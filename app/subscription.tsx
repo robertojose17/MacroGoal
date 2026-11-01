@@ -28,7 +28,10 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { trackEvent } from '@/utils/analytics';
 import Constants from 'expo-constants';
-import Purchases, { LOG_LEVEL, isPurchasesAvailable } from '@/utils/purchases';
+import Purchases, { LOG_LEVEL, isPurchasesAvailable, withRevenueCatUser, revenueCatLeaseCurrent } from '@/utils/purchases';
+import type { RevenueCatLease } from '@/utils/purchases';
+import { usePremium } from '@/hooks/usePremium';
+import { premiumEntitlement } from '@/utils/premiumEntitlement';
 import { validateAndAttributeCode } from '@/utils/affiliateApi';
 import { syncPremiumMembership } from '@/utils/premiumSync';
 import { capturePremiumFlow, newCheckpointId } from '@/utils/premiumCheckpointContract';
@@ -118,8 +121,7 @@ export default function SubscriptionScreen() {
   const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
-  const [isPremium, setIsPremium] = useState(false);
-  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const { isPremium, customerInfo, loading: premiumLoading, refreshPremiumStatus } = usePremium();
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activePlan, setActivePlan] = useState<'monthly' | 'yearly'>('yearly');
@@ -156,203 +158,75 @@ export default function SubscriptionScreen() {
     (!pkg.product?.subscriptionPeriod && pkg.packageType === 'ANNUAL')
   );
 
-  // Initialize RevenueCat and fetch offerings
+  // All native SDK identity mutations go through the shared coordinator.
+  const initializationRef = React.useRef(0);
+  const mountedRef = React.useRef(false);
   const initializeRevenueCat = async () => {
-    if (Platform.OS === 'web') {
-      console.log('[Subscription] Web platform - RevenueCat not available');
-      setLoading(false);
-      return;
-    }
-
-    const { Purchases, LOG_LEVEL } = loadPurchases();
-
-    if (!Purchases) {
-      console.log('[Subscription] Purchases SDK not available on this platform');
-      setLoading(false);
-      return;
-    }
-
+    const ticket = ++initializationRef.current;
+    const current = () => mountedRef.current && initializationRef.current === ticket;
+    if (Platform.OS === 'web' || !isPurchasesAvailable) { setLoading(false); return; }
+    setLoading(true);
+    setErrorMessage(null);
     try {
-      console.log('[Subscription] ========== INITIALIZING REVENUECAT ==========');
-
-      // Get RevenueCat configuration from app.json
-      const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
-      console.log('[Subscription] RevenueCat config:', {
-        hasConfig: !!revenueCatConfig,
-        iosApiKey: revenueCatConfig?.iosApiKey?.substring(0, 10) + '...',
-        androidApiKey: revenueCatConfig?.androidApiKey?.substring(0, 10) + '...',
-        offeringIdentifier: revenueCatConfig?.offeringIdentifier,
-        entitlementIdentifier: revenueCatConfig?.entitlementIdentifier,
+      const { data, error } = await supabase.auth.getSession();
+      if (!current()) return;
+      const user = data.session?.user;
+      if (error || !user) throw new Error('RC_AUTH_REQUIRED');
+      const result = await withRevenueCatUser<any>(user.id, async (sdk, lease) => {
+        // Preserve existing subscriber attributes, isolated from plan availability.
+        try {
+          if (user.email) await sdk.setEmail(user.email);
+          if (!revenueCatLeaseCurrent(lease)) throw new Error('RC_ACCOUNT_CHANGED');
+          const { data: profile } = await supabase.from('users').select('email').eq('id', user.id).maybeSingle();
+          if (!revenueCatLeaseCurrent(lease)) throw new Error('RC_ACCOUNT_CHANGED');
+          await sdk.setDisplayName(profile?.email || user.email?.split('@')[0] || 'User');
+        } catch { /* optional attributes must not block the offer */ }
+        if (!revenueCatLeaseCurrent(lease)) throw new Error('RC_ACCOUNT_CHANGED');
+        const response = await sdk.getOfferings();
+        const identifier = Constants.expoConfig?.extra?.revenueCat?.offeringIdentifier || 'Monthly_MG';
+        // Never choose an arbitrary/current Test Store offering on a missing config.
+        const offering = response.all[identifier];
+        if (!offering || offering.identifier !== identifier || !offering.availablePackages.length) {
+          throw new Error('RC_OFFERING_UNAVAILABLE');
+        }
+        return { offering, lease };
       });
-
-      const apiKey = Platform.select({
-        ios: revenueCatConfig?.iosApiKey,
-        android: revenueCatConfig?.androidApiKey,
-      });
-
-      console.log('[Subscription] Platform:', Platform.OS);
-      console.log('[Subscription] API Key exists:', !!apiKey);
-      console.log('[Subscription] API Key starts with:', apiKey?.substring(0, 10));
-
-      // Check if API key is configured
-      if (!apiKey) {
-        const errorMsg = 'RevenueCat API key not found in configuration';
-        console.error('[Subscription] ❌', errorMsg);
-        setErrorMessage(errorMsg);
-        setLoading(false);
-        return;
-      }
-
-      if (apiKey.includes('YOUR')) {
-        const errorMsg = `RevenueCat API key not configured for ${Platform.OS}. Please add your ${Platform.OS === 'ios' ? 'iOS' : 'Android'} API key to app.json`;
-        console.error('[Subscription] ❌', errorMsg);
-        setErrorMessage(errorMsg);
-        setLoading(false);
-        return;
-      }
-
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.error('[Subscription] ❌ No user found');
-        setErrorMessage('Please log in to view subscriptions');
-        setLoading(false);
-        return;
-      }
-
-      console.log('[Subscription] User ID:', user.id);
-      console.log('[Subscription] User Email:', user.email);
-
-      // Configure RevenueCat
-      console.log('[Subscription] Configuring RevenueCat SDK...');
-      await Purchases.configure({
-        apiKey,
-        appUserID: user.id,
-      });
-
+      if (!current() || !revenueCatLeaseCurrent(result.lease)) return;
       configuredActorRef.current = user.id;
-
-      // Enable debug logs
-      await Purchases.setLogLevel(LOG_LEVEL.DEBUG);
-      console.log('[Subscription] ✅ RevenueCat configured successfully');
-
-      // CRITICAL: Set user attributes (email and display name) for RevenueCat dashboard
-      console.log('[Subscription] 📝 Setting user attributes for RevenueCat dashboard...');
-
-      const userEmail = user.email;
-
-      // Get user's name from the users table
-      const { data: userData } = await supabase
-        .from('users')
-        .select('email')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (userEmail) {
-        await Purchases.setEmail(userEmail);
-        console.log('[Subscription] ✅ Email set in RevenueCat:', userEmail);
+      setOfferings(result.offering);
+      setPackages(result.offering.availablePackages);
+    } catch {
+      if (current()) {
+        configuredActorRef.current = null;
+        setOfferings(null); setPackages([]);
+        setErrorMessage(/^es/i.test(i18n.language)
+          ? 'No pudimos cargar tus planes. Revisa tu conexión e inténtalo de nuevo.'
+          : 'We could not load your plans. Check your connection and try again.');
       }
-
-      // Set display name (use email username as display name if no name available)
-      const displayName = userData?.email || userEmail?.split('@')[0] || 'User';
-      await Purchases.setDisplayName(displayName);
-      console.log('[Subscription] ✅ Display name set in RevenueCat:', displayName);
-
-      // Fetch offerings
-      console.log('[Subscription] Fetching offerings...');
-      const offeringsResponse = await Purchases.getOfferings();
-
-      console.log('[Subscription] Offerings response:', {
-        hasCurrent: !!offeringsResponse.current,
-        currentIdentifier: offeringsResponse.current?.identifier,
-        allOfferingsCount: Object.keys(offeringsResponse.all).length,
-        allOfferingIds: Object.keys(offeringsResponse.all),
-      });
-
-      // Try to get the specific offering by identifier first
-      const offeringIdentifier = revenueCatConfig?.offeringIdentifier;
-      let targetOffering = offeringsResponse.current;
-
-      if (offeringIdentifier && offeringsResponse.all[offeringIdentifier]) {
-        console.log('[Subscription] Using specific offering:', offeringIdentifier);
-        targetOffering = offeringsResponse.all[offeringIdentifier];
-      } else if (offeringsResponse.current) {
-        console.log('[Subscription] Using current offering:', offeringsResponse.current.identifier);
-      } else if (Object.keys(offeringsResponse.all).length > 0) {
-        // Use the first available offering
-        const firstOfferingKey = Object.keys(offeringsResponse.all)[0];
-        console.log('[Subscription] Using first available offering:', firstOfferingKey);
-        targetOffering = offeringsResponse.all[firstOfferingKey];
-      }
-
-      if (targetOffering && targetOffering.availablePackages.length > 0) {
-        console.log('[Subscription] ✅ Offering found:', {
-          identifier: targetOffering.identifier,
-          packagesCount: targetOffering.availablePackages.length,
-          packageIdentifiers: targetOffering.availablePackages.map((p: any) => p.identifier),
-        });
-
-        setOfferings(targetOffering);
-        setPackages(targetOffering.availablePackages);
-
-        // Log package details
-        targetOffering.availablePackages.forEach((pkg: any, index: number) => {
-          console.log(`[Subscription] Package ${index + 1}:`, {
-            identifier: pkg.identifier,
-            packageType: pkg.packageType,
-            productId: pkg.product.identifier,
-            title: pkg.product.title,
-            price: pkg.product.priceString,
-          });
-        });
-      } else {
-        console.warn('[Subscription] ⚠️ No offerings or packages available');
-        console.log('[Subscription] Debug info:', {
-          hasOfferings: Object.keys(offeringsResponse.all).length > 0,
-          offeringIds: Object.keys(offeringsResponse.all),
-          currentOffering: offeringsResponse.current?.identifier,
-          configuredOffering: offeringIdentifier,
-        });
-
-        const errorMsg = `No subscription plans currently available.\n\nPlease ensure:\n1. Products are created in RevenueCat\n2. Offering "${offeringIdentifier || 'default'}" is configured\n3. Products are linked to the offering\n\nCurrent offerings: ${Object.keys(offeringsResponse.all).join(', ') || 'none'}`;
-        setErrorMessage(errorMsg);
-      }
-
-      // Check current premium status
-      console.log('[Subscription] Checking customer info...');
-      const info = await Purchases.getCustomerInfo();
-      setCustomerInfo(info);
-
-      const entitlementIdentifier = revenueCatConfig?.entitlementIdentifier || 'Macrogoal Pro';
-      const hasActiveEntitlement = info.entitlements.active[entitlementIdentifier]?.isActive || false;
-
-      console.log('[Subscription] Customer info:', {
-        hasActiveEntitlements: Object.keys(info.entitlements.active).length > 0,
-        activeEntitlements: Object.keys(info.entitlements.active),
-        targetEntitlement: entitlementIdentifier,
-        isPremium: hasActiveEntitlement,
-      });
-
-      setIsPremium(hasActiveEntitlement);
-
-    } catch (error: any) {
-      console.error('[Subscription] ❌ RevenueCat initialization error:', error);
-      console.error('[Subscription] Error details:', {
-        message: error.message,
-        code: error.code,
-        stack: error.stack,
-      });
-
-      const errorMsg = `Failed to initialize subscriptions:\n\n${error.message || 'Unknown error'}\n\nPlease check:\n1. RevenueCat API keys are correct\n2. Products are configured in RevenueCat dashboard\n3. Internet connection is active`;
-      setErrorMessage(errorMsg);
-    } finally {
-      setLoading(false);
-      console.log('[Subscription] ========== INITIALIZATION COMPLETE ==========');
-    }
+    } finally { if (current()) setLoading(false); }
   };
 
   useEffect(() => {
-    initializeRevenueCat();
+    mountedRef.current = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let owner: string | null | undefined;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const next = session?.user.id ?? null;
+      if (next === owner) return;
+      owner = next;
+      initializationRef.current += 1;
+      configuredActorRef.current = null;
+      setOfferings(null); setPackages([]); setShowSuccessModal(false);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { void initializeRevenueCat(); }, 0);
+    });
+    void initializeRevenueCat();
+    return () => {
+      mountedRef.current = false;
+      initializationRef.current += 1;
+      if (timer) clearTimeout(timer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -363,14 +237,14 @@ export default function SubscriptionScreen() {
   // annual card, and leave any other available plan for an explicit selection.
   useEffect(() => {
     if (
-      autoStart !== 'true' || loading || errorMessage || isPremium ||
+      autoStart !== 'true' || loading || premiumLoading || errorMessage || isPremium ||
       !resolvedYearlyPkg || autoStartFiredRef.current
     ) return;
     autoStartFiredRef.current = true;
     setActivePlan('yearly');
     console.log('[Subscription] Auto-starting yearly purchase from onboarding:', resolvedYearlyPkg.identifier);
     handlePurchase(resolvedYearlyPkg, 'auto_start');
-  }, [autoStart, loading, errorMessage, isPremium, resolvedYearlyPkg]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoStart, loading, premiumLoading, errorMessage, isPremium, resolvedYearlyPkg]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle purchase
   const handlePurchase = async (pkg: PurchasesPackage, trigger: 'manual' | 'auto_start' = 'manual') => {
@@ -394,6 +268,7 @@ export default function SubscriptionScreen() {
     let attribution: Attribution = 'unknown';
     let sdkInvoked = false;
     let resultRecorded = false;
+    let operationLease: RevenueCatLease | null = null;
 
     try {
       console.log('[Subscription] ========== STARTING PURCHASE ==========');
@@ -412,7 +287,12 @@ export default function SubscriptionScreen() {
       const offer = displayedPackage(pkg, offerings?.identifier);
       if (offer) checkpoint(checkpointFlow, { name: 'purchase_attempt', attemptId, offer, trigger, attribution }, actor);
       sdkInvoked = true;
-      const purchaseResult = await Purchases.purchasePackage(pkg);
+      const purchaseResult = await withRevenueCatUser<any>(configuredActorRef.current || '', async (sdk, lease) => {
+        operationLease = lease;
+        if (!mountedRef.current) throw new Error('RC_SCREEN_CLOSED');
+        return sdk.purchasePackage(pkg);
+      });
+      if (!mountedRef.current || !operationLease || !revenueCatLeaseCurrent(operationLease)) return;
       const { customerInfo, productIdentifier } = purchaseResult;
 
       console.log('[Subscription] ✅ Purchase successful');
@@ -422,7 +302,7 @@ export default function SubscriptionScreen() {
       // Check if premium entitlement is now active
       const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
       const entitlementIdentifier = revenueCatConfig?.entitlementIdentifier || 'Macrogoal Pro';
-      const hasActiveEntitlement = customerInfo.entitlements.active[entitlementIdentifier]?.isActive || false;
+      const hasActiveEntitlement = !!premiumEntitlement(customerInfo, entitlementIdentifier);
 
       // An SDK entitlement is a client observation, never a verified new sale.
       const resultAttribution = actorStillCurrent(actor) ? await purchaseAttribution(Purchases, actor) : 'unknown';
@@ -431,8 +311,8 @@ export default function SubscriptionScreen() {
         outcome: hasActiveEntitlement ? 'sdk_returned_entitlement' : 'sdk_returned_no_entitlement',
         ...(transactionCandidate(purchaseResult) ? { correlation: transactionCandidate(purchaseResult) } : {}) }, actor);
       resultRecorded = true;
-      setIsPremium(hasActiveEntitlement);
-      setCustomerInfo(customerInfo);
+      if (!mountedRef.current || !operationLease || !revenueCatLeaseCurrent(operationLease)) return;
+      void refreshPremiumStatus();
 
       if (hasActiveEntitlement) {
         console.log('[Subscription] ✅ Premium access granted');
@@ -458,15 +338,20 @@ export default function SubscriptionScreen() {
       });
 
       // Handle specific error codes
-      if (error.userCancelled) {
+      if (!mountedRef.current || (operationLease && !revenueCatLeaseCurrent(operationLease))) return;
+      const outcome = observedPurchaseError(error);
+      if (outcome === 'canceled') {
         console.log('[Subscription] User cancelled purchase');
         // Don't show alert for user cancellation
-      } else if (error.code === 'PRODUCT_ALREADY_PURCHASED') {
+      } else if (outcome === 'pending') {
+        Alert.alert(/^es/i.test(i18n.language) ? 'Pago pendiente' : 'Payment pending',
+          /^es/i.test(i18n.language) ? 'La tienda está procesando tu pago. No vuelvas a comprar mientras se confirma.' : 'The store is processing your payment. Do not purchase again while it is being confirmed.');
+      } else if (outcome === 'already_owned') {
         Alert.alert(
           t('subscription.alreadySubscribed'),
           t('subscription.alreadySubscribedMsg')
         );
-      } else if (error.code === 'NETWORK_ERROR') {
+      } else if (['10', 'NETWORK_ERROR'].includes(String(error.code))) {
         Alert.alert(
           t('subscription.networkError'),
           t('subscription.networkErrorMsg')
@@ -503,6 +388,7 @@ export default function SubscriptionScreen() {
     let attribution: Attribution = 'unknown';
     let sdkInvoked = false;
     let resultRecorded = false;
+    let operationLease: RevenueCatLease | null = null;
     try {
       console.log('[Subscription] ========== RESTORING PURCHASES ==========');
       setLoading(true);
@@ -510,22 +396,27 @@ export default function SubscriptionScreen() {
       attribution = await purchaseAttribution(Purchases, actor);
       checkpoint(checkpointFlow, { name: 'restore_attempt', attemptId }, actor);
       sdkInvoked = true;
-      const info = await Purchases.restorePurchases();
+      const info = await withRevenueCatUser<any>(configuredActorRef.current || '', async (sdk, lease) => {
+        operationLease = lease;
+        if (!mountedRef.current) throw new Error('RC_SCREEN_CLOSED');
+        return sdk.restorePurchases();
+      });
+      if (!mountedRef.current || !operationLease || !revenueCatLeaseCurrent(operationLease)) return;
       console.log('[Subscription] ✅ Purchases restored');
       console.log('[Subscription] Active entitlements:', Object.keys(info.entitlements.active));
 
-      setCustomerInfo(info);
 
       const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
       const entitlementIdentifier = revenueCatConfig?.entitlementIdentifier || 'Macrogoal Pro';
-      const hasActiveEntitlement = info.entitlements.active[entitlementIdentifier]?.isActive || false;
+      const hasActiveEntitlement = !!premiumEntitlement(info, entitlementIdentifier);
 
       const resultAttribution = actorStillCurrent(actor) ? await purchaseAttribution(Purchases, actor) : 'unknown';
       checkpoint(checkpointFlow, { name: 'restore_result', attemptId,
         attribution: attribution === 'consistent' ? resultAttribution : attribution,
         outcome: hasActiveEntitlement ? 'restored_entitlement' : 'no_entitlement' }, actor);
       resultRecorded = true;
-      setIsPremium(hasActiveEntitlement);
+      if (!mountedRef.current || !operationLease || !revenueCatLeaseCurrent(operationLease)) return;
+      void refreshPremiumStatus();
 
       if (hasActiveEntitlement) {
         console.log('[Subscription] Triggering premium membership sync after restore');
@@ -545,7 +436,14 @@ export default function SubscriptionScreen() {
       const observed = observedPurchaseError(error);
       if (sdkInvoked && !resultRecorded) checkpoint(checkpointFlow, { name: 'restore_result', attemptId,
         attribution: actorStillCurrent(actor) ? attribution : 'unknown', outcome: observed === 'already_owned' ? 'error' : observed }, actor);
-      console.error('[Subscription] ❌ Restore error:', error);
+      if (!mountedRef.current || (operationLease && !revenueCatLeaseCurrent(operationLease))) return;
+      if (observed === 'canceled') return;
+      if (observed === 'pending') {
+        Alert.alert(/^es/i.test(i18n.language) ? 'Pago pendiente' : 'Payment pending',
+          /^es/i.test(i18n.language) ? 'Espera a que la tienda confirme el pago y vuelve a comprobar tu acceso.' : 'Wait for the store to confirm payment, then check your access again.');
+        return;
+      }
+      console.warn('[Subscription] Restore failed');
       Alert.alert(
         t('subscription.restoreFailed'),
         t('subscription.restoreFailedMsg')
@@ -621,7 +519,7 @@ export default function SubscriptionScreen() {
     );
   }
 
-  if (loading) {
+  if (loading || premiumLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: DARK_BG }]} edges={['top']}>
         <View style={styles.loadingContainer}>
