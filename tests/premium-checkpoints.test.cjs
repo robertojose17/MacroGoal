@@ -100,3 +100,33 @@ test('valid Auth without a profile is an explicit nonretrying coverage rejection
   else {assert.equal(response.status,401);assert.equal(body.error,mode==='invalid_jwt'?'unauthorized':'account_unavailable');}
  }
 });
+
+
+test('pinned shared transport rejects alternate hosts and preserves delivery/status rules',async()=>{
+ const contract=load('utils/premiumCheckpointContract.ts');
+ const runtime=load('utils/premiumCheckpointRuntime.ts',{'./premiumCheckpointContract':contract});
+ const endpoint='https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/track-onboarding/premium-checkpoint';
+ assert.equal(runtime.CHECKPOINT_ENDPOINT,endpoint);
+ const actor={userId:'actor-a',sessionId:'session-a',credentials:{accessToken:'fixture-token'}};let current=actor;
+ const body=JSON.stringify(event()),signal=new AbortController().signal;
+ assert.throws(()=>runtime.pinnedCheckpointTransport('https://example.invalid',()=>current,async()=>true,async()=>{}),/unapproved_checkpoint_endpoint/);
+ for(const [status,ack,want] of [[202,{eventId:event().eventId,status:'accepted'},'ack'],[200,{eventId:event().eventId,status:'duplicate'},'ack'],[202,{eventId:'wrong',status:'accepted'},'retry'],[400,{},'reject'],[401,{},'reject'],[403,{},'reject'],[409,{},'reject'],[408,{},'retry'],[429,{},'retry'],[503,{},'retry']]){
+  let sent;const transport=runtime.pinnedCheckpointTransport(endpoint,()=>current,async()=>true,async(url,options)=>(sent={url,options},{status,json:async()=>ack}));
+  assert.equal(await transport(body,actor,signal),want);assert.equal(sent.url,endpoint);assert.equal(sent.options.redirect,'error');assert.equal(sent.options.credentials,'omit');assert.equal(sent.options.body,body);assert.equal(sent.options.signal,signal);assert.equal(sent.options.headers.Authorization,'Bearer fixture-token');
+ }
+ let calls=0;const switched=runtime.pinnedCheckpointTransport(endpoint,()=>current,async()=>{current={...actor};return true;},async()=>{calls++;});
+ assert.equal(await switched(body,actor,signal),'reject');assert.equal(calls,0);
+});
+test('wired auth verifier preserves token refresh and rejects account or session replacement',async()=>{
+ const contract=load('utils/premiumCheckpointContract.ts');
+ const sessionId='11111111-1111-4111-8111-111111111111';
+ const token=(id,n)=>'header.'+Buffer.from(JSON.stringify({session_id:id,n})).toString('base64url')+'.signature';
+ let session={user:{id:'actor-a'},access_token:token(sessionId,1)},listener,current,verify,invalidations=0;
+ const api=load('utils/premiumCheckpoints.ts',{'react-native':{Platform:{OS:'ios'}},'@/lib/supabase/client':{supabase:{auth:{onAuthStateChange:f=>{listener=f;},getSession:async()=>({data:{session},error:null})}}},'./premiumCheckpointContract':contract,'./premiumCheckpointRuntime':{CHECKPOINT_ENDPOINT:'verified-test-endpoint',pinnedCheckpointTransport:(_endpoint,c,v)=>{current=c;verify=v;return ()=>{};},createCheckpointQueue:()=>({enqueue:()=>true,invalidate:()=>invalidations++}),validDisplayedOffer:()=>true}});
+ api.checkpointActor();await Promise.resolve();await Promise.resolve();const actor=current();assert.ok(actor);
+ session={user:{id:'actor-a'},access_token:token(sessionId,2)};listener('TOKEN_REFRESHED',session);
+ assert.equal(current(),actor);assert.equal(await verify(actor),true);assert.equal(actor.credentials.accessToken,session.access_token);
+ session={user:{id:'actor-b'},access_token:token(sessionId,3)};assert.equal(await verify(actor),false);
+ session={user:{id:'actor-a'},access_token:token('22222222-2222-4222-8222-222222222222',4)};assert.equal(await verify(actor),false);
+ listener('SIGNED_OUT',null);assert.equal(current(),null);assert.equal(await verify(actor),false);assert.ok(invalidations>=2);
+});
