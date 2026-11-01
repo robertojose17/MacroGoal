@@ -102,7 +102,7 @@ const COPY: Readonly<Record<'en' | 'es', Record<Theme, Copy>>> = {
         },
         {
           "title": "A better personal fit",
-          "desc": "Choose protein options and portions that suit your goals within your selected plan."
+          "desc": "Choose protein options and review portions that suit your goals within your selected plan."
         },
         {
           "title": "Your plan, ready to revisit",
@@ -237,7 +237,7 @@ const COPY: Readonly<Record<'en' | 'es', Record<Theme, Copy>>> = {
         },
         {
           "title": "Más a tu medida",
-          "desc": "Elige proteínas y porciones según tus metas dentro del plan seleccionado."
+          "desc": "Elige proteínas y revisa las porciones según tus metas dentro del plan seleccionado."
         },
         {
           "title": "Tu plan siempre a mano",
