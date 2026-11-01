@@ -2,8 +2,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { OpenFoodFactsProduct } from './openFoodFacts';
 
-const CACHE_KEY_PREFIX = '@food_search_cache:';
-const CACHE_INDEX_KEY = '@food_search_cache_index';
+const CACHE_KEY_PREFIX = '@food_search_cache:v2:';
+const CACHE_INDEX_KEY = '@food_search_cache_index:v2';
 const TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_ENTRIES = 50;
 
@@ -30,7 +30,7 @@ export async function getLocalCache(query: string): Promise<OpenFoodFactsProduct
     }
     const entry: CacheEntry = JSON.parse(raw);
     const age = Date.now() - entry.timestamp;
-    if (age > TTL_MS) {
+    if (!Array.isArray(entry.products) || !Number.isFinite(entry.timestamp) || age < 0 || age > TTL_MS) {
       console.log('[FoodSearchCache] EXPIRED for query:', query, '(age:', Math.round(age / 1000 / 60), 'min)');
       // Don't await — fire-and-forget cleanup
       AsyncStorage.removeItem(key).catch(() => {});
