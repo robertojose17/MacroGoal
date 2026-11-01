@@ -1,77 +1,102 @@
-// utils/purchases.native.ts
-// On native (iOS/Android), use the real react-native-purchases SDK.
-// Metro resolves '@/utils/purchases' → this file via the .native.ts extension.
+// Native RevenueCat identity has one owner and one serialized operation queue.
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+import { supabase } from '@/lib/supabase/client';
 
 export default Purchases;
 export { LOG_LEVEL };
 export const isPurchasesAvailable = true;
 
-let isConfigured = false;
-let currentAppUserID: string | null = null;
+let configured = false;
+let owner: string | null = null;
+let generation = 0;
+let authRevision = 0;
+let tail: Promise<unknown> = Promise.resolve();
 
-/**
- * Configure RevenueCat AND identify the user atomically.
- * - If not yet configured, calls `Purchases.configure({ apiKey, appUserID: userId })` so RevenueCat NEVER receives an anonymous ID for an authenticated user.
- * - If already configured under a different appUserID, calls `Purchases.logIn(userId)`.
- * - If already configured under the same appUserID, no-op.
- *
- * Safe to call repeatedly; subsequent calls reconcile state.
- */
-export async function loginRevenueCat(userId: string, apiKey: string, opts?: { email?: string }): Promise<void> {
-  try {
-    if (!userId) {
-      console.warn('[RC] loginRevenueCat called with empty userId — skipping');
-      return;
-    }
-    if (!apiKey || apiKey.includes('YOUR')) {
-      console.warn('[RC] loginRevenueCat called with invalid apiKey — skipping');
-      return;
-    }
+function acceptOwner(next: string | null) {
+  if (next !== owner) { owner = next; generation += 1; }
+}
+// Synchronous invalidation; never await Supabase inside its auth callback.
+// Process-lifetime subscription, owned by this singleton rather than a component.
+supabase.auth.onAuthStateChange((_event, session) => {
+  authRevision += 1;
+  acceptOwner(session?.user?.id ?? null);
+});
 
-    if (!isConfigured) {
-      console.log('[RC] Configuring with appUserID:', userId);
-      await Purchases.configure({ apiKey, appUserID: userId });
-      isConfigured = true;
-      currentAppUserID = userId;
-    } else if (currentAppUserID !== userId) {
-      console.log('[RC] Logging in (was:', currentAppUserID, '→ now:', userId, ')');
-      const { customerInfo } = await Purchases.logIn(userId);
-      currentAppUserID = userId;
-      console.log('[RC] Active entitlements after logIn:', Object.keys(customerInfo.entitlements.active));
-    } else {
-      console.log('[RC] Already configured for user', userId, '— no-op');
-    }
-
-    if (opts?.email) {
-      try { await Purchases.setEmail(opts.email); } catch (_) { /* non-fatal */ }
-    }
-
-    // iOS AdServices attribution — fire-and-forget, never blocks login or premium sync
-    if (Platform.OS === 'ios') {
-      Purchases.enableAdServicesAttributionTokenCollection()
-        .then(() => console.log('[RC] AdServices attribution token collection enabled'))
-        .catch((e: unknown) => console.warn('[RC] AdServices attribution failed (non-fatal):', e));
-    }
-  } catch (e) {
-    console.warn('[RC] loginRevenueCat failed:', e);
-  }
+export type RevenueCatLease = Readonly<{ userId: string; generation: number }>;
+export function revenueCatLeaseCurrent(lease: RevenueCatLease): boolean {
+  return owner === lease.userId && generation === lease.generation;
+}
+function requireCurrent(lease: RevenueCatLease) {
+  if (!revenueCatLeaseCurrent(lease)) throw new Error('RC_ACCOUNT_CHANGED');
+}
+function serialize<T>(work: () => Promise<T>): Promise<T> {
+  const result = tail.then(work, work);
+  // A failed operation cannot poison the queue. A pending SDK operation retains
+  // the lock: a caller timeout must never permit a competing identity mutation.
+  tail = result.then(() => undefined, () => undefined);
+  return result;
 }
 
-/**
- * Log the user out of RevenueCat. Safe to call when not configured (no-op).
- */
-export async function logoutRevenueCat(): Promise<void> {
-  try {
-    if (!isConfigured || !currentAppUserID) {
-      console.log('[RC] logoutRevenueCat — not configured, skipping');
-      return;
+/** Capture auth before enqueue, validate again before/after every SDK boundary. */
+export async function withRevenueCatUser<T>(userId: string, work: (sdk: typeof Purchases, lease: RevenueCatLease) => Promise<T>, apiKeyOverride?: string): Promise<T> {
+  const revision = authRevision;
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !userId || data.session?.user.id !== userId) throw new Error('RC_AUTH_REQUIRED');
+  if (revision === authRevision) acceptOwner(userId);
+  if (owner !== userId) throw new Error('RC_ACCOUNT_CHANGED');
+  const lease = Object.freeze({ userId, generation });
+  return serialize(async () => {
+    requireCurrent(lease);
+    const config = Constants.expoConfig?.extra?.revenueCat;
+    const apiKey = apiKeyOverride ?? Platform.select({ ios: config?.iosApiKey, android: config?.androidApiKey });
+    if (!apiKey || apiKey.includes('YOUR')) throw new Error('RC_CONFIGURATION_UNAVAILABLE');
+    if (!configured) {
+      Purchases.configure({ apiKey, appUserID: userId });
+      configured = true;
     }
-    console.log('[RC] Logging out current user:', currentAppUserID);
-    await Purchases.logOut();
-    currentAppUserID = null;
-  } catch (e) {
-    console.warn('[RC] logoutRevenueCat failed:', e);
-  }
+    requireCurrent(lease);
+    if (await Purchases.getAppUserID() !== userId) {
+      requireCurrent(lease);
+      await Purchases.logIn(userId);
+    }
+    requireCurrent(lease);
+    if (await Purchases.getAppUserID() !== userId) throw new Error('RC_IDENTITY_MISMATCH');
+    requireCurrent(lease);
+    const value = await work(Purchases, lease);
+    requireCurrent(lease);
+    if (await Purchases.getAppUserID() !== userId) throw new Error('RC_IDENTITY_MISMATCH');
+    requireCurrent(lease);
+    return value;
+  });
+}
+
+export async function loginRevenueCat(userId: string, apiKey: string, opts?: { email?: string }): Promise<void> {
+  await withRevenueCatUser(userId, async (sdk, lease) => {
+    if (opts?.email) {
+      try { await sdk.setEmail(opts.email); } catch { /* attributes are non-fatal */ }
+      requireCurrent(lease);
+    }
+    if (Platform.OS === 'ios') {
+      sdk.enableAdServicesAttributionTokenCollection().catch(() => {});
+    }
+  }, apiKey);
+}
+
+/** A delayed sign-out must never log out a subsequently signed-in account. */
+export async function logoutRevenueCat(): Promise<void> {
+  const revision = authRevision;
+  const { data, error } = await supabase.auth.getSession();
+  if (error || data.session) return;
+  if (revision === authRevision) acceptOwner(null);
+  const expectedGeneration = generation;
+  await serialize(async () => {
+    if (owner !== null || generation !== expectedGeneration || !configured) return;
+    // logOut is rejected by the SDK when it is already anonymous.
+    if (!(await Purchases.isAnonymous())) {
+      if (owner !== null || generation !== expectedGeneration) return;
+      await Purchases.logOut();
+    }
+  });
 }
