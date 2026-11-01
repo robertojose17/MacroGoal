@@ -57,7 +57,7 @@ jobs:
             return [...parsed.errors, ...ts.getPreEmitDiagnostics(program)].map(d => ({
               file: d.file ? path.relative(root, d.file.fileName).replaceAll('\\', '/') : '<config>',
               code: d.code,
-              message: ts.flattenDiagnosticMessageText(d.messageText, '\n').replaceAll(root, '<root>'),
+              message: ts.flattenDiagnosticMessageText(d.messageText, '\n').replaceAll(candidate, '<root>').replaceAll(baseline, '<root>'),
             }));
           }
           const before = diagnostics(baseline);
