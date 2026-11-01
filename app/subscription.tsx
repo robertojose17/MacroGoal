@@ -28,7 +28,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { trackEvent } from '@/utils/analytics';
 import Constants from 'expo-constants';
-import Purchases, { LOG_LEVEL, isPurchasesAvailable, withRevenueCatUser, revenueCatLeaseCurrent } from '@/utils/purchases';
+import Purchases, { LOG_LEVEL, isPurchasesAvailable, withRevenueCatUser, revenueCatLeaseCurrent, getRevenueCatOffering } from '@/utils/purchases';
 import type { RevenueCatLease } from '@/utils/purchases';
 import { usePremium } from '@/hooks/usePremium';
 import { premiumEntitlement } from '@/utils/premiumEntitlement';
@@ -171,25 +171,10 @@ export default function SubscriptionScreen() {
       if (!current()) return;
       const user = data.session?.user;
       if (error || !user) throw new Error('RC_AUTH_REQUIRED');
-      const result = await withRevenueCatUser<any>(user.id, async (sdk, lease) => {
-        // Preserve existing subscriber attributes, isolated from plan availability.
-        try {
-          if (user.email) await sdk.setEmail(user.email);
-          if (!revenueCatLeaseCurrent(lease)) throw new Error('RC_ACCOUNT_CHANGED');
-          const { data: profile } = await supabase.from('users').select('email').eq('id', user.id).maybeSingle();
-          if (!revenueCatLeaseCurrent(lease)) throw new Error('RC_ACCOUNT_CHANGED');
-          await sdk.setDisplayName(profile?.email || user.email?.split('@')[0] || 'User');
-        } catch { /* optional attributes must not block the offer */ }
-        if (!revenueCatLeaseCurrent(lease)) throw new Error('RC_ACCOUNT_CHANGED');
-        const response = await sdk.getOfferings();
-        const identifier = Constants.expoConfig?.extra?.revenueCat?.offeringIdentifier || 'Monthly_MG';
-        // Never choose an arbitrary/current Test Store offering on a missing config.
-        const offering = response.all[identifier];
-        if (!offering || offering.identifier !== identifier || !offering.availablePackages.length) {
-          throw new Error('RC_OFFERING_UNAVAILABLE');
-        }
-        return { offering, lease };
-      });
+      // Subscriber email is handled by the root login path. No optional profile
+      // query or display-name write belongs on the purchase availability path.
+      const identifier = Constants.expoConfig?.extra?.revenueCat?.offeringIdentifier || 'Monthly_MG';
+      const result = await getRevenueCatOffering(user.id, identifier);
       if (!current() || !revenueCatLeaseCurrent(result.lease)) return;
       configuredActorRef.current = user.id;
       setOfferings(result.offering);
