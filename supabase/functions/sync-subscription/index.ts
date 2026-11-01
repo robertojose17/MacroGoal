@@ -95,9 +95,9 @@ serve(async (req) => {
       },
     );
     const { data: profile, error: profileError } = await admin
-      .from('users').select('updated_at, user_type, is_premium').eq('id', user.id).maybeSingle();
+      .from('users').select('updated_at, user_type').eq('id', user.id).maybeSingle();
     if (profileError || !profile) return unavailable();
-    const existingPremium = profile.user_type === 'premium' || profile.is_premium === true;
+    const existingPremium = profile.user_type === 'premium';
     let providerState: PremiumState = 'unknown';
 
     if (rcApiKey.trim()) {
@@ -146,7 +146,6 @@ serve(async (req) => {
     const newUserType = is_premium ? 'premium' : 'free';
     let update = admin.from('users').update({
       user_type: newUserType,
-      is_premium,
       updated_at: new Date().toISOString(),
     }).eq('id', user.id);
     update = profile.updated_at === null
