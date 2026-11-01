@@ -73,15 +73,32 @@ export async function withRevenueCatUser<T>(userId: string, work: (sdk: typeof P
 }
 
 export async function loginRevenueCat(userId: string, apiKey: string, opts?: { email?: string }): Promise<void> {
-  await withRevenueCatUser(userId, async (sdk, lease) => {
-    if (opts?.email) {
-      try { await sdk.setEmail(opts.email); } catch { /* attributes are non-fatal */ }
-      requireCurrent(lease);
-    }
-    if (Platform.OS === 'ios') {
-      sdk.enableAdServicesAttributionTokenCollection().catch(() => {});
-    }
-  }, apiKey);
+  const lease = await withRevenueCatUser(userId, async (_sdk, captured) => captured, apiKey);
+  // Subscriber attributes are optional. Invoke only while this actor is current,
+  // without holding the identity queue while their promises settle.
+  if (!revenueCatLeaseCurrent(lease)) throw new Error('RC_ACCOUNT_CHANGED');
+  if (opts?.email) {
+    try { void Purchases.setEmail(opts.email).catch(() => {}); } catch { /* non-fatal */ }
+  }
+  if (Platform.OS === 'ios' && revenueCatLeaseCurrent(lease)) {
+    try { void Purchases.enableAdServicesAttributionTokenCollection().catch(() => {}); } catch { /* non-fatal */ }
+  }
+}
+
+/** Offer reads do not mutate identity and must not block login/logout/purchases. */
+export async function getRevenueCatOffering(userId: string, identifier: string, timeoutMs = 5000) {
+  const lease = await withRevenueCatUser(userId, async (_sdk, captured) => captured);
+  requireCurrent(lease);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const response = await Promise.race([Purchases.getOfferings(), new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('RC_OFFERING_TIMEOUT')), timeoutMs);
+    })]);
+    requireCurrent(lease);
+    const offering = response.all[identifier];
+    if (!offering || offering.identifier !== identifier || !offering.availablePackages.length) throw new Error('RC_OFFERING_UNAVAILABLE');
+    return { offering, lease };
+  } finally { if (timer) clearTimeout(timer); }
 }
 
 /** A delayed sign-out must never log out a subsequently signed-in account. */
