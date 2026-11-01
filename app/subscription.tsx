@@ -292,7 +292,7 @@ export default function SubscriptionScreen() {
       // An SDK entitlement is a client observation, never a verified new sale.
       const resultAttribution = actorStillCurrent(actor) ? await purchaseAttribution(Purchases, actor) : 'unknown';
       checkpoint(checkpointFlow, { name: 'purchase_result', attemptId,
-        attribution: attribution === 'consistent' ? resultAttribution : attribution,
+        attribution: (attribution as Attribution) === 'consistent' ? resultAttribution : attribution,
         outcome: hasActiveEntitlement ? 'sdk_returned_entitlement' : 'sdk_returned_no_entitlement',
         ...(transactionCandidate(purchaseResult) ? { correlation: transactionCandidate(purchaseResult) } : {}) }, actor);
       resultRecorded = true;
@@ -401,7 +401,7 @@ export default function SubscriptionScreen() {
 
       const resultAttribution = actorStillCurrent(actor) ? await purchaseAttribution(Purchases, actor) : 'unknown';
       checkpoint(checkpointFlow, { name: 'restore_result', attemptId,
-        attribution: attribution === 'consistent' ? resultAttribution : attribution,
+        attribution: (attribution as Attribution) === 'consistent' ? resultAttribution : attribution,
         outcome: hasActiveEntitlement ? 'restored_entitlement' : 'no_entitlement' }, actor);
       resultRecorded = true;
       if (!mountedRef.current || !operationLease || !revenueCatLeaseCurrent(operationLease)) return;
