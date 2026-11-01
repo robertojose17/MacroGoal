@@ -10,14 +10,17 @@ const body = (value = {}, subscriptions = {}) => ({ subscriber: { entitlements: 
 function fixture(options = {}) {
   let handler, updatePayload, writes = 0;
   const filters = [];
-  const profile = options.profile === undefined ? { updated_at: '2026-01-01T00:00:00Z', user_type: 'premium', is_premium: true } : options.profile;
+  const profile = options.profile === undefined ? { updated_at: '2026-01-01T00:00:00Z', user_type: 'premium' } : options.profile;
   const admin = { from(table) {
     let updating = false;
     const chain = {
-      select() { return chain; },
+      select(columns) {
+        if (table === 'users') for (const column of columns.split(',').map(value => value.trim())) assert.ok(['id', 'updated_at', 'user_type'].includes(column), 'Unknown users column: ' + column);
+        return chain;
+      },
       eq(key, value) { filters.push([key, value]); return chain; },
       is(key, value) { filters.push([key, value]); return chain; },
-      update(value) { updating = true; updatePayload = value; writes++; return chain; },
+      update(value) { if (table === 'users') for (const column of Object.keys(value)) assert.ok(['updated_at', 'user_type'].includes(column), 'Unknown users write column: ' + column); updating = true; updatePayload = value; writes++; return chain; },
       async maybeSingle() {
         if (updating) return { data: options.casMissing ? null : { id: 'fixture-user' }, error: options.updateError || null };
         return table === 'users' ? { data: profile, error: options.profileError || null } : { data: options.mirror ?? null, error: options.mirrorError || null };
@@ -41,7 +44,7 @@ for (const alias of ['Macrogoal Pro', 'Premium', 'premium', 'macrogoal_pro', 'pr
   test('recognizes active alias ' + alias, async () => {
     const f = fixture({ provider: body({ [alias]: { expires_date: future } }) });
     assert.equal((await f.run()).status, 200);
-    assert.equal(f.payload.is_premium, true);
+    assert.equal(f.payload.user_type, 'premium');
   });
 }
 test('provider lifetime, malformed expiry and grace classification', () => {
@@ -61,18 +64,18 @@ for (const provider of [body(), body({ 'Macrogoal Pro': { expires_date: past } }
   test('positive legacy mirror survives empty or expired provider', async () => {
     const f = fixture({ provider, mirror: { status: 'active', expiration_at: future } });
     assert.equal((await f.run()).status, 200);
-    assert.equal(f.payload.is_premium, true);
+    assert.equal(f.payload.user_type, 'premium');
   });
 }
 test('provider outage with future mirror retains paid state', async () => {
   const f = fixture({ networkError: true, mirror: { status: 'active', expiration_at: future } });
   assert.equal((await f.run()).status, 200);
-  assert.equal(f.payload.is_premium, true);
+  assert.equal(f.payload.user_type, 'premium');
 });
 test('expired provider and expired mirror resolve free', async () => {
   const f = fixture({ provider: body({ 'Macrogoal Pro': { expires_date: past } }), mirror: { status: 'active', expiration_at: past } });
   assert.equal((await f.run()).status, 200);
-  assert.equal(f.payload.is_premium, false);
+  assert.equal(f.payload.user_type, 'free');
 });
 for (const mirror of [null, { status: 'active' }, { status: 'inactive' }, { status: 'active', expiration_at: null, current_period_end: past }, { status: 'active', current_period_end: past }]) {
   test('uncertain legacy mirror is unchanged: ' + JSON.stringify(mirror), async () => {
@@ -108,4 +111,12 @@ test('authentication, preflight and profile errors never write', async () => {
   const failed = fixture({ profileError: { code: 'fixture' } });
   assert.equal((await failed.run()).status, 503);
   assert.equal(failed.writes, 0);
+});
+
+test('schema-faithful profile writes preserve the is_premium HTTP contract', async () => {
+  const f = fixture({ provider: body({ 'Macrogoal Pro': { expires_date: future } }) });
+  const response = await f.run();
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { is_premium: true, user_type: 'premium' });
+  assert.deepEqual(Object.keys(f.payload).sort(), ['updated_at', 'user_type']);
 });
