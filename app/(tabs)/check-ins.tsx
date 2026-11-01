@@ -1,3 +1,6 @@
+import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
+import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { createCommunityLikeCoordinator, requireCommunityLikedIds } from '@/utils/communityLikeState';
 import { formatCommunityRelativeTime, communityRelativeTimeAccessibilityLabel } from '@/utils/communityRelativeTime';
 import {progressMediaCopy} from '@/utils/progressMediaCopy';
@@ -2442,7 +2445,7 @@ function ComposerSheet({
         </Modal>
 
         <View style={{flex:1}} pointerEvents={posting || publication.current ? 'none' : 'auto'}>
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md }} keyboardShouldPersistTaps="handled">
+        <PremiumCheckpointScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md }} keyboardShouldPersistTaps="handled">
           {/* Author row */}
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.md }}>
             {currentUserAvatar ? (
@@ -2832,7 +2835,7 @@ function ComposerSheet({
               />
             </View>
           )}
-        </ScrollView>
+        </PremiumCheckpointScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -3030,7 +3033,7 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
         {loading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
         ) : (
-          <ScrollView contentContainerStyle={{ padding: spacing.md, gap: spacing.md }}>
+          <PremiumCheckpointScrollView contentContainerStyle={{ padding: spacing.md, gap: spacing.md }}>
             {/* Disable all */}
             <View style={[styles.settingsCard, { backgroundColor: cardBg, borderColor }]}>
               <View style={styles.settingsRow}>
@@ -3110,7 +3113,7 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
             {saving ? (
               <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.sm }} />
             ) : null}
-          </ScrollView>
+          </PremiumCheckpointScrollView>
         )}
       </View>
     </Modal>
@@ -4278,7 +4281,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
             <ActivityIndicator color={colors.primary} />
           </View>
         ) : activeUserCount < 1000 ? (
-          <ScrollView
+          <PremiumCheckpointScrollView
             contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, paddingVertical: 60, paddingBottom: 120 }}
             showsVerticalScrollIndicator={false}
           >
@@ -4336,7 +4339,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
               <Text style={{ fontSize: 16 }}>🎉</Text>
               <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{t('localization.checkins.inviteFriend')}</Text>
             </TouchableOpacity>
-          </ScrollView>
+          </PremiumCheckpointScrollView>
         ) : (
           <FlatList
             data={feedPosts}
@@ -4375,7 +4378,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
 
       {/* ── FRIENDS TAB ── */}
       {activeTab === 'friends' && (
-        <ScrollView
+        <PremiumCheckpointScrollView
           contentContainerStyle={{ padding: spacing.md, paddingBottom: 100 }}
           refreshControl={
             <RefreshControl refreshing={friendsRefreshing} onRefresh={handleFriendsRefresh} tintColor={colors.primary} />
@@ -4555,7 +4558,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
 
           <Text style={[styles.privacyNote, { color: secondaryColor }]}>
             {t('localization.checkins.privacyNote')}</Text>
-        </ScrollView>
+        </PremiumCheckpointScrollView>
       )}
 
       {/* ── PREMIUM CLUB TAB ── */}
@@ -4572,15 +4575,15 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
           <Text style={[styles.gateBadge, { color: secondaryColor }]}>{t('localization.checkins.privateIncluded')}</Text>
           <Text style={[styles.gateDesc, { color: secondaryColor }]}>
             {t('localization.checkins.clubSupport')}</Text>
-          <TouchableOpacity
+          <PremiumCheckpointInline source="community_club">{premiumFlow => (<TouchableOpacity
             style={[styles.inviteBtn, { marginTop: spacing.lg, paddingHorizontal: spacing.xl }]}
             onPress={() => {
               console.log('[Community] Unlock Premium Club button pressed');
-              router.push('/subscription');
+              router.push(premiumEntry('community_club', false, premiumFlow));
             }}
           >
             <Text style={styles.inviteBtnText}>{t('localization.checkins.unlockClub')}</Text>
-          </TouchableOpacity>
+          </TouchableOpacity>)}</PremiumCheckpointInline>
         </View>
       )}
 

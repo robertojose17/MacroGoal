@@ -23,6 +23,7 @@ interface UsePremiumReturn {
 
 /**
  * Hook to check if the current user has an active premium subscription
+ * Example premiumEntry import: @/utils/premiumCheckpoints
  *
  * This hook uses RevenueCat as the primary source of truth for premium status,
  * with Supabase as a fallback for offline scenarios.
@@ -52,7 +53,7 @@ interface UsePremiumReturn {
  *           {expirationDate && <Text>Expires: {expirationDate}</Text>}
  *         </>
  *       ) : (
- *         <Button title="Upgrade to Premium" onPress={() => router.push('/subscription')} />
+ *         <Button title="Upgrade to Premium" onPress={() => router.push(premiumEntry('feature_gate'))} />
  *       )}
  *     </View>
  *   );

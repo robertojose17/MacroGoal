@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 
 import React, { useState, useCallback } from 'react';
 import {
@@ -182,7 +183,7 @@ export default function TemplatePlanDetailScreen() {
     useCallback(() => {
       if (!premiumLoading && !isPremium) {
         console.log('[TemplatePlanDetail] Non-premium user, redirecting to subscription');
-        router.replace('/subscription');
+        router.replace(premiumEntry('template_plan'));
       }
     }, [isPremium, premiumLoading, router])
   );

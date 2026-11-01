@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
@@ -687,7 +688,7 @@ export default function HomeScreen() {
     const allowed = await canOpen();
     if (!allowed) {
       console.log('[Home Android] Recipe daily limit reached — redirecting to subscription');
-      router.push('/subscription');
+      router.push(premiumEntry('home_recipe_limit'));
       return;
     }
     await recordOpen();
@@ -1711,7 +1712,7 @@ export default function HomeScreen() {
           onPress={() => {
             console.log('[Home Android] Generate plan with AI pressed, isPremium:', isPremium);
             if (!isPremium) {
-              router.push('/subscription');
+              router.push(premiumEntry('home_ai_plan'));
             } else {
               router.push('/ai-meal-planner');
             }

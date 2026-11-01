@@ -1,3 +1,6 @@
+import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
+import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
@@ -1552,7 +1555,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <ScrollView
+        <PremiumCheckpointScrollView
           ref={scrollViewRef}
           style={styles.messagesContainer}
           contentContainerStyle={styles.messagesContent}
@@ -1606,16 +1609,16 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                       </Text>
                     )}
                     {message.showUpgradeButton && (
-                      <TouchableOpacity
+                      <PremiumCheckpointInline source="chatbot_upgrade">{premiumFlow => (<TouchableOpacity
                         style={styles.goPremiumButton}
                         onPress={() => {
                           console.log('[Chatbot] Go Premium button pressed — navigating to /subscription');
-                          router.push('/subscription');
+                          router.push(premiumEntry('chatbot_upgrade', false, premiumFlow));
                         }}
                         activeOpacity={0.8}
                       >
                         <Text style={styles.goPremiumButtonText}>{t('chatbot.upgrade')}</Text>
-                      </TouchableOpacity>
+                      </TouchableOpacity>)}</PremiumCheckpointInline>
                     )}
                   </View>
                 </View>
@@ -1991,11 +1994,11 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
               </TouchableOpacity>
             </View>
           )}
-        </ScrollView>
+        </PremiumCheckpointScrollView>
 
         {/* Craving chips — always visible above input, hidden in meal estimator mode */}
         {!isMealEstimator && (
-          <ScrollView
+          <PremiumCheckpointScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             style={[styles.cravingChipsScroll, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
@@ -2013,13 +2016,13 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                 </Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </PremiumCheckpointScrollView>
         )}
 
         <View style={[styles.inputContainer, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           {/* Multi-image thumbnails */}
           {selectedImages.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageThumbnailsScroll}>
+            <PremiumCheckpointScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageThumbnailsScroll}>
               {selectedImages.map((img, idx) => (
                 <View key={idx} style={styles.imageThumbnailWrapper}>
                   <Image source={{ uri: img }} style={styles.imageThumbnail} resizeMode="cover" />
@@ -2049,7 +2052,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
                   <Text style={{ color: colors.primary, fontSize: 11, marginTop: 2 }}>{t('localization.coach.add')}</Text>
                 </TouchableOpacity>
               )}
-            </ScrollView>
+            </PremiumCheckpointScrollView>
           )}
 
           {isMealEstimator && (

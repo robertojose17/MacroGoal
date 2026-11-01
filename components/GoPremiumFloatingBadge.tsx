@@ -1,3 +1,6 @@
+import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
+import type { PremiumFlow } from '@/utils/premiumCheckpointContract';
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
@@ -19,9 +22,9 @@ export default function GoPremiumFloatingBadge() {
     setVisible(false);
   };
 
-  const handlePress = () => {
+  const handlePress = (premiumFlow: PremiumFlow) => {
     console.log('[GoPremiumBadge] Tapped — navigating to /subscription');
-    router.push('/subscription');
+    router.push(premiumEntry('floating_badge', false, premiumFlow));
   };
 
   // Coach owns an inline preview/paywall action; a global floating badge covers
@@ -36,14 +39,14 @@ export default function GoPremiumFloatingBadge() {
   return (
     <View style={[styles.container, { bottom: bottomOffset }]} pointerEvents="box-none">
       <View style={styles.pill}>
-        <TouchableOpacity
+        <PremiumCheckpointInline source="floating_badge">{premiumFlow => (<TouchableOpacity
           style={styles.pillContent}
-          onPress={handlePress}
+          onPress={() => handlePress(premiumFlow)}
           activeOpacity={0.85}
         >
           <IconSymbol ios_icon_name="crown.fill" android_material_icon_name="workspace_premium" size={20} color="#FFD700" />
           <Text style={styles.label}>{t('premium.goPremium')}</Text>
-        </TouchableOpacity>
+        </TouchableOpacity>)}</PremiumCheckpointInline>
         <TouchableOpacity
           style={styles.closeBtn}
           onPress={handleDismiss}

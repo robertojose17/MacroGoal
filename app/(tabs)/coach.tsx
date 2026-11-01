@@ -1,3 +1,6 @@
+import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
+import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 import CoachSavedMealBrowser from '@/components/CoachSavedMealBrowser';
 import CoachConversationActions from '@/components/CoachConversationActions';
 import type { MealComposer } from '@/utils/coachMealComposer';
@@ -2436,7 +2439,7 @@ export default function CoachScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
-        <ScrollView
+        <PremiumCheckpointScrollView
           ref={scrollViewRef}
           style={styles.messagesContainer}
           contentContainerStyle={styles.messagesContent}
@@ -2601,10 +2604,10 @@ export default function CoachScreen() {
                             {t('coach.upgradeToPremium')}
                           </Text>
                         </View>
-                        <TouchableOpacity
+                        <PremiumCheckpointInline source="coach_preview">{premiumFlow => (<TouchableOpacity
                           onPress={() => {
                             console.log('[AICoach] See What My Coach Found button pressed');
-                            router.push('/subscription');
+                            router.push(premiumEntry('coach_preview', false, premiumFlow));
                           }}
                           style={{
                             backgroundColor: '#7C3AED',
@@ -2617,7 +2620,7 @@ export default function CoachScreen() {
                           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
                             {t('coach.upgrade')} →
                           </Text>
-                        </TouchableOpacity>
+                        </TouchableOpacity>)}</PremiumCheckpointInline>
                       </View>
                     )}
                     {message.actionProposal && message.actionStatus ? (
@@ -2677,7 +2680,7 @@ export default function CoachScreen() {
           </TouchableOpacity>
           </View>
         )}
-        </ScrollView>
+        </PremiumCheckpointScrollView>
 
         {/* ── Craving chips — rendered inside ScrollView after welcome message ── */}
 
@@ -2775,7 +2778,7 @@ export default function CoachScreen() {
           </View>
 
           {/* List */}
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md }}>
+          <PremiumCheckpointScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing.md }}>
             {loadingHistory ? (
               <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary, textAlign: 'center', marginTop: 40 }}>
                 {t('common.loading')}
@@ -2833,7 +2836,7 @@ export default function CoachScreen() {
                 {t('coach.history')} →
               </Text>
             </TouchableOpacity>
-          </ScrollView>
+          </PremiumCheckpointScrollView>
 
           {/* New conversation button */}
           <View style={{ padding: spacing.md }}>

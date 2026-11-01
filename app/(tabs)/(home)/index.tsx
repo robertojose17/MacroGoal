@@ -1,3 +1,4 @@
+import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
@@ -925,7 +926,7 @@ export default function HomeScreen() {
     const allowed = await canOpen();
     if (!allowed) {
       console.log('[Home] Recipe daily limit reached — redirecting to subscription');
-      router.push('/subscription');
+      router.push(premiumEntry('home_recipe_limit'));
       return;
     }
     await recordOpen();
