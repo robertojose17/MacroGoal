@@ -11,6 +11,7 @@ export function words(value: unknown): string[] {
 }
 // Deliberate basic-food aliases, not automatic translation of brands or names.
 const ALIASES: Record<string, string> = {
+  chiken: 'chicken',
   manzana: 'apple', manzanas: 'apple', banana: 'banana', bananas: 'banana',
   pina: 'pineapple', pinas: 'pineapple', pollo: 'chicken',
   pechuga: 'chicken breast', pechugas: 'chicken breast',
@@ -63,7 +64,7 @@ export function satisfiesIntent(products: Product[], query: string): boolean {
   const tokens = words(normalizeQuery(query));
   return products.some(p => isBasic(p,query)
     || tokens.some(t => PREPARATION.has(t))
-    || tokens.some(t => words(productBrand(p)).some(b => b.startsWith(t))));
+    || tokens.some(t => !['chicken','breast','apple','banana','pineapple'].includes(t) && words(productBrand(p)).includes(t)));
 }
 export function rankProducts(products: Product[], query: string): Product[] {
   return [...products].sort((a,b) => Number(isBasic(b,query)) - Number(isBasic(a,query))
@@ -94,7 +95,8 @@ export function mergeProducts(groups: Product[][], limit: number): Product[] {
   }
   return output;
 }
-async function bounded(provider: Provider, query: string, ms: number): Promise<{ products: Product[]; state: ProviderState }> {
+async function bounded(provider: Provider, query: string, ms: number, stage: 'db'|'usda'|'off'): Promise<{ products: Product[]; state: ProviderState }> {
+  const started = Date.now();
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -104,20 +106,26 @@ async function bounded(provider: Provider, query: string, ms: number): Promise<{
     ]);
     if (!Array.isArray(products)) throw new Error('SEARCH_INVALID_RESPONSE');
     return { products: usable(products,query), state: 'ok' };
-  } catch { return { products: [], state: 'unavailable' }; }
+   } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    const code = ['SEARCH_TIMEOUT','SEARCH_INVALID_RESPONSE','CATALOG_UNAVAILABLE','USDA_UNAVAILABLE','USDA_INVALID_RESPONSE','OFF_UNAVAILABLE','OFF_INVALID_RESPONSE'].includes(message) ? message : 'PROVIDER_FAILURE';
+    // Never log the query, raw error, headers, URL, account or food data.
+    console.warn('[search-foods] provider unavailable', { stage, code, elapsed_ms: Date.now() - started, deadline_ms: ms });
+    return { products: [], state: 'unavailable' };
+  }
   finally { if (timer) clearTimeout(timer); }
 }
 export async function searchCatalog(query: string, limit: number, providers: { db: Provider; usda: Provider; off: Provider }, budgets = { db: 1200, usda: 1800, off: 900 }) {
   // Preserve original-language intent; each provider chooses its request form.
   const states: Record<'db'|'usda'|'off',ProviderState> = { db: 'skipped',usda: 'skipped',off: 'skipped' };
-  const db = await bounded(providers.db,query,budgets.db); states.db = db.state;
+  const db = await bounded(providers.db,query,budgets.db,'db'); states.db = db.state;
   let usda: Product[] = []; let off: Product[] = [];
   if (!satisfiesIntent(db.products,query)) {
-    const result = await bounded(providers.usda,query,budgets.usda); states.usda = result.state;
+    const result = await bounded(providers.usda,query,budgets.usda,'usda'); states.usda = result.state;
     usda = rankProducts(result.products,query);
     // OFF is last resort, not a way to pad an already useful short result list.
     if (db.products.length + usda.length === 0) {
-      const result = await bounded(providers.off,query,budgets.off); states.off = result.state;
+      const result = await bounded(providers.off,query,budgets.off,'off'); states.off = result.state;
       off = rankProducts(result.products,query);
     }
   }
