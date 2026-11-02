@@ -40,6 +40,9 @@ export function matches(p: Product, query: string): boolean {
 const COMPOSITE = /\b(fried|stuffed|powder|novelty|novelties|yogurt|sweetened|sauce|mix|smoothie|breaded|deli|roll|sandwich|soup|nuggets?|juice|pie|candy|baby|restaurant|luncheon|pizza|sausage|patties|patty)\b/;
 const PREPARATION = new Set(['raw','cooked','roasted','fried','grilled','baked','boiled','breaded','dried','canned','smoked']);
 export function isBasic(p: Product, query: string): boolean {
+  const substitutes = /\b(meatless|vegan|vegetarian|plant based|sin carne|vegano|vegana)\b/;
+  // Apply before the SQL hint: a substitute is not a generic meat match.
+  if (substitutes.test(words(productName(p)).join(' ')) && !substitutes.test(words(query).join(' '))) return false;
   // The DB has already evaluated the equivalent predicate before its LIMIT.
   const row = p._db_row as Product | undefined;
   if (typeof row?._search_basic === 'boolean') return row._search_basic;
@@ -115,7 +118,7 @@ async function bounded(provider: Provider, query: string, ms: number, stage: 'db
   }
   finally { if (timer) clearTimeout(timer); }
 }
-export async function searchCatalog(query: string, limit: number, providers: { db: Provider; usda: Provider; off: Provider }, budgets = { db: 1200, usda: 1800, off: 900 }) {
+export async function searchCatalog(query: string, limit: number, providers: { db: Provider; usda: Provider; off: Provider }, budgets = { db: 1800, usda: 1400, off: 600 }) {
   // Preserve original-language intent; each provider chooses its request form.
   const states: Record<'db'|'usda'|'off',ProviderState> = { db: 'skipped',usda: 'skipped',off: 'skipped' };
   const db = await bounded(providers.db,query,budgets.db,'db'); states.db = db.state;
