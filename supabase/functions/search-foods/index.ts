@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { firstText, normalizeQuery, queryVariants, searchCatalog } from './searchCore.ts';
+import { firstText, normalizeQuery, queryVariants, searchCatalog, ProviderHttpError } from './searchCore.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -251,7 +251,7 @@ export async function handleSearch(req: Request): Promise<Response> {
     usda: async (normalized,signal) => {
       const url = 'https://api.nal.usda.gov/fdc/v1/foods/search?query=' + encodeURIComponent(normalizeQuery(normalized)) + '&pageSize=30&api_key=DEMO_KEY';
       const response = await fetch(url,{ signal });
-      if (!response.ok) throw new Error('USDA_UNAVAILABLE');
+      if (!response.ok) throw new ProviderHttpError('USDA_UNAVAILABLE',response.status);
       const body = await response.json();
       if (!Array.isArray(body.foods)) throw new Error('USDA_INVALID_RESPONSE');
       return body.foods.map(mapUsdaToOff).filter((p: Record<string,unknown> | null): p is Record<string,unknown> => p !== null);
@@ -261,7 +261,7 @@ export async function handleSearch(req: Request): Promise<Response> {
         + '&search_simple=1&action=process&json=1&page_size=20&sort_by=unique_scans_n'
         + '&fields=code,product_name,generic_name,brands,serving_size,serving_quantity,nutriments,image_url';
       const response = await fetch(url,{ signal,headers: { 'User-Agent': 'MacroGoal/1.0 (contact@macrogoal.app)' } });
-      if (!response.ok) throw new Error('OFF_UNAVAILABLE');
+      if (!response.ok) throw new ProviderHttpError('OFF_UNAVAILABLE',response.status);
       const body = await response.json();
       if (!Array.isArray(body.products)) throw new Error('OFF_INVALID_RESPONSE');
       return body.products.map((p: Record<string,unknown>) => mapOffProduct(p,scoreProduct(p)));
