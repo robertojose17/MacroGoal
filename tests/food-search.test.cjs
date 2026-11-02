@@ -300,3 +300,19 @@ test('generic fish outranks derived oil while explicit oils and supplements rema
  assert.equal(core.intentPenalty(food('Olive oil'),'olive oil'),0);
  assert.equal(core.matches(food('Olive oil'),'olive oil'),true);
 });
+
+test('general descriptor policy applies to new identities and respects explicit variants',async()=>{
+ for(const identity of ['millet','barley','sorghum']) {
+  const basic=food(identity+', raw');const derived=food(identity+' powder');
+  const p=providers([derived,basic]);const r=await core.searchCatalog(identity,30,p.providers);
+  assert.equal(r.products[0].product_name,basic.product_name);
+  assert.equal(core.intentPenalty(derived,identity+' powder'),0);
+ }
+ assert.equal(core.intentPenalty(food('Yogurt, plain'),'yogurt'),0);
+ assert.equal(core.intentPenalty(food('Protein powder'),'protein powder'),0);
+});
+test('SQL and final ranking share vocabulary and penalize variants before LIMIT',()=>{
+ const sql=fs.readFileSync('supabase/review/food-search-v2/catalog-search.CANDIDATE.sql','utf8');
+ for(const term of core.VARIANT_TERMS) assert.ok(sql.includes("'"+term+"'"),term);
+ assert.ok(sql.indexOf('ORDER BY r.unrequested_variant ASC')<sql.indexOf('LIMIT p_limit'));
+});
