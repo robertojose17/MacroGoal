@@ -47,6 +47,10 @@ const PREPARATION = new Set(['raw','cooked','roasted','fried','grilled','baked',
 // Penalize only unrequested variants; explicit preparation words remain required by matches().
 export function intentPenalty(p: Product, query: string): number {
   const q = words(normalizeQuery(query)); const name = words(productName(p));
+  // Food-derived oils/supplements are variants, not the generic food itself.
+  if (q.some(t => ['salmon','tuna','fish','chicken','egg','eggs'].includes(t))
+    && ['oil','capsule','capsules','supplement','supplements'].some(t => name.includes(t))
+    && !q.some(t => ['oil','capsule','capsules','supplement','supplements'].includes(t))) return 1;
   const unrequested = (terms: string[]) => terms.some(t => name.includes(t) && !q.includes(t));
   if (q.some(t => t === 'egg' || t === 'eggs') && unrequested(['yolk','white','whites'])) return 1;
   if (q.includes('tuna') && unrequested(['salad','sandwich'])) return 1;
