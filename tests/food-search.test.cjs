@@ -280,3 +280,10 @@ for (const [query,variant,basic] of [
  assert.equal(core.intentPenalty(food(variant),query),1);
  assert.equal(core.intentPenalty(food(variant),variant),0);
 });
+
+test('common Spanish foods preserve original and translated intent without guessing platano',()=>{
+ for(const [q,english] of [['arroz','rice'],['avena','oats'],['huevos','eggs'],['claras','egg whites'],['atún','tuna'],['salmón','salmon'],['carne molida','ground beef'],['papa','potato'],['yogur griego','greek yogurt'],['proteína en polvo','protein powder']]) {
+  assert.ok(core.queryVariants(q).includes(q)); assert.ok(core.queryVariants(q).includes(english),q);
+ }
+ assert.equal(core.normalizeQuery('plátano'),'platano');
+});
