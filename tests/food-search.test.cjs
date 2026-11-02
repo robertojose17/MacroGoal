@@ -267,3 +267,16 @@ test('full catalog response after old 1200ms deadline succeeds within total clie
   assert.equal(r.providers.db,'ok');assert.equal(r.status,'complete');assert.equal(r.count,30);
   assert.deepEqual(p.calls,['db']);assert.ok(Date.now()-start<5000);
 });
+
+for (const [query,variant,basic] of [
+ ['eggs','Eggs, Grade A, Large, egg yolk','Eggs, Grade A, Large, egg whole'],
+ ['tuna','Fish, tuna salad','Fish, tuna, fresh, bluefin, raw'],
+ ['salmon','Salmon, canned','Salmon, raw'],
+ ['whey','Whey, acid, fluid','Whey protein isolate'],
+]) test('unrequested variant follows requested basic: '+query, async()=>{
+ const p=providers([food(variant),food(basic)]);
+ const r=await core.searchCatalog(query,30,p.providers);
+ assert.equal(r.products[0].product_name,basic);
+ assert.equal(core.intentPenalty(food(variant),query),1);
+ assert.equal(core.intentPenalty(food(variant),variant),0);
+});
