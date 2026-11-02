@@ -1,28 +1,28 @@
-# Food search v2 — source-only candidate
+# Food search — general intent refactor review
 
-Base repository: 5c3c2ac0d6ffd3d8f523307737a0147f7f5703eb.
-Production baseline: search-foods v32, retrieved 2026-11-01 20:28 UTC; function ed6932b4-31ab-4280-bd39-6d7c7d3403d1; bundle SHA256 efd1b13ab13912c674f50b4e62473aa17d00a9a458d56df16139a05cb65538dd; verify_jwt=false. The repository backend differs from production. Implementation must preserve the live DB macro mapping (calories/protein/carbs/fat, macros_per and serving size).
+## Provenance and deployment boundary
 
-## Proposed execution order
+The preserved v32 source remains in preservedlive-v32.index.ts.txt. Current production is search-foods v37 from 1f5a6d0ef9073165b780b83b2de53ceea912f591. This general refactor is draft PR9 only: neither the replacement RPC nor matching Edge core has been applied. The existing web preview still exercises production v37, not this candidate.
 
-1. Indexed database token matching and relevance ranking BEFORE LIMIT. Use the existing food_items_fts_idx expression, not the incompletely populated stored search_vector. Blank product_name falls through to name. Basic generic raw/cooked foods rank ahead for unspecified intent; all explicit brand/preparation query tokens remain required.
-2. Return immediately when database results satisfy the requested intent. Otherwise supplement from USDA within a bounded overall deadline.
-3. OpenFoodFacts is a last resort only when neither database nor USDA supplies relevant usable results. It never displaces a relevant result from those sources.
+## Implemented methodology
 
-A new service-only, SECURITY INVOKER read-only RPC is proposed to express indexed ranking before LIMIT. Its SQL and grants require independent review and scoped approval before application. No catalog data, stored vectors, indexes, policies or existing RPCs will be modified. No deployment is authorized by this document.
+- Preserve original-language query plus bounded EN/ES aliases and the existing chiken correction. This is a finite dictionary, not universal translation; platano remains ambiguous.
+- Retrieve with the existing name+brand expression GIN and retain alternate display/generic/brand fields. Do not use the incomplete stored search_vector.
+- Classify matching identity, explicit preparation/presentation, brand and unrequested variants before SQL LIMIT; apply the same descriptor vocabulary in final provider ranking. No food-name-specific conditional branches remain in the ranking policy.
+- An arbitrary second comma segment is not food identity. Only explicit taxonomy heads can delegate identity to the next segment. Unknown/composite cases remain conservative and may trigger USDA.
+- DB first; when no suitable basic or explicit intent match exists, supplement from USDA even if branded DB matches exist. OFF remains last resort only when both provide no usable matches.
+- Keep DB1800/USDA1400/OFF600ms deadlines, existing client5s boundary, failure/empty/cache contracts, IDs, macros, servings, history and Premium gates unchanged. No new personalization, analytics, generated query inference or catalog writes.
 
-Keep product IDs, barcode/FDC identities, nutritional values, serving details, selection/history and Premium gates intact. Deduplication affects displayed search results only and must not collapse different preparation or nutrition. Small explicit Spanish search aliases do not rename foods. No user personalization or analytics changes.
+The shared descriptor list models preparation, derived products and presentation across identities; it is not proof of completeness. Brandless is not synonymous with verified/basic. No dietitian-verification claim is made.
 
-Client: preserve debounce/minimum query length; version the global non-personalized cache, bound the complete request including response decoding, and distinguish failure from an honest empty search. No authentication lookup should delay a non-personalized catalog query.
+## SQL security and performance
 
-## Validation plan and current evidence
+catalog-search.CANDIDATE.sql replaces only search_food_catalog_v2(text[],integer), STABLE SECURITY INVOKER, empty search_path, bounded inputs and service_role-only execution. PUBLIC/anon/authenticated remain revoked. No table, index, policy or data changes are included. Exact reviewed RPC replacement plus matching Edge deployment still require approval.
 
-Fixtures: chicken breast, raw/cooked/fried, Tyson, apple versus pineapple, banana, manzana and pechuga; provider ordering/deadlines; identity/nutrient/serving response contracts. Execute isolated fixtures and Deno/TypeScript checks in the existing repository's free GitHub Actions pattern, with no secrets, deployment or Expo build.
+Normalization and variant classification are materialized once per candidate, full nutrition rows hydrated only after ranking/LIMIT. SELECT-only equivalent EXPLAIN on chicken breast returned30 rows and used food_items_fts_idx: execution759.299ms/planning151.172ms on one observation. Prior candidate observation1085.914ms/planning158.097ms is not a controlled benchmark. The alternate-name lane scanned9699 rows and took558.706ms in the newer observation; this is the remaining performance bottleneck. No p95 or HTTP latency claim. The current indexes do not cover that complete predicate; do not silently drop alternate-field coverage or add an index without reviewed approval.
 
-Production read-only audit: expression-index chicken/breast query selected 190 candidates and ranked before LIMIT in 8.167 ms execution / 12.209 ms planning on one observation. This is not p95 or end-to-end latency. AND-token trigram alternative measured 251.627 ms. Candidate-specific measurements and results remain pending.
+## Validation and acceptance limits
 
-## Browser acceptance / release hold
+Existing GitHub CI runs isolated source/behavior fixtures, Deno checks and comparison against known TypeScript baseline errors. Focused coverage includes explicit brand/preparation, composites, provider fallback/deadlines, bilingual/typo matching and unchanged response data. Held-out category smoke fixtures (lentils, cheddar, milk, almonds, arepa) were added after fixing the general rules; they check identity/data preservation, not exhaustive category quality. Do not tune the policy solely to those examples.
 
-No existing canonical hosted web URL has yet been verified. A source route or Expo build-details page is not an interactive app preview. Do not create a second app/environment or promise a test link until the existing project's hosting is verified. Signed-in app mounting can trigger existing maintenance/analytics writes, so read-only host discovery must not mount another user's account.
-
-All merges, database application, Edge deployment, native builds and store submissions remain paused pending review. Native visual/performance acceptance is not established by source tests.
+Production catalog ranking across held-out categories, end-to-end latency and actual UI acceptance of THIS refactor remain pending the reviewed RPC/backend deployment. Existing v37 visual acceptance must not be represented as acceptance of these draft changes. No native build, paid preview run, merge or deployment is authorized by this document.
