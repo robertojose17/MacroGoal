@@ -39,7 +39,18 @@ export function matches(p: Product, query: string): boolean {
 }
 const COMPOSITE = /\b(fried|stuffed|powder|novelty|novelties|yogurt|sweetened|sauce|mix|smoothie|breaded|deli|roll|sandwich|soup|nuggets?|juice|pie|candy|baby|restaurant|luncheon|pizza|sausage|patties|patty)\b/;
 const PREPARATION = new Set(['raw','cooked','roasted','fried','grilled','baked','boiled','breaded','dried','canned','smoked']);
+// Penalize only unrequested variants; explicit preparation words remain required by matches().
+export function intentPenalty(p: Product, query: string): number {
+  const q = words(normalizeQuery(query)); const name = words(productName(p));
+  const unrequested = (terms: string[]) => terms.some(t => name.includes(t) && !q.includes(t));
+  if (q.some(t => t === 'egg' || t === 'eggs') && unrequested(['yolk','white','whites'])) return 1;
+  if (q.includes('tuna') && unrequested(['salad','sandwich'])) return 1;
+  if (q.includes('salmon') && unrequested(['canned','smoked'])) return 1;
+  if (q.includes('whey') && unrequested(['acid','fluid','sweet'])) return 1;
+  return 0;
+}
 export function isBasic(p: Product, query: string): boolean {
+  if (intentPenalty(p,query)) return false;
   const substitutes = /\b(meatless|vegan|vegetarian|plant based|sin carne|vegano|vegana)\b/;
   // Apply before the SQL hint: a substitute is not a generic meat match.
   if (substitutes.test(words(productName(p)).join(' ')) && !substitutes.test(words(query).join(' '))) return false;
@@ -70,7 +81,7 @@ export function satisfiesIntent(products: Product[], query: string): boolean {
     || tokens.some(t => !['chicken','breast','apple','banana','pineapple'].includes(t) && words(productBrand(p)).includes(t)));
 }
 export function rankProducts(products: Product[], query: string): Product[] {
-  return [...products].sort((a,b) => Number(isBasic(b,query)) - Number(isBasic(a,query))
+  return [...products].sort((a,b) => intentPenalty(a,query) - intentPenalty(b,query) || Number(isBasic(b,query)) - Number(isBasic(a,query))
     || Number(words(productName(b)).join(' ') === query) - Number(words(productName(a)).join(' ') === query)
     || productName(a).length - productName(b).length
     || productName(a).localeCompare(productName(b))
@@ -134,7 +145,7 @@ export async function searchCatalog(query: string, limit: number, providers: { d
   }
   // A relevant USDA basic food may precede branded/composite DB matches.
   // Stable sort preserves SQL order and DB priority within the same intent tier.
-  const primary = mergeProducts([db.products,usda],200).sort((a,b) => Number(isBasic(b,query)) - Number(isBasic(a,query)));
+  const primary = mergeProducts([db.products,usda],200).sort((a,b) => intentPenalty(a,query) - intentPenalty(b,query) || Number(isBasic(b,query)) - Number(isBasic(a,query)));
   const products = mergeProducts([primary,off],limit);
   const partial = Object.values(states).includes('unavailable');
   return { products,count: products.length,ranking_version: RANKING_VERSION,
