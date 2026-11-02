@@ -200,6 +200,7 @@ export default function FoodSearchScreen() {
         onSupabaseHit: (products) => {
           if (controller.signal.aborted) return;
           console.log('[FoodSearch] onSupabaseHit —', products.length, 'products');
+          resultsMapRef.current = new Map(); // Server response replaces provisional cache, including [].
           const merged = mergeProducts(resultsMapRef.current, products, 'supabase', query);
           setResults(merged);
         },
@@ -224,13 +225,6 @@ export default function FoodSearchScreen() {
           if (controller.signal.aborted) return;
           console.log('[FoodSearch] Search complete for query:', query);
           setIsSearching(false);
-          // If still no results after all stages, show empty message
-          setResults(prev => {
-            if (prev.length === 0) {
-              setErrorMessage(null); // let renderEmptyState handle it
-            }
-            return prev;
-          });
         },
       },
       controller.signal,
@@ -244,7 +238,12 @@ export default function FoodSearchScreen() {
       debounceTimerRef.current = null;
     }
 
+    abortControllerRef.current?.abort();
+    resultsMapRef.current = new Map();
+    setResults([]);
+    setErrorMessage(null);
     const trimmedQuery = searchQuery.trim();
+    setIsSearching(trimmedQuery.length >= 2);
 
     if (trimmedQuery.length === 0) {
       console.log('[FoodSearch] Query empty — clearing results');
@@ -468,6 +467,7 @@ export default function FoodSearchScreen() {
               value={searchQuery}
               onChangeText={(text) => {
                 console.log('[FoodSearch] Search input changed:', text);
+                abortControllerRef.current?.abort();
                 setSearchQuery(text);
               }}
               autoCapitalize="none"
@@ -478,6 +478,7 @@ export default function FoodSearchScreen() {
               <TouchableOpacity
                 onPress={() => {
                   console.log('[FoodSearch] Clear search button pressed');
+                  abortControllerRef.current?.abort();
                   setSearchQuery('');
                 }}
                 style={styles.clearButton}
