@@ -1,7 +1,7 @@
 -- REVIEW CANDIDATE ONLY. No application without exact RPC/grant approval.
 -- Uses the existing expression GIN; no catalog/index/policy changes.
 BEGIN;
-CREATE FUNCTION public.search_food_catalog_v2(p_queries text[], p_limit integer DEFAULT 30)
+CREATE OR REPLACE FUNCTION public.search_food_catalog_v2(p_queries text[], p_limit integer DEFAULT 30)
 RETURNS SETOF jsonb
 LANGUAGE plpgsql STABLE SECURITY INVOKER
 SET search_path = ''
@@ -55,24 +55,21 @@ BEGIN
       AND coalesce(f.calories,0) >= 0 AND coalesce(f.protein,0) >= 0
       AND coalesce(f.carbs,0) >= 0 AND coalesce(f.fat,0) >= 0
   ), ranked AS (
-    SELECT n.*,
-      (btrim(n.display_brand) = ''
-       AND regexp_replace(lower(substring(n.display_name FROM '^[[:alnum:]]+')),'s$','') = ANY(v_heads)
-       AND NOT EXISTS (
-         SELECT 1 FROM regexp_split_to_table(lower(split_part(n.display_name,',',1)),'[^[:alnum:]]+') h
-         WHERE h <> '' AND regexp_replace(h,'s$','') <> ALL(v_tokens)
-         AND h <> ALL(ARRAY['raw','fresh','plain','cooked','boneless','skinless','whole','white','brown','red','green'])
-       )
-       AND lower(n.display_name) !~ '\m(fried|stuffed|powder|breaded|deli|roll|sandwich|soup|nugget|nuggets|juice|pie|candy|baby|restaurant|luncheon|pizza|sausage|patties|patty|novelty|novelties|yogurt|sweetened|sauce|mix|smoothie)\M'
-      ) AS basic_food,
+    SELECT n.*, NOT (NOT EXISTS (SELECT 1 FROM unnest(ARRAY['fried','stuffed','powder','novelty','novelties','sweetened','sauce','mix','smoothie','breaded','deli','roll','sandwich','soup','nugget','nuggets','juice','pie','candy','baby','restaurant','luncheon','pizza','sausage','patties','patty','salad','canned','smoked','oil','capsule','capsules','supplement','supplements','meatless','vegan','vegetarian','plant based','yolk','egg white','egg whites','acid','fluid']) term WHERE (' '||regexp_replace(lower(n.display_name),'[^[:alnum:]]+',' ','g')||' ') LIKE '% '||term||' %' AND NOT EXISTS(SELECT 1 FROM unnest(v_queries) q WHERE (' '||q||' ') LIKE '% '||term||' %'))) AS unrequested_variant,
+      (btrim(n.display_brand) = '' AND NOT EXISTS (SELECT 1 FROM unnest(ARRAY['fried','stuffed','powder','novelty','novelties','sweetened','sauce','mix','smoothie','breaded','deli','roll','sandwich','soup','nugget','nuggets','juice','pie','candy','baby','restaurant','luncheon','pizza','sausage','patties','patty','salad','canned','smoked','oil','capsule','capsules','supplement','supplements','meatless','vegan','vegetarian','plant based','yolk','egg white','egg whites','acid','fluid']) term WHERE (' '||regexp_replace(lower(n.display_name),'[^[:alnum:]]+',' ','g')||' ') LIKE '% '||term||' %' AND NOT EXISTS(SELECT 1 FROM unnest(v_queries) q WHERE (' '||q||' ') LIKE '% '||term||' %'))
+       AND EXISTS (SELECT 1 FROM unnest(ARRAY[split_part(n.display_name,',',1),split_part(n.display_name,',',2)]) segment
+         WHERE regexp_replace(lower(substring(btrim(segment) FROM '^[[:alnum:]]+')),'s$','') = ANY(v_tokens)
+         AND NOT EXISTS (SELECT 1 FROM regexp_split_to_table(lower(segment),'[^[:alnum:]]+') word
+           WHERE word <> '' AND regexp_replace(word,'s$','') <> ALL(v_tokens)
+           AND word <> ALL(ARRAY['raw','fresh','plain','cooked','boneless','skinless','whole','white','brown','red','green','ground'])))) AS basic_food,
       ts_rank_cd(to_tsvector('simple'::regconfig,n.matching_text),v_query) text_rank
     FROM names n
   ), selected AS MATERIALIZED (
-    SELECT r.id,r.basic_food,row_number() OVER (ORDER BY r.basic_food DESC,
+    SELECT r.id,r.basic_food,row_number() OVER (ORDER BY r.unrequested_variant ASC,r.basic_food DESC,
       (lower(r.display_name) = ANY(v_queries)) DESC,r.text_rank DESC,
       length(r.display_name),lower(r.display_name),r.id) ordinal
     FROM ranked r
-    ORDER BY r.basic_food DESC,(lower(r.display_name) = ANY(v_queries)) DESC,
+    ORDER BY r.unrequested_variant ASC,r.basic_food DESC,(lower(r.display_name) = ANY(v_queries)) DESC,
       r.text_rank DESC,length(r.display_name),lower(r.display_name),r.id
     LIMIT p_limit
   )
