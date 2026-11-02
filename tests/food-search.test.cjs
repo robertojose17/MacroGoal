@@ -144,3 +144,84 @@ test('v2 cache does not read the old ranking namespace',async () => {
   const keys=[]; const cache=load('utils/foodSearchCache.ts',{'@react-native-async-storage/async-storage':{getItem:async key=>{keys.push(key);return null;}}});
   assert.equal(await cache.getLocalCache('Apple'),null);assert.equal(keys[0],'@food_search_cache:v2:apple');
 });
+
+// Execute the actual screen callbacks with state/timer doubles, without mounting RN.
+function screenHarness(file) {
+  const source = fs.readFileSync(file, 'utf8');
+  const inline = file.endsWith('add-food.tsx');
+  const state = { results: [], error: null, searching: false, searched: false, query: '' };
+  const calls = [];
+  const timers = new Map();
+  let timerId = 0;
+  const ref = () => ({ current: null });
+  const abort = ref(), debounce = ref(), map = { current: new Map() };
+  const setter = key => value => { state[key] = typeof value === 'function' ? value(state[key]) : value; };
+  const context = {
+    AbortController, Map, console: { log() {}, warn() {} }, t: key => key,
+    useCallback: fn => fn, useEffect: fn => fn(),
+    setTimeout: fn => { const id = ++timerId; timers.set(id, fn); return id; },
+    clearTimeout: id => timers.delete(id),
+    hybridSearch: (query, callbacks, signal) => calls.push({ query, callbacks, signal }),
+    mergeProducts: (target, products) => { for (const p of products) target.set(p.code, p); return [...target.values()]; },
+    abortControllerRef: abort, searchAbortRef: abort,
+    debounceTimerRef: debounce, searchDebounceRef: debounce,
+    resultsMapRef: map, searchResultsMapRef: map,
+    currentQueryRef: ref(), currentSearchQueryRef: ref(),
+    setResults: setter('results'), setSearchResults: setter('results'),
+    setErrorMessage: setter('error'), setSearchError: setter('error'),
+    setIsSearching: setter('searching'), setHasSearched: setter('searched'),
+    setSearchQuery: setter('query'), searchQuery: '',
+  };
+  vm.createContext(context);
+  function run(code) {
+    vm.runInContext(ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
+  }
+  const performStart = source.indexOf('  const performSearch = useCallback(');
+  const performEnd = source.indexOf(inline ? '  }, [t]);' : '  }, []);', performStart);
+  run(source.slice(performStart, performEnd + (inline ? '  }, [t]);' : '  }, []);').length) + '\nthis.performSearch = performSearch;');
+  let change;
+  if (inline) {
+    const start = source.indexOf('  const handleSearchChange = useCallback(');
+    const end = source.indexOf('  }, [performSearch]);', start);
+    run(source.slice(start, end + '  }, [performSearch]);'.length) + '\nthis.change = handleSearchChange;');
+    change = text => context.change(text);
+  } else {
+    const inputStart = source.indexOf('onChangeText={(text) => {') + 'onChangeText={(text) => {'.length;
+    const input = source.slice(inputStart, source.indexOf('}}', inputStart));
+    const start = source.indexOf('  useEffect(() => {\n    if (debounceTimerRef.current)');
+    const end = source.indexOf('  }, [searchQuery, performSearch]);', start);
+    assert.ok(start >= 0 && end > start);
+    const effect = source.slice(start, end + '  }, [searchQuery, performSearch]);'.length);
+    change = text => { context.text = text; run(input); context.searchQuery = text; run(effect); };
+  }
+  return { state, calls, change, start: query => context.performSearch(query),
+    flush() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); } };
+}
+for (const file of ['app/food-search.tsx', 'app/add-food.tsx']) {
+  test(file + ': A cannot emit beneath B before debounce', () => {
+    const h = screenHarness(file); h.start('apple'); const a = h.calls[0];
+    h.change('banana'); assert.equal(a.signal.aborted, true);
+    a.callbacks.onSupabaseHit([food('old apple')]); a.callbacks.onComplete();
+    assert.equal(h.state.results.length, 0); assert.equal(h.state.searching, true);
+    assert.equal(h.calls.length, 1); h.flush(); assert.equal(h.calls[1].query, 'banana');
+  });
+  test(file + ': one character aborts and resets', () => {
+    const h = screenHarness(file); h.start('apple'); const a = h.calls[0];
+    a.callbacks.onLocalCacheHit([food('cached apple')]); h.change('b');
+    a.callbacks.onSupabaseHit([food('late apple')]); a.callbacks.onComplete(); h.flush();
+    assert.equal(a.signal.aborted, true); assert.equal(h.state.results.length, 0);
+    assert.equal(h.state.searching, false); assert.equal(h.state.searched, false); assert.equal(h.calls.length, 1);
+  });
+  test(file + ': authoritative changed and empty results replace cache', () => {
+    const h = screenHarness(file); h.start('apple'); const cb = h.calls[0].callbacks;
+    cb.onLocalCacheHit([food('cached')]); cb.onSupabaseHit([food('fresh')]);
+    assert.deepEqual(plain(h.state.results).map(p => p.product_name), ['fresh']);
+    cb.onSupabaseHit([]); cb.onComplete(); assert.equal(h.state.results.length, 0);
+    assert.equal(h.state.error, null); assert.equal(h.state.searching, false);
+  });
+  test(file + ': completion preserves connection failure', () => {
+    const h = screenHarness(file); h.start('apple'); const cb = h.calls[0].callbacks;
+    cb.onError('supabase', new Error('SEARCH_UNAVAILABLE')); cb.onComplete();
+    assert.ok(h.state.error); assert.equal(h.state.searching, false);
+  });
+}
