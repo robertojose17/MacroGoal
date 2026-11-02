@@ -53,9 +53,11 @@ export function intentPenalty(p: Product, query: string): number {
 export function isBasic(p: Product, query: string): boolean {
   if(productBrand(p)||intentPenalty(p,query)||!matches(p,query)) return false;
   const variants=queryVariants(query).map(v=>words(v).map(w=>w.replace(/s$/,'')));
-  const segments=productName(p).split(',').slice(0,2).map(v=>words(v).map(w=>w.replace(/s$/,'')));
-  // Catalog taxonomies may prefix an identity (e.g. a class followed by the food).
-  // A matching first/second segment head is evidence, never a verified-food claim.
+  const allSegments=productName(p).split(',').slice(0,2).map(v=>words(v).map(w=>w.replace(/s$/,'')));
+  // Only explicit taxonomy prefixes can delegate identity to the next segment.
+  // An arbitrary composite (e.g. a baked product with a fruit ingredient) cannot.
+  const taxonomyHeads=['fish','meat','poultry','fruit','vegetable','cereal'];
+  const segments=taxonomyHeads.includes(allSegments[0]?.join(' ')) ? allSegments : allSegments.slice(0,1);
   return variants.some(tokens=>segments.some(segment=>tokens.includes(segment[0]) &&
     segment.every(word=>tokens.includes(word)||['raw','fresh','plain','cooked','boneless','skinless','whole','white','brown','red','green','ground'].includes(word))));
 }
