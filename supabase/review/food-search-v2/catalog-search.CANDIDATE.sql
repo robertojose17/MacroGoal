@@ -54,16 +54,27 @@ BEGIN
     WHERE (f.calories > 0 OR f.protein > 0 OR f.carbs > 0 OR f.fat > 0)
       AND coalesce(f.calories,0) >= 0 AND coalesce(f.protein,0) >= 0
       AND coalesce(f.carbs,0) >= 0 AND coalesce(f.fat,0) >= 0
+  ), normalized AS MATERIALIZED (
+    SELECT n.*,regexp_replace(lower(n.display_name),'[^[:alnum:]]+',' ','g') normalized_name
+    FROM names n
+  ), classified AS MATERIALIZED (
+    SELECT n.*,EXISTS (SELECT 1 FROM unnest(ARRAY['fried','stuffed','powder','novelty','novelties','sweetened','sauce','mix','smoothie','breaded','deli','roll','sandwich','soup','nugget','nuggets','juice','pie','candy','baby','restaurant','luncheon','pizza','sausage','patties','patty','salad','canned','smoked','oil','capsule','capsules','supplement','supplements','meatless','vegan','vegetarian','plant based','yolk','egg white','egg whites','acid','fluid']) term
+      WHERE (' '||n.normalized_name||' ') LIKE '% '||term||' %'
+        AND NOT EXISTS(SELECT 1 FROM unnest(v_queries) q WHERE (' '||q||' ') LIKE '% '||term||' %')) AS unrequested_variant
+    FROM normalized n
   ), ranked AS (
-    SELECT n.*, NOT (NOT EXISTS (SELECT 1 FROM unnest(ARRAY['fried','stuffed','powder','novelty','novelties','sweetened','sauce','mix','smoothie','breaded','deli','roll','sandwich','soup','nugget','nuggets','juice','pie','candy','baby','restaurant','luncheon','pizza','sausage','patties','patty','salad','canned','smoked','oil','capsule','capsules','supplement','supplements','meatless','vegan','vegetarian','plant based','yolk','egg white','egg whites','acid','fluid']) term WHERE (' '||regexp_replace(lower(n.display_name),'[^[:alnum:]]+',' ','g')||' ') LIKE '% '||term||' %' AND NOT EXISTS(SELECT 1 FROM unnest(v_queries) q WHERE (' '||q||' ') LIKE '% '||term||' %'))) AS unrequested_variant,
-      (btrim(n.display_brand) = '' AND NOT EXISTS (SELECT 1 FROM unnest(ARRAY['fried','stuffed','powder','novelty','novelties','sweetened','sauce','mix','smoothie','breaded','deli','roll','sandwich','soup','nugget','nuggets','juice','pie','candy','baby','restaurant','luncheon','pizza','sausage','patties','patty','salad','canned','smoked','oil','capsule','capsules','supplement','supplements','meatless','vegan','vegetarian','plant based','yolk','egg white','egg whites','acid','fluid']) term WHERE (' '||regexp_replace(lower(n.display_name),'[^[:alnum:]]+',' ','g')||' ') LIKE '% '||term||' %' AND NOT EXISTS(SELECT 1 FROM unnest(v_queries) q WHERE (' '||q||' ') LIKE '% '||term||' %'))
-       AND EXISTS (SELECT 1 FROM unnest(ARRAY[split_part(n.display_name,',',1),split_part(n.display_name,',',2)]) segment
+    SELECT n.*,
+      (btrim(n.display_brand) = '' AND NOT n.unrequested_variant
+       AND EXISTS (SELECT 1 FROM unnest(CASE
+         WHEN regexp_replace(lower(btrim(split_part(n.display_name,',',1))),'s$','') = ANY(ARRAY['fish','meat','poultry','fruit','vegetable','cereal'])
+         THEN ARRAY[split_part(n.display_name,',',1),split_part(n.display_name,',',2)]
+         ELSE ARRAY[split_part(n.display_name,',',1)] END) segment
          WHERE regexp_replace(lower(substring(btrim(segment) FROM '^[[:alnum:]]+')),'s$','') = ANY(v_tokens)
          AND NOT EXISTS (SELECT 1 FROM regexp_split_to_table(lower(segment),'[^[:alnum:]]+') word
            WHERE word <> '' AND regexp_replace(word,'s$','') <> ALL(v_tokens)
            AND word <> ALL(ARRAY['raw','fresh','plain','cooked','boneless','skinless','whole','white','brown','red','green','ground'])))) AS basic_food,
       ts_rank_cd(to_tsvector('simple'::regconfig,n.matching_text),v_query) text_rank
-    FROM names n
+    FROM classified n
   ), selected AS MATERIALIZED (
     SELECT r.id,r.basic_food,row_number() OVER (ORDER BY r.unrequested_variant ASC,r.basic_food DESC,
       (lower(r.display_name) = ANY(v_queries)) DESC,r.text_rank DESC,
