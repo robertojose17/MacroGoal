@@ -12,6 +12,8 @@ export function words(value: unknown): string[] {
 // Deliberate basic-food aliases, not automatic translation of brands or names.
 const ALIASES: Record<string, string> = {
   chiken: 'chicken',
+  arroz: 'rice', avena: 'oats', huevos: 'eggs', huevo: 'egg', claras: 'egg whites',
+  atun: 'tuna', salmon: 'salmon', papa: 'potato', papas: 'potato',
   manzana: 'apple', manzanas: 'apple', banana: 'banana', bananas: 'banana',
   pina: 'pineapple', pinas: 'pineapple', pollo: 'chicken',
   pechuga: 'chicken breast', pechugas: 'chicken breast',
@@ -19,7 +21,10 @@ const ALIASES: Record<string, string> = {
   asado: 'roasted', asada: 'roasted', frito: 'fried', frita: 'fried',
 };
 export function normalizeQuery(query: string): string {
-  const phrase = words(query).join(' ').replace(/\bpechugas? de pollo\b/g, 'chicken breast');
+  const phrase = words(query).join(' ').replace(/\bpechugas? de pollo\b/g, 'chicken breast')
+    .replace(/\bcarne molida\b/g, 'ground beef')
+    .replace(/\byogur griego\b/g, 'greek yogurt')
+    .replace(/\bproteina en polvo\b/g, 'protein powder');
   return [...new Set(phrase.split(' ').flatMap(word => (ALIASES[word] ?? word).split(' ')))].filter(Boolean).join(' ');
 }
 export function queryVariants(query: string): string[] {
