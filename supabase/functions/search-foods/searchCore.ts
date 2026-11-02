@@ -43,7 +43,7 @@ export function matches(p: Product, query: string): boolean {
   });
 }
 // Shared descriptor vocabulary, independent of food identity. SQL candidate uses the same terms.
-export const VARIANT_TERMS = ['fried','stuffed','powder','novelty','novelties','sweetened','sauce','mix','smoothie','breaded','deli','roll','sandwich','soup','nugget','nuggets','juice','pie','candy','baby','restaurant','luncheon','pizza','sausage','patties','patty','salad','canned','smoked','oil','capsule','capsules','supplement','supplements','meatless','vegan','vegetarian','plant based','yolk','egg white','egg whites','acid','fluid'];
+export const VARIANT_TERMS = ['fried','stuffed','powder','novelty','novelties','sweetened','sauce','mix','smoothie','breaded','deli','roll','sandwich','soup','nugget','nuggets','juice','pie','candy','baby','luncheon','pizza','sausage','patties','patty','salad','canned','smoked','oil','capsule','capsules','supplement','supplements','meatless','vegan','vegetarian','plant based','yolk','egg white','egg whites','acid','fluid'];
 const PREPARATION = new Set(['raw','cooked','roasted','fried','grilled','baked','boiled','breaded','dried','canned','smoked']);
 const containsPhrase = (text: string, term: string) => (' '+text+' ').includes(' '+term+' ');
 export function intentPenalty(p: Product, query: string): number {
@@ -75,8 +75,14 @@ export function satisfiesIntent(products: Product[], query: string): boolean {
     || (tokens.some(t => PREPARATION.has(t)) && !intentPenalty(p,query))
     || tokens.some(t => words(productBrand(p)).includes(t) && !words(productName(p)).includes(t)));
 }
+// A known brand is a preference only when a query token identifies that brand,
+// rather than merely repeating the food word contained in the brand name.
+export function brandPenalty(p: Product, query: string): number {
+  const brand=words(productBrand(p)); const name=words(productName(p));
+  return Number(brand.length>0 && !words(normalizeQuery(query)).some(t=>brand.includes(t)&&!name.includes(t)));
+}
 export function rankProducts(products: Product[], query: string): Product[] {
-  return [...products].sort((a,b) => intentPenalty(a,query) - intentPenalty(b,query) || Number(isBasic(b,query)) - Number(isBasic(a,query))
+  return [...products].sort((a,b) => intentPenalty(a,query) - intentPenalty(b,query) || Number(isBasic(b,query)) - Number(isBasic(a,query)) || brandPenalty(a,query) - brandPenalty(b,query)
     || Number(words(productName(b)).join(' ') === query) - Number(words(productName(a)).join(' ') === query)
     || productName(a).length - productName(b).length
     || productName(a).localeCompare(productName(b))
@@ -104,6 +110,9 @@ export function mergeProducts(groups: Product[][], limit: number): Product[] {
   }
   return output;
 }
+export class ProviderHttpError extends Error {
+  constructor(code: string, readonly status: number) { super(code); }
+}
 async function bounded(provider: Provider, query: string, ms: number, stage: 'db'|'usda'|'off'): Promise<{ products: Product[]; state: ProviderState }> {
   const started = Date.now();
   const controller = new AbortController();
@@ -119,7 +128,8 @@ async function bounded(provider: Provider, query: string, ms: number, stage: 'db
     const message = error instanceof Error ? error.message : '';
     const code = ['SEARCH_TIMEOUT','SEARCH_INVALID_RESPONSE','CATALOG_UNAVAILABLE','USDA_UNAVAILABLE','USDA_INVALID_RESPONSE','OFF_UNAVAILABLE','OFF_INVALID_RESPONSE'].includes(message) ? message : 'PROVIDER_FAILURE';
     // Never log the query, raw error, headers, URL, account or food data.
-    console.warn('[search-foods] provider unavailable', { stage, code, elapsed_ms: Date.now() - started, deadline_ms: ms });
+    const http_status = error instanceof ProviderHttpError && Number.isInteger(error.status) && error.status>=400 && error.status<=599 ? error.status : undefined;
+    console.warn('[search-foods] provider unavailable', { stage, code, http_status, elapsed_ms: Date.now() - started, deadline_ms: ms });
     return { products: [], state: 'unavailable' };
   }
   finally { if (timer) clearTimeout(timer); }
@@ -140,7 +150,7 @@ export async function searchCatalog(query: string, limit: number, providers: { d
   }
   // A relevant USDA basic food may precede branded/composite DB matches.
   // Stable sort preserves SQL order and DB priority within the same intent tier.
-  const primary = mergeProducts([db.products,usda],200).sort((a,b) => intentPenalty(a,query) - intentPenalty(b,query) || Number(isBasic(b,query)) - Number(isBasic(a,query)));
+  const primary = mergeProducts([db.products,usda],200).sort((a,b) => intentPenalty(a,query) - intentPenalty(b,query) || Number(isBasic(b,query)) - Number(isBasic(a,query)) || brandPenalty(a,query) - brandPenalty(b,query));
   const products = mergeProducts([primary,off],limit);
   const partial = Object.values(states).includes('unavailable');
   return { products,count: products.length,ranking_version: RANKING_VERSION,
