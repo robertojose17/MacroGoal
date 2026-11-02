@@ -225,3 +225,26 @@ for (const file of ['app/food-search.tsx', 'app/add-food.tsx']) {
     assert.ok(h.state.error); assert.equal(h.state.searching, false);
   });
 }
+
+
+test('generic food words inside a brand do not suppress USDA basic fallback', async () => {
+  const p = providers([food('Chicken breast strips', {brands:'Chicken Kitchen'})], [raw]);
+  const result = await core.searchCatalog('chicken breast',30,p.providers);
+  assert.deepEqual(p.calls,['db','usda']);
+  assert.equal(result.products[0].product_name,raw.product_name);
+});
+test('bounded typo retains original and corrected food intent', () => {
+  assert.deepEqual(plain(core.queryVariants('chiken breast')),['chiken breast','chicken breast']);
+  assert.equal(core.matches(raw,'chiken breast'),true);
+});
+test('provider diagnostic never exposes query or raw error text', async () => {
+  const logs=[];
+  const isolated=load('supabase/functions/search-foods/searchCore.ts',{}, {console:{warn:(...args)=>logs.push(args)}});
+  const p=providers(()=>{throw new Error('secret raw failure');},[raw]);
+  const result=await isolated.searchCatalog('chicken breast',30,p.providers);
+  assert.equal(result.status,'partial');
+  assert.equal(logs[0][1].stage,'db'); assert.equal(logs[0][1].code,'PROVIDER_FAILURE');
+  assert.equal(logs[0][1].deadline_ms,1200);
+  assert.ok(Number.isFinite(logs[0][1].elapsed_ms));
+  assert.ok(!JSON.stringify(logs).includes('secret')); assert.ok(!JSON.stringify(logs).includes('chicken'));
+});
