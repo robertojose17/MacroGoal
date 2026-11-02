@@ -261,7 +261,7 @@ test('unrequested meat substitutes cannot outrank actual chicken despite SQL bas
   assert.equal(core.isBasic(substitute,'chicken meatless'),true);
 });
 test('full catalog response after old 1200ms deadline succeeds within total client budget', async () => {
-  const rows=Array.from({length:30},(_,i)=>food('Chicken breast raw '+i,{code:String(i),_db_row:{_search_basic:true}}));
+  const rows=Array.from({length:30},(_,i)=>food('Chicken breast, raw '+i,{code:String(i),_db_row:{_search_basic:true}}));
   const p=providers(()=>new Promise(resolve=>setTimeout(()=>resolve(rows),1300)));
   const start=Date.now();const r=await core.searchCatalog('chicken breast',30,p.providers);
   assert.equal(r.providers.db,'ok');assert.equal(r.status,'complete');assert.equal(r.count,30);
@@ -315,4 +315,18 @@ test('SQL and final ranking share vocabulary and penalize variants before LIMIT'
  const sql=fs.readFileSync('supabase/review/food-search-v2/catalog-search.CANDIDATE.sql','utf8');
  for(const term of core.VARIANT_TERMS) assert.ok(sql.includes("'"+term+"'"),term);
  assert.ok(sql.indexOf('ORDER BY r.unrequested_variant ASC')<sql.indexOf('LIMIT p_limit'));
+});
+
+
+test('taxonomy head may introduce identity but composite ingredient may not',()=>{
+ assert.equal(core.isBasic(food('Fish, salmon, raw'),'salmon'),true);
+ assert.equal(core.isBasic(food('Muffins, apple'),'apple'),false);
+});
+test('held-out category identity smoke without category-specific rules',async()=>{
+ for(const [query,name] of [['lentils','Lentils, raw'],['cheddar','Cheddar cheese'],['milk','Milk, whole'],['almonds','Almonds, raw'],['arepa','Arepa']]) {
+  const item=food(name);const before=JSON.stringify(item);
+  const p=providers([item]);const result=await core.searchCatalog(query,30,p.providers);
+  assert.equal(result.products[0].product_name,name,query);
+  assert.equal(JSON.stringify(item),before);
+ }
 });
