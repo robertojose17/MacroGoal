@@ -419,6 +419,7 @@ export default function AddFoodScreen() {
         onSupabaseHit: (products) => {
           if (controller.signal.aborted) return;
           console.log('[AddFood] onSupabaseHit —', products.length, 'products');
+          searchResultsMapRef.current = new Map(); // Server response replaces provisional cache, including [].
           const merged = mergeProducts(searchResultsMapRef.current, products, 'supabase', query);
           setSearchResults(merged);
         },
@@ -451,6 +452,11 @@ export default function AddFoodScreen() {
    */
   const handleSearchChange = useCallback((text: string) => {
     console.log('[AddFood] Search input changed:', text);
+    searchAbortRef.current?.abort(); // Invalidate immediately, before the debounce interval.
+    searchResultsMapRef.current = new Map();
+    setSearchResults([]);
+    setSearchError(null);
+    setHasSearched(false);
     setSearchQuery(text);
 
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
