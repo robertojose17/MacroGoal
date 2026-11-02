@@ -287,3 +287,16 @@ test('common Spanish foods preserve original and translated intent without guess
  }
  assert.equal(core.normalizeQuery('plátano'),'platano');
 });
+
+test('generic fish outranks derived oil while explicit oils and supplements remain selectable',async()=>{
+ const oil=food('Fish oil, salmon');const fish=food('Fish, salmon, chum, raw');
+ const p=providers([oil,fish]);const r=await core.searchCatalog('salmon',30,p.providers);
+ assert.equal(r.products[0].product_name,fish.product_name);
+ assert.equal(core.intentPenalty(oil,'salmon'),1);
+ assert.equal(core.intentPenalty(oil,'salmon oil'),0);
+ assert.equal(core.matches(oil,'salmon oil'),true);
+ assert.equal(core.intentPenalty(food('Fish oil capsules'),'fish'),1);
+ assert.equal(core.intentPenalty(food('Fish oil capsules'),'fish oil capsules'),0);
+ assert.equal(core.intentPenalty(food('Olive oil'),'olive oil'),0);
+ assert.equal(core.matches(food('Olive oil'),'olive oil'),true);
+});
