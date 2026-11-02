@@ -244,7 +244,26 @@ test('provider diagnostic never exposes query or raw error text', async () => {
   const result=await isolated.searchCatalog('chicken breast',30,p.providers);
   assert.equal(result.status,'partial');
   assert.equal(logs[0][1].stage,'db'); assert.equal(logs[0][1].code,'PROVIDER_FAILURE');
-  assert.equal(logs[0][1].deadline_ms,1200);
+  assert.equal(logs[0][1].deadline_ms,1800);
   assert.ok(Number.isFinite(logs[0][1].elapsed_ms));
   assert.ok(!JSON.stringify(logs).includes('secret')); assert.ok(!JSON.stringify(logs).includes('chicken'));
+});
+
+
+test('unrequested meat substitutes cannot outrank actual chicken despite SQL basic hint', async () => {
+  const substitute=food('Chicken, meatless',{_db_row:{_search_basic:true}});
+  const real=food('Chicken, breast, raw',{_db_row:{_search_basic:true}});
+  const p=providers([substitute,real]);
+  const r=await core.searchCatalog('chicken',30,p.providers);
+  assert.equal(r.products[0].product_name,real.product_name);
+  assert.equal(core.isBasic(substitute,'chicken'),false);
+  assert.equal(core.matches(substitute,'chicken meatless'),true);
+  assert.equal(core.isBasic(substitute,'chicken meatless'),true);
+});
+test('full catalog response after old 1200ms deadline succeeds within total client budget', async () => {
+  const rows=Array.from({length:30},(_,i)=>food('Chicken breast raw '+i,{code:String(i),_db_row:{_search_basic:true}}));
+  const p=providers(()=>new Promise(resolve=>setTimeout(()=>resolve(rows),1300)));
+  const start=Date.now();const r=await core.searchCatalog('chicken breast',30,p.providers);
+  assert.equal(r.providers.db,'ok');assert.equal(r.status,'complete');assert.equal(r.count,30);
+  assert.deepEqual(p.calls,['db']);assert.ok(Date.now()-start<5000);
 });
