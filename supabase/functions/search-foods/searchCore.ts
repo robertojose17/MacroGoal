@@ -42,38 +42,22 @@ export function matches(p: Product, query: string): boolean {
     return tokens.length > 0 && tokens.every(token => haystack.some(word => word.startsWith(token)));
   });
 }
-const COMPOSITE = /\b(fried|stuffed|powder|novelty|novelties|yogurt|sweetened|sauce|mix|smoothie|breaded|deli|roll|sandwich|soup|nuggets?|juice|pie|candy|baby|restaurant|luncheon|pizza|sausage|patties|patty)\b/;
+// Shared descriptor vocabulary, independent of food identity. SQL candidate uses the same terms.
+export const VARIANT_TERMS = ['fried','stuffed','powder','novelty','novelties','sweetened','sauce','mix','smoothie','breaded','deli','roll','sandwich','soup','nugget','nuggets','juice','pie','candy','baby','restaurant','luncheon','pizza','sausage','patties','patty','salad','canned','smoked','oil','capsule','capsules','supplement','supplements','meatless','vegan','vegetarian','plant based','yolk','egg white','egg whites','acid','fluid'];
 const PREPARATION = new Set(['raw','cooked','roasted','fried','grilled','baked','boiled','breaded','dried','canned','smoked']);
-// Penalize only unrequested variants; explicit preparation words remain required by matches().
+const containsPhrase = (text: string, term: string) => (' '+text+' ').includes(' '+term+' ');
 export function intentPenalty(p: Product, query: string): number {
-  const q = words(normalizeQuery(query)); const name = words(productName(p));
-  // Food-derived oils/supplements are variants, not the generic food itself.
-  if (q.some(t => ['salmon','tuna','fish','chicken','egg','eggs'].includes(t))
-    && ['oil','capsule','capsules','supplement','supplements'].some(t => name.includes(t))
-    && !q.some(t => ['oil','capsule','capsules','supplement','supplements'].includes(t))) return 1;
-  const unrequested = (terms: string[]) => terms.some(t => name.includes(t) && !q.includes(t));
-  if (q.some(t => t === 'egg' || t === 'eggs') && unrequested(['yolk','white','whites'])) return 1;
-  if (q.includes('tuna') && unrequested(['salad','sandwich'])) return 1;
-  if (q.includes('salmon') && unrequested(['canned','smoked'])) return 1;
-  if (q.includes('whey') && unrequested(['acid','fluid','sweet'])) return 1;
-  return 0;
+  const name=words(productName(p)).join(' '); const requested=words(normalizeQuery(query)).join(' ');
+  return Number(VARIANT_TERMS.some(term=>containsPhrase(name,term)&&!containsPhrase(requested,term)));
 }
 export function isBasic(p: Product, query: string): boolean {
-  if (intentPenalty(p,query)) return false;
-  const substitutes = /\b(meatless|vegan|vegetarian|plant based|sin carne|vegano|vegana)\b/;
-  // Apply before the SQL hint: a substitute is not a generic meat match.
-  if (substitutes.test(words(productName(p)).join(' ')) && !substitutes.test(words(query).join(' '))) return false;
-  // The DB has already evaluated the equivalent predicate before its LIMIT.
-  const row = p._db_row as Product | undefined;
-  if (typeof row?._search_basic === 'boolean') return row._search_basic;
-  const singular = (word: string) => word.replace(/s$/, '');
-  const variants = queryVariants(query).map(words);
-  const heads = variants.map(tokens => singular(tokens[0] ?? ''));
-  const allowed = new Set([...variants.flat().map(singular),'raw','fresh','plain','cooked','boneless','skinless','whole','white','brown','red','green']);
-  const name = productName(p);
-  const head = words(name.split(',')[0]);
-  return !productBrand(p) && head.length > 0 && heads.includes(singular(head[0]))
-    && head.every(word => allowed.has(singular(word))) && !COMPOSITE.test(words(name).join(' '));
+  if(productBrand(p)||intentPenalty(p,query)||!matches(p,query)) return false;
+  const variants=queryVariants(query).map(v=>words(v).map(w=>w.replace(/s$/,'')));
+  const segments=productName(p).split(',').slice(0,2).map(v=>words(v).map(w=>w.replace(/s$/,'')));
+  // Catalog taxonomies may prefix an identity (e.g. a class followed by the food).
+  // A matching first/second segment head is evidence, never a verified-food claim.
+  return variants.some(tokens=>segments.some(segment=>tokens.includes(segment[0]) &&
+    segment.every(word=>tokens.includes(word)||['raw','fresh','plain','cooked','boneless','skinless','whole','white','brown','red','green','ground'].includes(word))));
 }
 export function hasNutrition(p: Product): boolean {
   const n = p.nutriments as Record<string, unknown> | undefined;
@@ -86,8 +70,8 @@ export function usable(products: Product[], query: string): Product[] {
 export function satisfiesIntent(products: Product[], query: string): boolean {
   const tokens = words(normalizeQuery(query));
   return products.some(p => isBasic(p,query)
-    || tokens.some(t => PREPARATION.has(t))
-    || tokens.some(t => !['chicken','breast','apple','banana','pineapple'].includes(t) && words(productBrand(p)).includes(t)));
+    || (tokens.some(t => PREPARATION.has(t)) && !intentPenalty(p,query))
+    || tokens.some(t => words(productBrand(p)).includes(t) && !words(productName(p)).includes(t)));
 }
 export function rankProducts(products: Product[], query: string): Product[] {
   return [...products].sort((a,b) => intentPenalty(a,query) - intentPenalty(b,query) || Number(isBasic(b,query)) - Number(isBasic(a,query))
