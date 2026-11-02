@@ -1,0 +1,12 @@
+name: Preview existing MacroGoal web app
+# Manual only: confirm workflow usage cost before starting in Expo.
+# Uses the existing project and production backend; does not validate an unapplied RPC.
+on:
+  workflow_dispatch: {}
+jobs:
+  deploy_web:
+    name: Export and deploy web preview
+    type: deploy
+    environment: production
+    params:
+      prod: false
