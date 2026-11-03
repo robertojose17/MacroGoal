@@ -206,3 +206,23 @@ test('new view uses one natural unit and only verified volume choices; old edit 
  assert.ok(!view.includes('setNumberOfServings(unitCount'));
  assert.ok(source.includes("if (mode === 'edit' || itemId) options.push("));
 });
+
+test('fractional package mass is not rounded before detail or log calculations',()=>{
+ const product={code:'fixture-third',serving_size:'3 pieces (100 g)',serving_quantity:100,nutriments:{'energy-kcal_100g':300}};
+ const unit=extractServingSize(product);
+ assert.equal(unit.grams,100/3);assert.equal(extractNutritionPerServing(product,unit.grams).calories,100);
+});
+test('entire SQL candidate retains complete regex literals and atomic service-only ACLs',()=>{
+ const sql=readFileSync(new URL('../supabase/review/food-search-v2/portion-cache.CANDIDATE.sql',import.meta.url),'utf8');
+ assert.equal(sql.split("'^[0-9]{1,20}$'").length-1,3);
+ assert.equal(sql.split('$fn$').length-1,4);
+ assert.equal((sql.match(/^CREATE FUNCTION /gm)||[]).length,2);
+ assert.equal((sql.match(/^BEGIN;/gm)||[]).length,1);
+ assert.match(sql,/COMMIT;\s*$/);
+ for(const signature of ['read_usda_portions_v1(text[])','record_usda_portions_v1(text,jsonb)']){
+  assert.ok(sql.includes('REVOKE ALL ON FUNCTION public.'+signature+' FROM PUBLIC,anon,authenticated;'));
+  assert.ok(sql.includes('GRANT EXECUTE ON FUNCTION public.'+signature+' TO service_role;'));
+ }
+ assert.equal((sql.match(/SECURITY INVOKER SET search_path = ''/g)||[]).length,2);
+ assert.ok(!/GRANT[^;]*TO (PUBLIC|anon|authenticated)/i.test(sql));
+});
