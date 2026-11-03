@@ -1,3 +1,4 @@
+import { applyUsdaPortion } from '../supabase/functions/_shared/foodPortions.mjs';
 
 import { singularizeUnit } from '@/utils/stringUtils';
 
@@ -21,6 +22,8 @@ import { singularizeUnit } from '@/utils/stringUtils';
 
 export interface OpenFoodFactsProduct {
   code: string;
+  _portion_evidence?: unknown;
+  _db_id?: string;
   product_name?: string;
   image_url?: string;
   generic_name?: string;
@@ -583,4 +586,9 @@ export function mapOpenFoodFactsToFood(product: OpenFoodFactsProduct): any {
     is_favorite: false,
     is_from_openfoodfacts: true, // Flag to indicate external source
   };
+}
+
+/** New catalog selections only; historical edit loaders must preserve saved grams. */
+export function normalizeUsdaProduct(product:OpenFoodFactsProduct):OpenFoodFactsProduct {
+ return applyUsdaPortion(product,product._portion_evidence);
 }
