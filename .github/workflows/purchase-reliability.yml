@@ -74,4 +74,27 @@ jobs:
           deno-version: v2.5.6
       - name: Deno check of backend candidate (no execution)
         if: success() || failure()
-        run: deno check --no-config --no-lock supabase/functions/sync-subscription/index.ts supabase/functions/search-foods/index.ts supabase/functions/lookup-barcode/index.ts supabase/functions/vision-nutrition-extract/index.ts
+        run: deno check --no-config --no-lock supabase/functions/sync-subscription/index.ts supabase/functions/search-foods/index.ts supabase/functions/lookup-barcode/index.ts
+      - name: Compare vision Deno diagnostics with baseline (no execution)
+        if: success() || failure()
+        run: |
+          set +e
+          deno check --no-config --no-lock supabase/functions/vision-nutrition-extract/index.ts > candidate-vision.log 2>&1
+          candidate_status=$?
+          deno check --no-config --no-lock ../baseline/supabase/functions/vision-nutrition-extract/index.ts > baseline-vision.log 2>&1
+          baseline_status=$?
+          set -e
+          CANDIDATE_STATUS=$candidate_status BASELINE_STATUS=$baseline_status node <<'NODE'
+          const fs=require('node:fs');
+          function diagnostics(file,status){
+            const source=fs.readFileSync(file,'utf8').replace(/\x1b\[[0-9;]*m/g,'');
+            const matches=[...source.matchAll(/TS(\d{4}) \[ERROR\]: ([^\n]+)/g)];
+            if(Number(status)!==0&&!matches.length)throw Error('Deno infrastructure or unparsed failure: '+file+'\n'+source);
+            return matches.map(m=>({code:m[1],message:m[2]}));
+          }
+          const before=diagnostics('baseline-vision.log',process.env.BASELINE_STATUS),after=diagnostics('candidate-vision.log',process.env.CANDIDATE_STATUS);
+          const counts=new Map();for(const d of before){const key=JSON.stringify(d);counts.set(key,(counts.get(key)||0)+1);}
+          const introduced=after.filter(d=>{const key=JSON.stringify(d),count=counts.get(key)||0;if(count){counts.set(key,count-1);return false;}return true;});
+          console.log(JSON.stringify({visionBaselineDiagnostics:before.length,visionCandidateDiagnostics:after.length,introduced},null,2));
+          if(introduced.length)process.exitCode=1;
+          NODE
