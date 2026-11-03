@@ -1,3 +1,4 @@
+import { decorateCachedProducts } from '../_shared/portionCache.mjs';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { barcodeCandidates, canonicalNewBarcode, insertLookupItemOrReturnWinner } from './identity.mjs';
@@ -260,7 +261,8 @@ Deno.serve(async (req: Request) => {
 
   // If found in DB, return immediately
   if (dbRow) {
-    return jsonResponse({ found: true, item: dbRow, source: 'supabase' });
+    const decorated=await decorateCachedProducts([{_usda_fdc_id:dbRow.usda_fdc_id,nutriments:{}}],supabase,150);
+    return jsonResponse({ found: true, item: {...dbRow,_portion_evidence:decorated[0]?._portion_evidence??null}, source: 'supabase' });
   }
 
   // Store supabase item for fallback
