@@ -46,7 +46,7 @@ export async function resolveCorrectionIdentity(input, repo) {
 export async function persistVerifiedCorrection(identity, values, repo) {
   const payload = { ...values, barcode: identity.barcode, source: 'user', ai_verified: true, verified: true, confidence: 'high' };
   if (identity.row) {
-    const saved = await repo.update(identity.row.id, payload);
+    const saved = await repo.update(identity.row.id, payload, identity.row);
     if (!saved) throw new Error('verified correction update returned no persisted row');
     return saved;
   }
@@ -64,7 +64,7 @@ export async function persistVerifiedCorrection(identity, values, repo) {
         ...values,
         barcode: winner.barcode || identity.barcode,
         source: 'user', ai_verified: true, verified: true, confidence: 'high',
-      });
+      }, winner);
       if (!saved) throw new Error('concurrent verified correction update returned no persisted row');
       return saved;
     }
