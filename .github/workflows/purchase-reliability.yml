@@ -74,4 +74,4 @@ jobs:
           deno-version: v2.5.6
       - name: Deno check of backend candidate (no execution)
         if: success() || failure()
-        run: deno check --no-config --no-lock supabase/functions/sync-subscription/index.ts supabase/functions/search-foods/index.ts
+        run: deno check --no-config --no-lock supabase/functions/sync-subscription/index.ts supabase/functions/search-foods/index.ts supabase/functions/lookup-barcode/index.ts
