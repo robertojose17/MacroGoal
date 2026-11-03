@@ -93,3 +93,52 @@ test('service cache RPC error propagates instead of false persistence success',a
  const cache=servicePortionCache(admin);
  await assert.rejects(()=>cache.write('123',captureUsdaPortions(food([p()]),123,date)),/PORTION_CACHE_WRITE/);
 });
+
+import {applyUsdaPortion} from '../supabase/functions/_shared/foodPortions.mjs';
+import {registerHooks} from 'node:module';
+import {readFileSync} from 'node:fs';
+registerHooks({resolve(specifier,context,next){return next(specifier==='@/utils/stringUtils'?new URL('../utils/stringUtils.ts',import.meta.url).href:specifier,context);}});
+const {extractServingSize,extractNutritionPerServing}=await import('../utils/openFoodFacts.ts');
+const {formatFoodRowServing}=await import('../utils/servingDisplay.ts');
+const {buildSyntheticOffData}=await import('../utils/servingParser.ts');
+test('search label, detail grams and logged nutrition share the actual adapter basis',()=>{
+ for(const [amount,weight,description] of [[1,118,'medium'],[0.5,80,'cup'],[2,28,'slice'],[1,13.5,'tablespoon']]){
+  const evidence=captureUsdaPortions(food([p(amount,weight,description)]),123,date);
+  const raw={code:'catalog-id',_db_id:'catalog-id',_usda_fdc_id:'123',product_name:'Fixture food, cooked',serving_quantity:100,serving_size:'999 g',nutriments:{'energy-kcal_100g':89,'proteins_100g':1.09,'energy-kcal_serving':900}};
+  const unchanged=structuredClone(raw);const product=applyUsdaPortion(raw,evidence);
+  const serving=extractServingSize(product);const nutrition=extractNutritionPerServing(product,serving.grams);
+  assert.equal(serving.grams,weight/amount);assert.equal(nutrition.calories,Math.round(89*weight/amount/100));
+  assert.ok(formatFoodRowServing(product.serving_size,1,serving.grams).includes(String(Number((weight/amount).toFixed(2)))));
+  assert.equal(product._db_id,raw._db_id);assert.equal(product.code,raw.code);assert.deepEqual(raw,unchanged);
+ }
+});
+test('same FDC but wrong food description cannot apply a measure to another preparation',()=>{
+ const evidence=captureUsdaPortions(food([p()]),123,date);
+ const result=applyUsdaPortion({_usda_fdc_id:'123',product_name:'Fixture food, raw',nutriments:{}},evidence);
+ assert.equal(result.serving_quantity,100);assert.equal(result._portion_evidence,null);
+});
+test('ambiguous measures and gram-only measures retain 100g default',()=>{
+ for(const list of [[p(),p(1,200,'large')],[p(100,100,'g')]]){
+  const evidence=captureUsdaPortions(food(list),123,date);
+  const result=applyUsdaPortion({_usda_fdc_id:'123',product_name:'Fixture food, cooked',nutriments:{}},evidence);
+  assert.equal(result.serving_quantity,100);assert.equal(result.serving_size,'100 g');
+ }
+});
+test('actual barcode adapter preserves per100 macros and uses the same exact evidence',()=>{
+ const evidence=captureUsdaPortions(food([p()]),123,date);
+ const item={name:'Fixture food, cooked',barcode:'fixture-code',usda_fdc_id:'123',calories:89,protein:1.09,carbs:22.8,fat:0.33,fiber:null,serving_size:999,serving_quantity:100,macros_per:'100g',_portion_evidence:evidence};
+ const saved=structuredClone(item);const scanned=buildSyntheticOffData(item);
+ assert.equal(extractServingSize(scanned).grams,118);
+ assert.equal(scanned.nutriments['energy-kcal_100g'],89);assert.deepEqual(item,saved);
+});
+test('non-USDA barcode measures remain unchanged',()=>{
+ const product={code:'package',serving_quantity:42.5,serving_size:'1 pack (42.5 g)',nutriments:{'energy-kcal_100g':200}};
+ assert.equal(applyUsdaPortion(product,null),product);
+});
+test('historical edit loader remains byte-identical to baseline',()=>{
+ const file='components/FoodDetailsLayout.tsx';
+ const current=readFileSync(new URL('../'+file,import.meta.url),'utf8');
+ const baseline=readFileSync(new URL('../../baseline/'+file,import.meta.url),'utf8');
+ const section=s=>{const start=s.indexOf('  const loadEditItem = useCallback');assert.ok(start>0);const end=s.indexOf('\n  useEffect(() => {',start);assert.ok(end>start);return s.slice(start,end);};
+ assert.equal(section(current),section(baseline));
+});
