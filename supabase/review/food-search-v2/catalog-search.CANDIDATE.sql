@@ -68,7 +68,8 @@ BEGIN
       (btrim(n.display_brand) <> '' AND NOT EXISTS (
         SELECT 1 FROM unnest(v_tokens) token
         WHERE token <> ''
-          AND token = ANY(ARRAY(SELECT regexp_replace(word,'s
+          AND token = ANY(ARRAY(SELECT regexp_replace(word,'s$','') FROM regexp_split_to_table(lower(n.display_brand),'[^[:alnum:]]+') word))
+          AND token <> ALL(ARRAY(SELECT regexp_replace(word,'s$','') FROM regexp_split_to_table(n.normalized_name,' ') word))
       )) AS brand_penalty,
       (btrim(n.display_brand) = '' AND NOT n.unrequested_variant
        AND EXISTS (SELECT 1 FROM unnest(CASE
