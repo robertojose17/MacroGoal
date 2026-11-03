@@ -408,3 +408,24 @@ test('barcode identity mismatch cannot persist another product or its portion',a
  const f=scanPortionFixture('737628064502');const response=await f.request();
  assert.equal(response.status,503);assert.equal(f.inserts,0);assert.equal(f.saved,null);
 });
+
+test('USDA Branded foodNutrients retain per100 basis independently of serving size',()=>{
+ const {api:edge}=edgeFixture();
+ const base={fdcId:123,description:'Fixture exact product',dataType:'Branded',servingSize:25,servingSizeUnit:'g',foodNutrients:[{nutrientName:'Energy',value:400},{nutrientName:'Protein',value:20},{nutrientName:'Carbohydrate',value:50},{nutrientName:'Total lipid (fat)',value:12}]};
+ const mapped=edge.mapUsdaToOff(base);
+ assert.equal(mapped.nutriments['energy-kcal_100g'],400);
+ assert.equal(mapped.nutriments.proteins_100g,20);
+ assert.equal(mapped.serving_quantity,'25');
+ assert.equal(edge.mapUsdaToOff({...base,servingSize:50}).nutriments['energy-kcal_100g'],400);
+});
+test('normal detail persistence cannot overwrite corrections or enrich using the first name match',()=>{
+ const source=fs.readFileSync('components/FoodDetailsLayout.tsx','utf8');
+ const start=source.indexOf('  const upsertFoodItem ='),end=source.indexOf('  const handleSave =',start);
+ const persistence=source.slice(start,end);
+ assert.ok(start>0&&end>start);
+ assert.ok(!persistence.includes('.update('));
+ assert.ok(!persistence.includes(".ilike('name'"));
+ assert.ok(!source.includes('enrichWithUSDA('));
+ assert.ok(persistence.includes(".eq('usda_fdc_id',prod._usda_fdc_id)"));
+ assert.ok(persistence.includes(".eq('barcode', barcode)"));
+});
