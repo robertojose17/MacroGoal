@@ -1,3 +1,4 @@
+import { decorateCachedProducts } from '../_shared/portionCache.mjs';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { firstText, normalizeQuery, queryVariants, searchCatalog, ProviderHttpError } from './searchCore.ts';
@@ -267,6 +268,7 @@ export async function handleSearch(req: Request): Promise<Response> {
       return body.products.map((p: Record<string,unknown>) => mapOffProduct(p,scoreProduct(p)));
     },
   });
+  result.products = await decorateCachedProducts(result.products,supabase,150);
   // Empty + unavailable is not an authoritative no-results response.
   return jsonResponse(result,result.count === 0 && result.status === 'partial' ? 503 : 200);
 }
