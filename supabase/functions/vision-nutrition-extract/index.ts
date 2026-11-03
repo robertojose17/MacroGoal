@@ -329,13 +329,13 @@ Deno.serve(async (req) => {
     if (type === "correction") {
       const identity = correctionIdentity!;
       const outcome = await handleVerifiedCorrection(aiResult, identity, {
-          async update(id: string, values: Record<string, unknown>) {
-            const { data, error } = await supabase.from("food_items").update(values).eq("id", id).select().maybeSingle();
+          async update(id: string, values: Record<string, unknown>, expected: Record<string, unknown>) {
+            const { data, error } = await supabase.rpc("apply_verified_food_correction_v1",{p_id:id,p_expected_updated_at:expected.updated_at??null,p_values:values});
             if (error) throw error;
             return data;
           },
           async insert(values: Record<string, unknown>) {
-            const { data, error } = await supabase.from("food_items").insert(values).select().single();
+            const { data, error } = await supabase.rpc("apply_verified_food_correction_v1",{p_id:null,p_expected_updated_at:null,p_values:values});
             if (error) throw error;
             return data;
           },
