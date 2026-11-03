@@ -142,3 +142,42 @@ test('historical edit loader remains byte-identical to baseline',()=>{
  const section=s=>{const start=s.indexOf('  const loadEditItem = useCallback');assert.ok(start>0);const end=s.indexOf('\n  useEffect(() => {',start);assert.ok(end>start);return s.slice(start,end);};
  assert.equal(section(current),section(baseline));
 });
+
+const {handlePortionRequest}=await import('../supabase/functions/_shared/portionEndpoint.ts');
+function endpointFixture(existing=null){
+ const catalog=new Map(existing?[['123',structuredClone(existing)]]:[]),cache=new Map();let insertions=0;
+ const admin={auth:{getUser:async()=>({data:{user:{id:'fixture-owner'}},error:null})},
+  rpc(name,args){const run=()=>{if(name==='read_usda_portions_v1')return {data:[...cache].map(([fdc_id,payload])=>({fdc_id,payload})),error:null};cache.set(args.p_fdc_id,structuredClone(args.p_payload));return {data:null,error:null};};return {abortSignal:async()=>run(),then:(a,b)=>Promise.resolve(run()).then(a,b)};},
+  from(table){assert.equal(table,'food_items');let key,payload;
+   const query={select(){return query;},eq(column,value){assert.equal(column,'usda_fdc_id');key=value;return query;},maybeSingle(){return query;},insert(value){payload=value;return query;},single(){return query;},async abortSignal(){if(payload){insertions++;const row={...payload,id:'22222222-2222-4222-8222-222222222222'};catalog.set(payload.usda_fdc_id,row);return {data:row,error:null};}return {data:catalog.get(key)??null,error:null};}};return query;}
+ };
+ return {admin,catalog,cache,get insertions(){return insertions;}};
+}
+const providerDetail=()=>({...food([p()]),foodNutrients:[
+ {nutrient:{id:1008,unitName:'kcal'},amount:89},{nutrient:{id:1003,unitName:'g'},amount:1.09},
+ {nutrient:{id:1004,unitName:'g'},amount:0.33},{nutrient:{id:1005,unitName:'g'},amount:22.8}]});
+const portionRequest=(extra={},auth=true)=>new Request('https://fixture.invalid/lookup-barcode',{method:'POST',headers:auth?{Authorization:'Bearer fixture'}:{},body:JSON.stringify({operation:'usda_portions_v1',fdc_id:'123',...extra})});
+test('actual authenticated endpoint inserts exact provider food once and reuses cached UUID',async()=>{
+ const f=endpointFixture();const oldFetch=globalThis.fetch,oldDeno=globalThis.Deno;let fetches=0;
+ globalThis.Deno={env:{get:()=> 'fixture-key'}};
+ globalThis.fetch=async url=>{fetches++;assert.equal(new URL(url).pathname,'/fdc/v1/food/123');return Response.json(providerDetail());};
+ try{
+  const first=await handlePortionRequest(portionRequest(),f.admin,{});assert.equal(first.status,200);
+  const saved=await first.json();assert.equal(saved.portion_persisted,true);assert.equal(saved.food_item_id,'22222222-2222-4222-8222-222222222222');
+  assert.equal(f.catalog.get('123').calories,89);assert.equal(f.catalog.get('123').serving_size,100);assert.equal(f.cache.get('123').portions[0].grams,118);
+  const second=await(await handlePortionRequest(portionRequest(),f.admin,{})).json();
+  assert.equal(second.food_item_id,saved.food_item_id);assert.equal(fetches,1);assert.equal(f.insertions,1);
+ }finally{globalThis.fetch=oldFetch;globalThis.Deno=oldDeno;}
+});
+test('actual capture never overwrites an existing catalog row or historical reference',async()=>{
+ const existing={id:'11111111-1111-4111-8111-111111111111',name:'Fixture food, cooked',calories:91,serving_size:100,usda_fdc_id:'123'};
+ const f=endpointFixture(existing);const oldFetch=globalThis.fetch,oldDeno=globalThis.Deno;
+ globalThis.Deno={env:{get:()=> 'fixture-key'}};globalThis.fetch=async()=>Response.json(providerDetail());
+ try{const result=await(await handlePortionRequest(portionRequest(),f.admin,{})).json();assert.equal(result.food_item_id,existing.id);assert.deepEqual(f.catalog.get('123'),existing);assert.equal(f.insertions,0);assert.equal(f.cache.size,1);}
+ finally{globalThis.fetch=oldFetch;globalThis.Deno=oldDeno;}
+});
+test('capture rejects unauthenticated or client-supplied nutrient evidence before fetching',async()=>{
+ const f=endpointFixture();const oldFetch=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('must not fetch');};
+ try{assert.equal((await handlePortionRequest(portionRequest({},false),f.admin,{})).status,401);assert.equal((await handlePortionRequest(portionRequest({foodPortions:[p()]}),f.admin,{})).status,400);assert.equal(calls,0);assert.equal(f.cache.size,0);assert.equal(f.insertions,0);}
+ finally{globalThis.fetch=oldFetch;}
+});
