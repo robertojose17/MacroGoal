@@ -301,6 +301,10 @@ test('global guard candidate is private, role-bound and patches only verified li
  assert.ok(sql.includes("current_setting('role',true)='service_role'"));
  assert.ok(sql.includes("current_setting('macrogoal.correction_context',true)='confirmed_v1'"));
  assert.ok(sql.includes('BEFORE INSERT OR UPDATE ON public.food_items'));
+ assert.equal((sql.match(/^BEGIN;/gm)||[]).length,1);assert.equal((sql.match(/^COMMIT;/gm)||[]).length,1);
+ assert.equal((sql.match(/^CREATE FUNCTION /gm)||[]).length,3);
+ assert.equal(sql.split('$fn$').length-1,6);assert.equal(sql.split('$patch$').length-1,2);
+ assert.equal(sql.split("'^[0-9]{8,14}$'").length-1,1);
  assert.ok(sql.includes('945fc10d72f144171132e0a56e8b3e43'));
  assert.ok(sql.includes('OLD.ai_verified_source'));assert.ok(sql.includes('p_expected_updated_at'));
  assert.ok(!/GRANT[^;]+TO (PUBLIC|anon|authenticated)/i.test(sql));
