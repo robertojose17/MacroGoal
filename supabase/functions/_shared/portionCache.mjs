@@ -1,4 +1,4 @@
-import { captureUsdaPortions, readUsdaPortions } from './foodPortions.mjs';
+import { captureUsdaPortions, readUsdaPortions, applyUsdaPortion } from './foodPortions.mjs';
 
 /** Dependencies are server-owned. Never pass a client supplied USDA response here.
  * Search calls readCachedPortions only. Detail/scan can resolve one exact FDC ID.
@@ -68,4 +68,18 @@ export function servicePortionCache(admin) {
       if (error) throw new Error('PORTION_CACHE_WRITE');
     },
   };
+}
+
+/** Search never fetches provider details. One batch read, bounded independently. */
+export async function decorateCachedProducts(products, admin, milliseconds = 150) {
+ const ids=[...new Set(products.map(p=>p._usda_fdc_id).filter(v=>/^\d{1,20}$/.test(String(v))))];
+ if(!ids.length)return products;
+ const controller=new AbortController(); let timer;
+ const expired=new Promise(resolve=>{timer=setTimeout(()=>{controller.abort();resolve([]);},milliseconds);});
+ let rows=[];
+ try{
+  rows=await Promise.race([(async()=>{const {data,error}=await admin.rpc('read_usda_portions_v1',{p_fdc_ids:ids.slice(0,100)}).abortSignal(controller.signal);return !error&&Array.isArray(data)?data:[];})(),expired]);
+ }catch{}finally{clearTimeout(timer);controller.abort();}
+ const evidence=new Map(rows.map(r=>[r.fdc_id,r.payload]));
+ return products.map(p=>applyUsdaPortion(p,evidence.get(p._usda_fdc_id)));
 }
