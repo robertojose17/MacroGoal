@@ -147,7 +147,7 @@ const {handlePortionRequest}=await import('../supabase/functions/_shared/portion
 function endpointFixture(existing=null){
  const catalog=new Map(existing?[['123',structuredClone(existing)]]:[]),cache=new Map();let insertions=0;
  const admin={auth:{getUser:async()=>({data:{user:{id:'fixture-owner'}},error:null})},
-  rpc(name,args){const run=()=>{if(name==='read_usda_portions_v1')return {data:[...cache].map(([fdc_id,payload])=>({fdc_id,payload})),error:null};cache.set(args.p_fdc_id,structuredClone(args.p_payload));return {data:null,error:null};};return {abortSignal:async()=>run(),then:(a,b)=>Promise.resolve(run()).then(a,b)};},
+  rpc(name,args){const run=()=>{if(name==='record_food_nutrition_evidence_v1')return {data:1,error:null};if(name==='read_usda_portions_v1')return {data:[...cache].map(([fdc_id,payload])=>({fdc_id,payload})),error:null};cache.set(args.p_fdc_id,structuredClone(args.p_payload));return {data:null,error:null};};return {abortSignal:async()=>run(),then:(a,b)=>Promise.resolve(run()).then(a,b)};},
   from(table){assert.equal(table,'food_items');let key,payload;
    const query={select(){return query;},eq(column,value){assert.equal(column,'usda_fdc_id');key=value;return query;},maybeSingle(){return query;},insert(value){payload=value;return query;},single(){return query;},async abortSignal(){if(payload){insertions++;const row={...payload,id:'22222222-2222-4222-8222-222222222222'};catalog.set(payload.usda_fdc_id,row);return {data:row,error:null};}return {data:catalog.get(key)??null,error:null};}};return query;}
  };
@@ -164,6 +164,7 @@ test('actual authenticated endpoint inserts exact provider food once and reuses 
  try{
   const first=await handlePortionRequest(portionRequest(),f.admin,{});assert.equal(first.status,200);
   const saved=await first.json();assert.equal(saved.portion_persisted,true);assert.equal(saved.food_item_id,'22222222-2222-4222-8222-222222222222');
+  assert.equal(f.catalog.get('123').off_data.nutrition_evidence.facts['1008'].value,89);
   assert.equal(f.catalog.get('123').calories,89);assert.equal(f.catalog.get('123').serving_size,100);assert.equal(f.cache.get('123').portions[0].grams,118);
   const second=await(await handlePortionRequest(portionRequest(),f.admin,{})).json();
   assert.equal(second.food_item_id,saved.food_item_id);assert.equal(fetches,1);assert.equal(f.insertions,1);
@@ -260,4 +261,20 @@ test('fresh evidence and confirmed corrections do not trigger provider refresh',
  const now=Date.parse(date);assert.equal(evidence.shouldRefreshNutrition({retrievedAt:date},now),false);
  assert.equal(evidence.shouldRefreshNutrition({confirmed:true},now),false);
  assert.equal(evidence.shouldRefreshNutrition(null,now),true);
+});
+
+test('evidence append reports database errors and timeouts without blocking the food flow',async()=>{
+ const fact=evidence.captureUsdaNutrition(nutrientFood,123,date);let args;
+ const admin={rpc(name,values){assert.equal(name,'record_food_nutrition_evidence_v1');args=values;return {abortSignal:async()=>({data:1,error:null})};}};
+ assert.equal(await evidence.recordNutritionEvidence(admin,'fixture-food',fact),true);
+ assert.equal(args.p_expected_revision,null);assert.deepEqual(args.p_payload,fact);
+ assert.equal(await evidence.recordNutritionEvidence({rpc:()=>({abortSignal:async()=>({error:{code:'fixture'}})})},'fixture-food',fact),false);
+ let signal;const hung={rpc:()=>({abortSignal:s=>{signal=s;return new Promise(()=>{});}})};
+ assert.equal(await evidence.recordNutritionEvidence(hung,'fixture-food',fact,10),false);assert.equal(signal.aborted,true);
+});
+test('evidence SQL remains append-only and service-only pending separate activation',()=>{
+ const sql=readFileSync(new URL('../supabase/review/food-search-v2/nutrition-evidence.CANDIDATE.sql',import.meta.url),'utf8');
+ assert.ok(sql.includes("SECURITY INVOKER SET search_path=''"));
+ assert.ok(sql.includes('GRANT SELECT,INSERT ON macrogoal_food_private.nutrition_evidence TO service_role;'));
+ assert.ok(!/UPDATE public\.food_items|DELETE FROM|GRANT[^;]+TO (anon|authenticated|PUBLIC)/i.test(sql));
 });
