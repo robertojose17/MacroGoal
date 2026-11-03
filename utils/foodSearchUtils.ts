@@ -230,3 +230,18 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
   console.log('[buildOffProductFromFoodItemId] Built from columns, serving_size=', product.serving_size);
   return product;
 }
+
+/** Capture provider facts on use, not on every keystroke. No private diary writes. */
+export async function persistUsdaSelection(product:OpenFoodFactsProduct):Promise<string|null>{
+ if(!product._usda_fdc_id||!/^\d{1,20}$/.test(product._usda_fdc_id))return null;
+ let timer:ReturnType<typeof setTimeout>|undefined;
+ try{
+  const response:any=await Promise.race([
+   supabase.functions.invoke('lookup-barcode',{body:{operation:'usda_portions_v1',fdc_id:product._usda_fdc_id}}),
+   new Promise(resolve=>{timer=setTimeout(()=>resolve(null),1800);})
+  ]);
+  if(response?.error||response?.data?.fdc_id!==product._usda_fdc_id)return null;
+  const id=response.data.food_item_id;
+  return typeof id==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)?id:null;
+ }catch{return null;}finally{if(timer)clearTimeout(timer);}
+}
