@@ -214,9 +214,9 @@ export function extractServingSize(product: OpenFoodFactsProduct): ServingSizeIn
   try {
     if (unitName && unitCount > 1) {
       // e.g. "4 cookies (29 g)" with serving_quantity=29 → grams per cookie = 7.25
-      const gramsPerUnit = parseFloat((totalGrams / unitCount).toFixed(2));
+      const gramsPerUnit = totalGrams / unitCount;
       const description = `${unitCount} ${unitName}s`;
-      const displayText = `1 ${unitName} (${gramsPerUnit} g)`;
+      const displayText = `1 ${unitName} (${Number(gramsPerUnit.toFixed(2))} g)`;
       return {
         description,
         grams: gramsPerUnit,
