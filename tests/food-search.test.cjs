@@ -315,6 +315,8 @@ test('SQL and final ranking share vocabulary and penalize variants before LIMIT'
  const sql=fs.readFileSync('supabase/review/food-search-v2/catalog-search.CANDIDATE.sql','utf8');
  for(const term of core.VARIANT_TERMS) assert.ok(sql.includes("'"+term+"'"),term);
  assert.ok(sql.indexOf('ORDER BY r.unrequested_variant ASC')<sql.indexOf('LIMIT p_limit'));
+ assert.ok(sql.includes('r.basic_food DESC,r.brand_penalty ASC'));
+ assert.ok(!sql.includes("'restaurant'"));
 });
 
 
@@ -329,4 +331,38 @@ test('held-out category identity smoke without category-specific rules',async()=
   assert.equal(result.products[0].product_name,name,query);
   assert.equal(JSON.stringify(item),before);
  }
+});
+
+
+test('generic unbranded category matches precede brands without food-name exceptions',async()=>{
+ for(const [query,name,brandName,brand] of [['cheddar','Cheese, cheddar','Cheddar','Example'],['almonds','Nuts, almonds','Almond Breeze Calcio','Blue Diamond Almonds'],['flatbread','Restaurant, Regional, flatbread','Flatbread','Example']]) {
+  const plainFood=food(name,{_db_id:'plain-'+query});const branded=food(brandName,{brands:brand});
+  const original=JSON.stringify(plainFood);const p=providers([branded,plainFood]);
+  const result=await core.searchCatalog(query,30,p.providers);
+  assert.equal(result.products[0]._db_id,plainFood._db_id,query);
+  assert.equal(JSON.stringify(plainFood),original);
+ }
+ assert.equal(core.intentPenalty(food('Restaurant, Regional, flatbread'),'flatbread'),0);
+});
+test('explicit brand remains preferred and a food word inside a brand is not brand intent',()=>{
+ const p=food('Cheddar',{brands:'Example'});
+ assert.equal(core.brandPenalty(p,'Example cheddar'),0);
+ assert.equal(core.brandPenalty(p,'cheddar'),1);
+ assert.equal(core.brandPenalty(food('Milk',{brands:'Milk Kitchen'}),'milk'),1);
+ assert.equal(core.brandPenalty(food('Almond Breeze Calcio',{brands:'Blue Diamond Almonds'}),'almonds'),1);
+ assert.equal(core.matches(p,'Example cheddar'),true);
+ assert.equal(core.matches(food('Cheese, cheddar'),'Example cheddar'),false);
+});
+test('real provider HTTP rejection records only bounded status and retains partial contract',async()=>{
+ const logs=[];let calls=0;
+ const isolated=load('supabase/functions/search-foods/searchCore.ts',{}, {console:{warn:(...args)=>logs.push(args)}});
+ let handler;load('supabase/functions/search-foods/index.ts',{
+  'jsr:@supabase/functions-js/edge-runtime.d.ts':{},'./searchCore.ts':isolated,
+  'jsr:@supabase/supabase-js@2':{createClient:()=>({rpc:()=>({abortSignal:async()=>({data:[{id:'brand',name:'Cheddar',brand:'Example',calories:100,protein:10,carbs:1,fat:2,macros_per:'100g',serving_size:100}],error:null})})})}
+ },{Deno:{env:{get:()=> 'fixture'},serve:h=>{handler=h;}},fetch:async()=>{calls++;return new Response('secret provider body',{status:429});}});
+ const response=await handler(new Request('https://fixture.invalid/search',{method:'POST',body:JSON.stringify({query:'cheddar',limit:30})}));
+ const body=await response.json();assert.equal(response.status,200);assert.equal(body.status,'partial');
+ assert.equal(body.providers.usda,'unavailable');assert.equal(calls,1);
+ assert.equal(logs[0][1].stage,'usda');assert.equal(logs[0][1].code,'USDA_UNAVAILABLE');assert.equal(logs[0][1].http_status,429);
+ assert.ok(!JSON.stringify(logs).includes('secret'));assert.ok(!JSON.stringify(logs).includes('cheddar'));
 });
