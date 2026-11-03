@@ -225,7 +225,7 @@ Deno.serve(async (req: Request) => {
       return await handlePortionRequest(req,admin,corsHeaders);
     }
   } catch {
-    return jsonResponse({error:'Invalid request'},400);
+    return jsonResponse({error:'Portion verification unavailable'},503);
   }
 
   let barcode: string;
@@ -261,7 +261,7 @@ Deno.serve(async (req: Request) => {
 
   // If found in DB, return immediately
   if (dbRow) {
-    const decorated=await decorateCachedProducts([{_usda_fdc_id:dbRow.usda_fdc_id,nutriments:{}}],supabase,150);
+    const decorated=await decorateCachedProducts([{_usda_fdc_id:dbRow.usda_fdc_id,product_name:dbRow.name,nutriments:{}}],supabase,150);
     return jsonResponse({ found: true, item: {...dbRow,_portion_evidence:decorated[0]?._portion_evidence??null}, source: 'supabase' });
   }
 
