@@ -299,7 +299,37 @@ Deno.serve(async (req: Request) => {
 
   if (check.passes) {
     const item = mapOffProductToItem(offProduct, null, false, false);
-    return jsonResponse({ found: true, item, source: 'openfoodfacts' });
+    const externalCode=String(item.barcode??'');
+    if(!barcodeCandidates(externalCode).some((code:string)=>barcodesToTry.includes(code))){
+      return jsonResponse({found:false,error:'provider_identity_mismatch'},503);
+    }
+    const rawLabel=String(offProduct.serving_size??'');
+    const explicitGrams=rawLabel.match(/(\d+(?:\.\d+)?)\s*g\b/i);
+    const quantity=Number(item.serving_quantity);
+    const consistent=explicitGrams&&Number.isFinite(quantity)&&quantity>0&&Math.abs(Number(explicitGrams[1])-quantity)<0.01;
+    const unit=consistent?rawLabel.match(/^(\d+(?:\.\d+)?)\s+([a-zA-Z][a-zA-Z\s]*?)\s*\(/):null;
+    const grams=consistent?quantity:100;
+    const values={
+      name:item.name,brand:item.brand,barcode:canonicalNewBarcode(externalCode),
+      calories:item.calories,protein:item.protein,carbs:item.carbs,fat:item.fat,fiber:item.fiber,
+      macros_per:'100g',serving_size:grams,serving_quantity:String(grams),serving_unit:'g',
+      serving_description:unit?unit[2].trim():null,serving_count:unit?Number(unit[1]):null,
+      source:'openfoodfacts',ai_verified:false,
+      off_data:{code:externalCode,product_name:item.name,brands:item.brand,
+        serving_size:rawLabel,serving_quantity:offProduct.serving_quantity,
+        measure_provenance:{provider:'openfoodfacts',identifier:externalCode,verification:'provider_reported',
+          gram_weight_explicit:Boolean(consistent),retrieved_at:new Date().toISOString()}}
+    };
+    try{
+      const persisted=await insertLookupItemOrReturnWinner(values,{
+        async insert(row:Record<string,unknown>){const {data,error}=await supabase.from('food_items').insert(row).select('*').single();if(error)throw error;return data;},
+        async findByBarcodes(codes:string[]){const {data,error}=await supabase.from('food_items').select('*').in('barcode',codes);if(error)throw error;return data??[];}
+      });
+      return jsonResponse({found:true,item:persisted.item,source:persisted.inserted?'openfoodfacts':'supabase',persisted:true});
+    }catch{
+      console.warn('[lookup-barcode] Catalog capture unavailable');
+      return jsonResponse({found:true,item:{...item,serving_size:grams,serving_quantity:String(grams)},source:'openfoodfacts',persisted:false});
+    }
   }
 
   // Step 4: Sanity failed — try AI Vision
