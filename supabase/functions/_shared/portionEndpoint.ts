@@ -1,3 +1,4 @@
+import {captureUsdaNutrition} from './nutritionEvidence.mjs';
 import {resolvePortionsWithin,servicePortionCache} from './portionCache.mjs';
 
 // Called only by the explicit operation in the existing lookup-barcode function.
@@ -52,7 +53,8 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
     else if(!existing.error){
      const inserted=await admin.from('food_items').insert({name:food.description,brand:food.brandOwner||food.brandName||'',source:'usda',usda_fdc_id:fdcId,
       calories,protein:values.get(1003),fat:values.get(1004),carbs:values.get(1005),fiber:values.get(1079)??null,
-      macros_per:'100g',serving_size:100,serving_quantity:'100',serving_unit:'g'}).select('id').single().abortSignal(signal);
+      macros_per:'100g',serving_size:100,serving_quantity:'100',serving_unit:'g',
+      off_data:{nutrition_evidence:captureUsdaNutrition(food,fdcId,new Date().toISOString())}} ).select('id').single().abortSignal(signal);
      if(inserted.data)catalogId=inserted.data.id;
      else if(inserted.error?.code==='23505'){
       const winner=await admin.from('food_items').select('id').eq('usda_fdc_id',fdcId).maybeSingle().abortSignal(signal);
