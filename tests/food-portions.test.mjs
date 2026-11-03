@@ -278,3 +278,34 @@ test('evidence SQL remains append-only and service-only pending separate activat
  assert.ok(sql.includes('GRANT SELECT,INSERT ON macrogoal_food_private.nutrition_evidence TO service_role;'));
  assert.ok(!/UPDATE public\.food_items|DELETE FROM|GRANT[^;]+TO (anon|authenticated|PUBLIC)/i.test(sql));
 });
+
+const correction=await import('../supabase/functions/vision-nutrition-extract/identity.mjs');
+const checkedLabel={product_name:'Exact package',brand:'Fixture',confidence:'high',match:true,serving_size_g:30,serving_quantity:'1 pack (30 g)',per_serving:{calories:120,protein:4,carbs:20,fat:3,fiber:null}};
+test('actual correction workflow forwards original version and preserves unknown fiber',async()=>{
+ const row={id:'fixture-food',barcode:'012345678905',updated_at:'2026-11-03T00:00:00Z'};let received;
+ const result=await correction.handleVerifiedCorrection(checkedLabel,{row,barcode:row.barcode,isNew:false},{update:async(id,values,expected)=>{received={id,values,expected};return {...row,...values};}});
+ assert.equal(result.status,'approved');assert.equal(received.expected,row);assert.equal(received.values.fiber,null);assert.equal(received.values.macros_per,'serving');
+});
+test('concurrent correction conflict cannot return approval or overwrite a newer record',async()=>{
+ const row={id:'fixture-food',barcode:'012345678905',updated_at:'old'};let calls=0;
+ const result=await correction.handleVerifiedCorrection(checkedLabel,{row,barcode:row.barcode,isNew:false},{update:async()=>{calls++;throw Object.assign(Error('catalog_changed'),{code:'40001'});}});
+ assert.equal(result.status,'error');assert.equal(calls,1);assert.equal(result.food_item,undefined);
+});
+test('insert race uses the winning row version rather than the originally absent identity',async()=>{
+ const winner={id:'winner',barcode:'0012345678905',updated_at:'winner-version'};let expected;
+ const result=await correction.persistVerifiedCorrection({row:null,barcode:winner.barcode,isNew:true},{name:'Exact package'},{insert:async()=>{throw {code:'23505'};},findByBarcodes:async()=>[winner],update:async(id,values,row)=>{expected=row;return {...winner,...values};}});
+ assert.equal(result.id,winner.id);assert.equal(expected,winner);
+});
+test('global guard candidate is private, role-bound and patches only verified live recovery baseline',()=>{
+ const sql=readFileSync(new URL('../supabase/review/food-search-v2/nutrition-authority.CANDIDATE.sql',import.meta.url),'utf8');
+ assert.ok(sql.includes("current_setting('role',true)='service_role'"));
+ assert.ok(sql.includes("current_setting('macrogoal.correction_context',true)='confirmed_v1'"));
+ assert.ok(sql.includes('BEFORE INSERT OR UPDATE ON public.food_items'));
+ assert.ok(sql.includes('945fc10d72f144171132e0a56e8b3e43'));
+ assert.ok(sql.includes('OLD.ai_verified_source'));assert.ok(sql.includes('p_expected_updated_at'));
+ assert.ok(!/GRANT[^;]+TO (PUBLIC|anon|authenticated)/i.test(sql));
+ const source=readFileSync(new URL('../supabase/functions/vision-nutrition-extract/index.ts',import.meta.url),'utf8');
+ const start=source.indexOf('if (type === "correction") {',source.indexOf('let foodItem:'));
+ const end=source.indexOf('} else {',start);const branch=source.slice(start,end);
+ assert.ok(branch.includes('apply_verified_food_correction_v1'));assert.ok(!branch.includes('.update(values)'));
+});
