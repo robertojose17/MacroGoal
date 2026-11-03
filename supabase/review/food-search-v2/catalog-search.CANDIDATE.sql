@@ -1,5 +1,6 @@
 -- REVIEW CANDIDATE ONLY. No application without exact RPC/grant approval.
--- Uses the existing expression GIN; no catalog/index/policy changes.
+-- Main lane reuses existing expression GIN. Alternate lane is index-ready;
+-- review alternate-index.CANDIDATE.sql separately before any index application.
 BEGIN;
 CREATE OR REPLACE FUNCTION public.search_food_catalog_v2(p_queries text[], p_limit integer DEFAULT 30)
 RETURNS SETOF jsonb
@@ -37,15 +38,15 @@ BEGIN
     -- audited catalog. Materialize this small lane before evaluating its FTS.
     SELECT f.id,f.name,f.brand,f.product_name,f.generic_name,f.brands
     FROM public.food_items f
-    WHERE nullif(btrim(f.generic_name),'') IS NOT NULL
+    WHERE (nullif(btrim(f.generic_name),'') IS NOT NULL
       OR (nullif(btrim(f.product_name),'') IS NOT NULL AND f.product_name IS DISTINCT FROM f.name)
-      OR (nullif(btrim(f.brands),'') IS NOT NULL AND f.brands IS DISTINCT FROM f.brand)
+      OR (nullif(btrim(f.brands),'') IS NOT NULL AND f.brands IS DISTINCT FROM f.brand))
+      AND to_tsvector('simple'::regconfig,coalesce(f.name,'') || ' ' || coalesce(f.brand,'') || ' ' || coalesce(f.product_name,'') || ' ' || coalesce(f.generic_name,'') || ' ' || coalesce(f.brands,'')) @@ v_query
   ), matched_ids AS MATERIALIZED (
     SELECT f.id FROM public.food_items f
     WHERE to_tsvector('simple'::regconfig,coalesce(f.name,'') || ' ' || coalesce(f.brand,'')) @@ v_query
     UNION
     SELECT a.id FROM alternate_names a
-    WHERE to_tsvector('simple'::regconfig,concat_ws(' ',a.name,a.brand,a.product_name,a.generic_name,a.brands)) @@ v_query
   ), names AS MATERIALIZED (
     SELECT f.id,coalesce(nullif(btrim(f.product_name),''),nullif(btrim(f.name),''),f.generic_name,'') display_name,
       coalesce(nullif(btrim(f.brands),''),f.brand,'') display_brand,
@@ -58,12 +59,18 @@ BEGIN
     SELECT n.*,regexp_replace(lower(n.display_name),'[^[:alnum:]]+',' ','g') normalized_name
     FROM names n
   ), classified AS MATERIALIZED (
-    SELECT n.*,EXISTS (SELECT 1 FROM unnest(ARRAY['fried','stuffed','powder','novelty','novelties','sweetened','sauce','mix','smoothie','breaded','deli','roll','sandwich','soup','nugget','nuggets','juice','pie','candy','baby','restaurant','luncheon','pizza','sausage','patties','patty','salad','canned','smoked','oil','capsule','capsules','supplement','supplements','meatless','vegan','vegetarian','plant based','yolk','egg white','egg whites','acid','fluid']) term
+    SELECT n.*,EXISTS (SELECT 1 FROM unnest(ARRAY['fried','stuffed','powder','novelty','novelties','sweetened','sauce','mix','smoothie','breaded','deli','roll','sandwich','soup','nugget','nuggets','juice','pie','candy','baby','luncheon','pizza','sausage','patties','patty','salad','canned','smoked','oil','capsule','capsules','supplement','supplements','meatless','vegan','vegetarian','plant based','yolk','egg white','egg whites','acid','fluid']) term
       WHERE (' '||n.normalized_name||' ') LIKE '% '||term||' %'
         AND NOT EXISTS(SELECT 1 FROM unnest(v_queries) q WHERE (' '||q||' ') LIKE '% '||term||' %')) AS unrequested_variant
     FROM normalized n
   ), ranked AS (
     SELECT n.*,
+      (btrim(n.display_brand) <> '' AND NOT EXISTS (
+        SELECT 1 FROM unnest(v_queries) q,LATERAL regexp_split_to_table(q,' ') token
+        WHERE token <> ''
+          AND (' '||regexp_replace(lower(n.display_brand),'[^[:alnum:]]+',' ','g')||' ') LIKE '% '||token||' %'
+          AND (' '||n.normalized_name||' ') NOT LIKE '% '||token||' %'
+      )) AS brand_penalty,
       (btrim(n.display_brand) = '' AND NOT n.unrequested_variant
        AND EXISTS (SELECT 1 FROM unnest(CASE
          WHEN regexp_replace(lower(btrim(split_part(n.display_name,',',1))),'s$','') = ANY(ARRAY['fish','meat','poultry','fruit','vegetable','cereal'])
@@ -76,11 +83,11 @@ BEGIN
       ts_rank_cd(to_tsvector('simple'::regconfig,n.matching_text),v_query) text_rank
     FROM classified n
   ), selected AS MATERIALIZED (
-    SELECT r.id,r.basic_food,row_number() OVER (ORDER BY r.unrequested_variant ASC,r.basic_food DESC,
+    SELECT r.id,r.basic_food,row_number() OVER (ORDER BY r.unrequested_variant ASC,r.basic_food DESC,r.brand_penalty ASC,
       (lower(r.display_name) = ANY(v_queries)) DESC,r.text_rank DESC,
       length(r.display_name),lower(r.display_name),r.id) ordinal
     FROM ranked r
-    ORDER BY r.unrequested_variant ASC,r.basic_food DESC,(lower(r.display_name) = ANY(v_queries)) DESC,
+    ORDER BY r.unrequested_variant ASC,r.basic_food DESC,r.brand_penalty ASC,(lower(r.display_name) = ANY(v_queries)) DESC,
       r.text_rank DESC,length(r.display_name),lower(r.display_name),r.id
     LIMIT p_limit
   )
