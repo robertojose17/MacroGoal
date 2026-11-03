@@ -45,7 +45,7 @@ BEGIN
  END IF;
  SELECT * INTO previous FROM macrogoal_food_private.nutrition_evidence WHERE food_id=p_food_id ORDER BY revision DESC LIMIT 1;
  IF previous.payload=p_payload THEN RETURN previous.revision; END IF;
- IF coalesce(previous.revision,0) IS DISTINCT FROM p_expected_revision
+ IF p_expected_revision IS NOT NULL AND coalesce(previous.revision,0) IS DISTINCT FROM p_expected_revision
  THEN RAISE EXCEPTION 'revision conflict' USING ERRCODE='40001'; END IF;
  INSERT INTO macrogoal_food_private.nutrition_evidence(food_id,revision,payload)
  VALUES(p_food_id,coalesce(previous.revision,0)+1,p_payload);
