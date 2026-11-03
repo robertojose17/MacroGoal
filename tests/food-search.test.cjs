@@ -366,3 +366,18 @@ test('real provider HTTP rejection records only bounded status and retains parti
  assert.equal(logs[0][1].stage,'usda');assert.equal(logs[0][1].code,'USDA_UNAVAILABLE');assert.equal(logs[0][1].http_status,429);
  assert.ok(!JSON.stringify(logs).includes('secret'));assert.ok(!JSON.stringify(logs).includes('cheddar'));
 });
+
+
+test('entire RPC migration rejects duplicate transactions and content after COMMIT',()=>{
+ function validate(sql) {
+  assert.equal((sql.match(/^CREATE OR REPLACE FUNCTION /gm)||[]).length,1);
+  assert.equal((sql.match(/\$function\$/g)||[]).length,2);
+  assert.equal((sql.match(/^BEGIN;/gm)||[]).length,1);
+  const pieces=sql.split('$function$;');assert.equal(pieces.length,2);
+  assert.match(pieces[1],/^\s*REVOKE ALL ON FUNCTION public\.search_food_catalog_v2\(text\[\],integer\) FROM PUBLIC,anon,authenticated;\s*GRANT EXECUTE ON FUNCTION public\.search_food_catalog_v2\(text\[\],integer\) TO service_role;\s*COMMIT;\s*$/);
+ }
+ const sql=fs.readFileSync('supabase/review/food-search-v2/catalog-search.CANDIDATE.sql','utf8');
+ validate(sql);
+ assert.throws(()=>validate(sql+String.fromCharCode(10)+'SELECT 1;'));
+ assert.throws(()=>validate(sql+sql));
+});
