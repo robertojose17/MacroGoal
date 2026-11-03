@@ -10,6 +10,7 @@ function load(file, mocks = {}, globals = {}) {
   const exports = {};
   vm.runInNewContext(output,{ exports,module: { exports },require(id) {
     if (Object.hasOwn(mocks,id)) return mocks[id];
+    if(id==='../_shared/portionCache.mjs')return require('../supabase/functions/_shared/portionCache.mjs');
     throw new Error('Unexpected dependency: ' + id);
   },console: { log() {},warn() {},error() {} },setTimeout,clearTimeout,AbortController,Request,Response,...globals },{ filename: file });
   return exports;
