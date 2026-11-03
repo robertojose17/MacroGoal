@@ -12,7 +12,7 @@ GRANT SELECT,INSERT,UPDATE ON macrogoal_food_private.nutrition_current TO servic
 GRANT SELECT,INSERT ON macrogoal_food_private.nutrition_changes TO service_role;
 CREATE FUNCTION macrogoal_food_private.nutrition_snapshot_v1(p jsonb) RETURNS jsonb LANGUAGE sql IMMUTABLE SECURITY INVOKER SET search_path='' AS $fn$
  SELECT coalesce(jsonb_object_agg(key,value),'{}'::jsonb) FROM jsonb_each(p)
- WHERE key=ANY(ARRAY['name','brand','barcode','usda_fdc_id','source_id','source','calories','protein','carbs','fat','fiber','sugar','sodium','saturated_fat','trans_fat','polyunsaturated_fat','monounsaturated_fat','cholesterol','added_sugars','sugar_alcohols','soluble_fiber','insoluble_fiber','starch','biotin','choline','calcium','iron','potassium','phosphorus','magnesium','zinc','selenium','copper','manganese','chromium','molybdenum','iodine','chloride','nutriments','macros_per','serving_size','serving_quantity','serving_unit','serving_count','serving_description']) OR key LIKE 'vitamin_%' OR key ~ '(_g|_mg|_mcg)$';
+ WHERE key=ANY(ARRAY['name','brand','product_name','generic_name','brands','verified','ai_verified','ai_verified_source','confidence','last_verified_at','barcode','usda_fdc_id','source_id','source','calories','protein','carbs','fat','fiber','sugar','sodium','saturated_fat','trans_fat','polyunsaturated_fat','monounsaturated_fat','cholesterol','added_sugars','sugar_alcohols','soluble_fiber','insoluble_fiber','starch','biotin','choline','calcium','iron','potassium','phosphorus','magnesium','zinc','selenium','copper','manganese','chromium','molybdenum','iodine','chloride','nutriments','macros_per','serving_size','serving_quantity','serving_unit','serving_count','serving_description']) OR key LIKE 'vitamin_%' OR key ~ '(_g|_mg|_mcg)$';
 $fn$;
 REVOKE ALL ON FUNCTION macrogoal_food_private.nutrition_snapshot_v1(jsonb) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION macrogoal_food_private.nutrition_snapshot_v1(jsonb) TO service_role;
@@ -24,7 +24,7 @@ BEGIN
  explicit_correction:=current_setting('role',true)='service_role' AND current_setting('macrogoal.correction_context',true)='confirmed_v1';
  SELECT * INTO state FROM macrogoal_food_private.nutrition_current WHERE food_id=NEW.id FOR UPDATE;
  IF TG_OP='UPDATE' AND before_value IS NOT DISTINCT FROM after_value THEN RETURN NEW; END IF;
- IF (coalesce(state.confirmed,false) OR (TG_OP='UPDATE' AND (coalesce(OLD.verified,false) OR coalesce(OLD.ai_verified,false)))) AND NOT coalesce(explicit_correction,false)
+ IF (coalesce(state.confirmed,false) OR (TG_OP='UPDATE' AND (coalesce(OLD.verified,false) OR coalesce(OLD.ai_verified,false) OR coalesce(OLD.ai_verified_source,'') LIKE 'barcode_recovery:%'))) AND NOT coalesce(explicit_correction,false)
  THEN RAISE EXCEPTION 'confirmed_nutrition_protected' USING ERRCODE='40001'; END IF;
  next_revision:=coalesce(state.revision,0)+1;
  INSERT INTO macrogoal_food_private.nutrition_changes VALUES(NEW.id,next_revision,before_value,after_value,coalesce(explicit_correction,false),now());
@@ -56,9 +56,9 @@ BEGIN
  ELSE
   -- Reset all older nutrition/basis evidence before applying this complete label.
   SELECT jsonb_object_agg(key,'null'::jsonb) INTO patch FROM jsonb_each(macrogoal_food_private.nutrition_snapshot_v1(to_jsonb(item)));
-  patch:=to_jsonb(item)||patch||jsonb_build_object('name',p_values->>'name','brand',p_values->>'brand','barcode',item.barcode,'calories',p_values->'calories','protein',p_values->'protein','carbs',p_values->'carbs','fat',p_values->'fat','fiber',p_values->'fiber','serving_size',p_values->'serving_size','serving_quantity',p_values->>'serving_quantity','serving_unit','g','macros_per','serving','source','user','verified',true,'ai_verified',true,'confidence','high','nutriments','{}'::jsonb,'off_data',null,'updated_at',now());
+  patch:=to_jsonb(item)||patch||jsonb_build_object('name',p_values->>'name','brand',p_values->>'brand','barcode',item.barcode,'calories',p_values->'calories','protein',p_values->'protein','carbs',p_values->'carbs','fat',p_values->'fat','fiber',p_values->'fiber','serving_size',p_values->'serving_size','serving_quantity',p_values->>'serving_quantity','serving_unit','g','macros_per','serving','source','user','verified',true,'ai_verified',true,'confidence','high','nutriments','{}'::jsonb,'off_data',null,'product_name',p_values->>'name','generic_name',null,'brands',p_values->>'brand','ingredients_text',null,'allergens',null,'nutriscore_grade',null,'image_url',null,'ai_verified_source','two_read_correction_v1','last_verified_at',now(),'updated_at',now());
   replacement:=jsonb_populate_record(NULL::public.food_items,patch);
-  SELECT string_agg(format('%I=($1).%I',key,key),',') INTO assignments FROM jsonb_each(patch) WHERE key IN (SELECT key FROM jsonb_each(macrogoal_food_private.nutrition_snapshot_v1(patch))) OR key=ANY(ARRAY['verified','ai_verified','confidence','off_data','updated_at']);
+  SELECT string_agg(format('%I=($1).%I',key,key),',') INTO assignments FROM jsonb_each(patch) WHERE key IN (SELECT key FROM jsonb_each(macrogoal_food_private.nutrition_snapshot_v1(patch))) OR key=ANY(ARRAY['verified','ai_verified','confidence','off_data','ingredients_text','allergens','nutriscore_grade','image_url','updated_at']);
   EXECUTE 'UPDATE public.food_items SET '||assignments||' WHERE id=$2 RETURNING *' INTO saved USING replacement,p_id;
  END IF;
  PERFORM set_config('macrogoal.correction_context',coalesce(old_context,''),true);
