@@ -39,7 +39,7 @@ export function buildResultItem(product: OpenFoodFactsProduct, source: ResultSou
     displayCarbs: nutrition.carbs,
     displayFats: nutrition.fat,
     displayFiber: nutrition.fiber,
-    servingText: formatFoodRowServing(product.serving_size, 1, servingInfo.grams),
+    servingText: formatFoodRowServing(servingInfo.displayText, 1, servingInfo.grams),
     hasNutrition: nutrition.calories > 0 || nutrition.protein > 0 || nutrition.carbs > 0 || nutrition.fat > 0,
     source,
   };
