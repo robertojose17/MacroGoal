@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { readUsdaPortions } from '../supabase/functions/_shared/foodPortions.mjs';
 import { normalizeUsdaProduct } from '@/utils/openFoodFacts';
 import { recoveryRouteContext, macroDisplayGrams, recoveryProduct, preferRecoveryProduct, createLoadGeneration } from '@/utils/recoveryRouteContext';
@@ -705,7 +706,7 @@ export default function FoodDetailsLayout({
           const gramsPerUnit = totalGrams / unitCount;
           options.push({
             key: 'natural_unit',
-            label: `1 ${singularDisplay} (${Math.round(gramsPerUnit)}g)`,
+            label: `1 ${singularDisplay} (${Number(gramsPerUnit.toFixed(2))}g)`,
             gramsPerUnit: gramsPerUnit,
           });
           // SKIP default — would be a 3rd duplicate
@@ -746,6 +747,9 @@ export default function FoodDetailsLayout({
       { key: 'g',     label: '1 g',     gramsPerUnit: 1 },
       { key: 'oz',    label: '1 oz',    gramsPerUnit: 28.35 },
       { key: 'lb',    label: '1 lb',    gramsPerUnit: 453.592 },
+    );
+    // Historical edits retain their saved unit choices. New foods need a verified mass/volume relationship.
+    if (mode === 'edit' || itemId) options.push(
       { key: 'ml',    label: '1 ml',    gramsPerUnit: 1 },
       { key: 'tsp',   label: t('localization.shared.teaspoon'),   gramsPerUnit: 5 },
       { key: 'tbsp',  label: t('localization.shared.tablespoon'),  gramsPerUnit: 15 },
@@ -754,7 +758,7 @@ export default function FoodDetailsLayout({
     );
 
     return options;
-  }, [product, editDefaultGramsPerUnit, mode, t]);
+  }, [product, editDefaultGramsPerUnit, mode, itemId, t]);
 
   // Per-100g macros from the foods table — the immutable calculation reference
   const [per100Macros, setPer100Macros] = useState<{ calories: number; protein: number; carbs: number; fats: number; fiber: number } | null>(null);
@@ -854,7 +858,7 @@ export default function FoodDetailsLayout({
         const singular = singularizeUnit(unitName);
         console.log('[FoodDetails] loadViewData: natural unit detected from serving_size=', parsedProduct.serving_size, '→ singular=', singular, 'gramsPerUnit=', gramsPerUnit, 'unitCount=', unitCount, 'totalGrams=', totalGrams);
         setServingAmount(gramsPerUnit);
-        setNumberOfServings(unitCount > 1 ? String(unitCount) : '1');
+        setNumberOfServings('1');
         setSelectedServingOptionKey('natural_unit');
       } else {
         // No natural unit — default serving
@@ -1590,7 +1594,7 @@ export default function FoodDetailsLayout({
   const upsertFoodItem = async (prod: OpenFoodFactsProduct): Promise<string | null> => {
     // USDA IDs are not barcodes. Existing provider rows are never overwritten by a client snapshot.
     if(prod._usda_fdc_id){
-      const {data}=await supabase.from('food_items').select('id').eq('usda_fdc_id',prod._usda_fdc_id).maybeSingle();
+      const {data}=await (supabase as SupabaseClient).from('food_items').select('id').eq('usda_fdc_id',prod._usda_fdc_id).maybeSingle();
       return data?.id??null;
     }
     const barcode = prod.code?.trim() || null;
