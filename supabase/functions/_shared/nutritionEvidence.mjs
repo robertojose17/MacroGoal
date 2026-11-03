@@ -6,6 +6,7 @@ export function captureUsdaNutrition(food,expectedId,retrievedAt){
  if(!/^\d{1,20}$/.test(id)||String(food?.fdcId)!==id||!text(food.description)||!Number.isFinite(Date.parse(retrievedAt)))return null;
  const facts={};
  for(const row of (Array.isArray(food.foodNutrients)?food.foodNutrients:[]).slice(0,512)){
+  if(!row||typeof row!=='object')continue;
   const nutrient=row.nutrient??row,id=nutrient.id??row.nutrientId;
   const value=row.amount??row.value,unit=text(nutrient.unitName??row.unitName,24).toLowerCase();
   if(!Number.isInteger(id)||id<=0||!validNumber(value)||!unit)continue;
@@ -49,4 +50,17 @@ export function shouldRefreshNutrition(record,now,ttlMs=30*86400000){
  if(record?.confirmed===true)return false;
  const time=Date.parse(record?.retrievedAt??'');
  return !Number.isFinite(time)||now-time>=ttlMs;
+}
+
+// Best-effort append only. The RPC never updates canonical food or diary rows.
+export async function recordNutritionEvidence(admin,foodId,evidence,milliseconds=150){
+ if(!foodId||!evidence)return false;
+ const controller=new AbortController();let timer;
+ try{
+  const result=await Promise.race([
+   admin.rpc('record_food_nutrition_evidence_v1',{p_food_id:foodId,p_expected_revision:null,p_payload:evidence}).abortSignal(controller.signal),
+   new Promise(resolve=>{timer=setTimeout(()=>{controller.abort();resolve(null);},milliseconds);})
+  ]);
+  return Boolean(result&&!result.error&&Number.isInteger(result.data));
+ }catch{return false;}finally{if(timer)clearTimeout(timer);}
 }
