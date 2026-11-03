@@ -1,3 +1,4 @@
+import { captureOffNutrition } from '../_shared/nutritionEvidence.mjs';
 import { decorateCachedProducts } from '../_shared/portionCache.mjs';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -317,6 +318,7 @@ Deno.serve(async (req: Request) => {
       source:'openfoodfacts',ai_verified:false,
       off_data:{code:externalCode,product_name:item.name,brands:item.brand,
         serving_size:rawLabel,serving_quantity:offProduct.serving_quantity,
+        nutrition_evidence:captureOffNutrition(offProduct,externalCode,new Date().toISOString()),
         measure_provenance:{provider:'openfoodfacts',identifier:externalCode,verification:'provider_reported',
           gram_weight_explicit:Boolean(consistent),retrieved_at:new Date().toISOString()}}
     };
