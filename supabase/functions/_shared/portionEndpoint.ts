@@ -8,8 +8,13 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
  const authorization=req.headers.get('authorization')??'';
  const bearer=authorization.match(/^Bearer ([^ ]+)$/i)?.[1];
  if(!bearer)return reply({error:'Unauthorized'},401);
- const {data,error}=await admin.auth.getUser(bearer);
- if(error||!data?.user)return reply({error:'Unauthorized'},401);
+ let authTimer:ReturnType<typeof setTimeout>|undefined;
+ let auth:any;
+ try{auth=await Promise.race([admin.auth.getUser(bearer),new Promise(resolve=>{authTimer=setTimeout(()=>resolve(null),800);})]);}
+ catch{return reply({error:'Verification unavailable'},503);}
+ finally{if(authTimer)clearTimeout(authTimer);}
+ if(!auth)return reply({error:'Verification unavailable'},503);
+ if(auth.error||!auth.data?.user)return reply({error:'Unauthorized'},401);
  let body:any;
  try{body=await req.json();}catch{return reply({error:'Invalid request'},400);}
  if(body?.operation!=='usda_portions_v1'||typeof body.fdc_id!=='string'||!/^\d{1,20}$/.test(body.fdc_id)||Object.keys(body).some(k=>!['operation','fdc_id'].includes(k)))return reply({error:'Invalid request'},400);
@@ -17,7 +22,14 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
  let catalogId:string|null=null;
  const cache=servicePortionCache(admin);
  const result=await resolvePortionsWithin(key,{
-  now:()=>new Date().toISOString(),cache,
+  now:()=>new Date().toISOString(),cache:{
+   async read(fdcId:string,signal:AbortSignal){
+    const [value,row]=await Promise.all([cache.read(fdcId,signal),admin.from('food_items').select('id').eq('usda_fdc_id',fdcId).maybeSingle().abortSignal(signal)]);
+    if(row.data)catalogId=row.data.id;
+    return catalogId?value:null;
+   },
+   write:cache.write
+  },
   fetchExactFood:async(fdcId:string,signal:AbortSignal)=>{
    const apiKey=Deno.env.get('USDA_API_KEY')||'DEMO_KEY';
    const response=await fetch('https://api.nal.usda.gov/fdc/v1/food/'+fdcId+'?api_key='+encodeURIComponent(apiKey),{signal});
@@ -34,7 +46,7 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
      ([1008,2047,2048].includes(n?.id)&&String(n?.unitName).toLowerCase()==='kcal')))values.set(n.id,amount);
    }
    const calories=values.get(1008)??values.get(2048)??values.get(2047);
-   if(typeof food.description==='string'&&food.description.trim()&&calories!==undefined&&[1003,1004,1005].every(n=>values.has(n))){
+   if(['Foundation','SR Legacy','Survey (FNDDS)','Branded'].includes(food.dataType)&&typeof food.description==='string'&&food.description.trim()&&calories!==undefined&&[1003,1004,1005].every(n=>values.has(n))){
     const existing=await admin.from('food_items').select('id').eq('usda_fdc_id',fdcId).maybeSingle().abortSignal(signal);
     if(existing.data)catalogId=existing.data.id;
     else if(!existing.error){
