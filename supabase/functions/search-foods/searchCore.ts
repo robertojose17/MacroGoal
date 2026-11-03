@@ -73,13 +73,14 @@ export function satisfiesIntent(products: Product[], query: string): boolean {
   const tokens = words(normalizeQuery(query));
   return products.some(p => isBasic(p,query)
     || (tokens.some(t => PREPARATION.has(t)) && !intentPenalty(p,query))
-    || tokens.some(t => words(productBrand(p)).includes(t) && !words(productName(p)).includes(t)));
+    || (!!productBrand(p) && brandPenalty(p,query)===0));
 }
 // A known brand is a preference only when a query token identifies that brand,
 // rather than merely repeating the food word contained in the brand name.
 export function brandPenalty(p: Product, query: string): number {
-  const brand=words(productBrand(p)); const name=words(productName(p));
-  return Number(brand.length>0 && !words(normalizeQuery(query)).some(t=>brand.includes(t)&&!name.includes(t)));
+  const singular=(value: string)=>value.replace(/s$/,'');
+  const brand=words(productBrand(p)).map(singular); const name=words(productName(p)).map(singular);
+  return Number(brand.length>0 && !words(normalizeQuery(query)).map(singular).some(t=>brand.includes(t)&&!name.includes(t)));
 }
 export function rankProducts(products: Product[], query: string): Product[] {
   return [...products].sort((a,b) => intentPenalty(a,query) - intentPenalty(b,query) || Number(isBasic(b,query)) - Number(isBasic(a,query)) || brandPenalty(a,query) - brandPenalty(b,query)
