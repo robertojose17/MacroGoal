@@ -382,3 +382,29 @@ test('entire RPC migration rejects duplicate transactions and content after COMM
  assert.throws(()=>validate(sql+String.fromCharCode(10)+'SELECT 1;'));
  assert.throws(()=>validate(sql+sql));
 });
+
+function scanPortionFixture(providerCode='012345678905'){
+ let handler,saved=null,inserts=0;
+ const client={from(table){assert.equal(table,'food_items');let inserting=false;
+  const query={select(){return query;},in(){return query;},maybeSingle:async()=>({data:null,error:null}),insert(row){inserts++;saved=structuredClone(row);inserting=true;return query;},single:async()=>({data:inserting?{...saved,id:'fixture-catalog-id'}:null,error:null})};return query;}};
+ load('supabase/functions/lookup-barcode/index.ts',{
+  'jsr:@supabase/functions-js/edge-runtime.d.ts':{},
+  'jsr:@supabase/supabase-js@2':{createClient:()=>client},
+  './identity.mjs':require('../supabase/functions/lookup-barcode/identity.mjs')
+ },{Deno:{env:{get:name=>name==='OPENROUTER_API_KEY'?'':'fixture'},serve:h=>{handler=h;}},
+  fetch:async()=>Response.json({status:1,product:{code:providerCode,product_name:'Fixture cookies',brands:'Fixture',serving_size:'4 cookies (29 g)',serving_quantity:29,nutriments:{'energy-kcal_100g':400,proteins_100g:8,carbohydrates_100g:60,fat_100g:14}}})});
+ return {request:()=>handler(new Request('https://fixture.invalid/lookup-barcode',{method:'POST',body:JSON.stringify({barcode:'012345678905'})})),get saved(){return saved;},get inserts(){return inserts;}};
+}
+test('actual barcode handler saves provider-labeled grams and count with insert-only provenance',async()=>{
+ const f=scanPortionFixture();const response=await f.request(),body=await response.json();
+ assert.equal(response.status,200);assert.equal(body.persisted,true);assert.equal(f.inserts,1);
+ assert.equal(f.saved.serving_size,29);assert.equal(f.saved.serving_count,4);assert.equal(f.saved.serving_description,'cookies');
+ assert.equal(f.saved.calories,400);assert.equal(f.saved.macros_per,'100g');
+ assert.equal(f.saved.off_data.measure_provenance.verification,'provider_reported');
+ assert.equal(f.saved.off_data.measure_provenance.gram_weight_explicit,true);
+ assert.equal(body.item.id,'fixture-catalog-id');
+});
+test('barcode identity mismatch cannot persist another product or its portion',async()=>{
+ const f=scanPortionFixture('737628064502');const response=await f.request();
+ assert.equal(response.status,503);assert.equal(f.inserts,0);assert.equal(f.saved,null);
+});
