@@ -1,3 +1,4 @@
+import { applyUsdaPortion } from '../supabase/functions/_shared/foodPortions.mjs';
 
 /**
  * utils/servingParser.ts
@@ -178,7 +179,8 @@ export function buildSyntheticOffData(item: {
     'selenium_100g': item.selenium_mcg != null ? Number(item.selenium_mcg) / 1000000 : undefined,
   };
 
-  return {
+  return applyUsdaPortion({
+    _portion_evidence: item._portion_evidence,
     code: item.barcode || undefined,
     product_name: item.name || '',
     brands: item.brand || '',
@@ -191,5 +193,5 @@ export function buildSyntheticOffData(item: {
     _data_quality_score: item.data_quality_score || undefined,
     ingredients_text: item.ingredients_text || undefined,
     allergens_tags: item.allergens || undefined,
-  };
+  }, item._portion_evidence);
 }
