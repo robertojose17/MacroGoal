@@ -226,3 +226,38 @@ test('entire SQL candidate retains complete regex literals and atomic service-on
  assert.equal((sql.match(/SECURITY INVOKER SET search_path = ''/g)||[]).length,2);
  assert.ok(!/GRANT[^;]*TO (PUBLIC|anon|authenticated)/i.test(sql));
 });
+
+const evidence=await import('../supabase/functions/_shared/nutritionEvidence.mjs');
+const nutrientFood={fdcId:123,description:'Exact food, cooked',publicationDate:'2026-01-01',foodNutrients:[{nutrient:{id:1008,unitName:'kcal'},amount:100},{nutrient:{id:1093,unitName:'mg'},amount:0},{nutrient:{id:1106,unitName:'ug'},amount:5}]};
+test('all available nutrient amounts retain units and explicit zero; absence stays absent',()=>{
+ const result=evidence.captureUsdaNutrition(nutrientFood,123,date);
+ assert.equal(result.facts['1093'].value,0);assert.equal(result.facts['1093'].unit,'mg');
+ assert.equal(result.facts['1106'].unit,'ug');assert.equal(result.facts['1003'],undefined);
+ assert.equal(evidence.captureUsdaNutrition(nutrientFood,124,date),null);
+});
+test('malformed or contradictory provider nutrient amounts are not silently selected',()=>{
+ assert.equal(evidence.captureUsdaNutrition({...nutrientFood,foodNutrients:[...nutrientFood.foodNutrients,{nutrient:{id:1093,unitName:'mg'},amount:4}]},123,date),null);
+ const result=evidence.captureUsdaNutrition({...nutrientFood,foodNutrients:[{nutrient:{id:1,unitName:'g'},amount:null},{nutrient:{id:2,unitName:'g'},amount:0}]},123,date);
+ assert.equal(result.facts['1'],undefined);assert.equal(result.facts['2'].value,0);
+});
+test('refresh fills only missing facts and protects known zero and immutable snapshots',()=>{
+ const candidate=evidence.captureUsdaNutrition(nutrientFood,123,date), current={...structuredClone(candidate),revision:1,facts:{'1093':candidate.facts['1093']}};
+ const before=structuredClone(current);const result=evidence.resolveNutritionRefresh(current,candidate,1);
+ assert.equal(result.status,'fill_missing');assert.equal(result.record.facts['1093'].value,0);assert.equal(result.record.facts['1106'].value,5);assert.deepEqual(current,before);
+ assert.equal(evidence.resolveNutritionRefresh(current,candidate,0).status,'conflict');
+ assert.equal(evidence.resolveNutritionRefresh({...current,confirmed:true},candidate,1).status,'protected');
+ assert.equal(evidence.resolveNutritionRefresh(current,{...candidate,formulation:'new formulation'},1).status,'identity_conflict');
+ const changed=structuredClone(candidate);changed.facts['1093'].value=1;
+ assert.equal(evidence.resolveNutritionRefresh(current,changed,1).status,'nutrient_conflict');
+});
+test('OFF preserves ambiguous liquid basis and requires exact provider identity',()=>{
+ const product={code:'012345678905',product_name:'Fixture drink',serving_size:'250 ml',serving_quantity:250,nutriments:{sodium_100g:0,'energy-kcal_serving':80}};
+ const result=evidence.captureOffNutrition(product,product.code,date);
+ assert.equal(result.facts.sodium_100g.basis,'provider_100');assert.equal(result.facts['energy-kcal_serving'].grams,undefined);
+ assert.equal(evidence.captureOffNutrition(product,'999999999999',date),null);
+});
+test('fresh evidence and confirmed corrections do not trigger provider refresh',()=>{
+ const now=Date.parse(date);assert.equal(evidence.shouldRefreshNutrition({retrievedAt:date},now),false);
+ assert.equal(evidence.shouldRefreshNutrition({confirmed:true},now),false);
+ assert.equal(evidence.shouldRefreshNutrition(null,now),true);
+});
