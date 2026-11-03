@@ -1,3 +1,5 @@
+import { readUsdaPortions } from '../supabase/functions/_shared/foodPortions.mjs';
+import { normalizeUsdaProduct } from '@/utils/openFoodFacts';
 import { recoveryRouteContext, macroDisplayGrams, recoveryProduct, preferRecoveryProduct, createLoadGeneration } from '@/utils/recoveryRouteContext';
 import { optionalFiber } from '@/utils/optionalFiber';
 import i18n from '@/lib/i18n';
@@ -732,6 +734,13 @@ export default function FoodDetailsLayout({
       options.push({ key: 'default', label: t('localization.shared.serving100'), gramsPerUnit: 100 });
     }
 
+    // Only new selections receive verified choices; saved diary edit grams remain untouched.
+    if(mode==='view'&&product?._usda_fdc_id){
+      for(const p of readUsdaPortions(product._portion_evidence,product._usda_fdc_id)){
+        const grams=p.grams/p.amount;
+        options.push({key:'portion:'+p.key,label:'1 '+p.description+' ('+Number(grams.toFixed(2))+'g)',gramsPerUnit:grams});
+      }
+    }
     // ── Standard measurement units (always present) ──────────────────────
     options.push(
       { key: 'g',     label: '1 g',     gramsPerUnit: 1 },
@@ -795,7 +804,24 @@ export default function FoodDetailsLayout({
     }
 
     try {
-      const parsedProduct: OpenFoodFactsProduct = JSON.parse(offData);
+      let parsedProduct: OpenFoodFactsProduct = JSON.parse(offData);
+      if (parsedProduct._usda_fdc_id) {
+        if (!readUsdaPortions(parsedProduct._portion_evidence,parsedProduct._usda_fdc_id).length) {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            const response:any=await Promise.race([
+              supabase.functions.invoke('lookup-barcode',{body:{operation:'usda_portions_v1',fdc_id:parsedProduct._usda_fdc_id}}),
+              new Promise(resolve=>{timer=setTimeout(()=>resolve(null),1800);})
+            ]);
+            if(latestOffData.current!==offData)return;
+            if(response?.data?.fdc_id===parsedProduct._usda_fdc_id){
+              parsedProduct._portion_evidence=response.data.portion_evidence;
+              if(response.data.food_item_id)parsedProduct._db_id=response.data.food_item_id;
+            }
+          } catch {} finally {if(timer)clearTimeout(timer);}
+        }
+        parsedProduct=normalizeUsdaProduct(parsedProduct);
+      }
       // Ensure product_name is always populated — some OFacts entries have it in generic_name only
       if (!parsedProduct.product_name && parsedProduct.generic_name) {
         parsedProduct.product_name = parsedProduct.generic_name;
@@ -1328,6 +1354,8 @@ export default function FoodDetailsLayout({
         return;
       }
       if (!food_item_id || mode !== 'view') return;
+      // Search/scan already carries a coherent USDA snapshot; do not replace its selected grams.
+      if(offData){try{if(JSON.parse(offData)._usda_fdc_id)return;}catch{}}
 
       let active = true;
       const requestedOffData = offData;
@@ -1560,6 +1588,11 @@ export default function FoodDetailsLayout({
    * Returns null if the product has no usable name.
    */
   const upsertFoodItem = async (prod: OpenFoodFactsProduct): Promise<string | null> => {
+    // USDA IDs are not barcodes. Existing provider rows are never overwritten by a client snapshot.
+    if(prod._usda_fdc_id){
+      const {data}=await supabase.from('food_items').select('id').eq('usda_fdc_id',prod._usda_fdc_id).maybeSingle();
+      return data?.id??null;
+    }
     const barcode = prod.code?.trim() || null;
     const pName = (prod.product_name || prod.generic_name || '').trim();
     const pBrand = (prod.brands || '').trim() || null;
