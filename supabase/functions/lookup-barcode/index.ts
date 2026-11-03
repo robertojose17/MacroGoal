@@ -1,4 +1,4 @@
-import { captureOffNutrition } from '../_shared/nutritionEvidence.mjs';
+import { captureOffNutrition, recordNutritionEvidence } from '../_shared/nutritionEvidence.mjs';
 import { decorateCachedProducts } from '../_shared/portionCache.mjs';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -327,6 +327,7 @@ Deno.serve(async (req: Request) => {
         async insert(row:Record<string,unknown>){const {data,error}=await supabase.from('food_items').insert(row).select('*').single();if(error)throw error;return data;},
         async findByBarcodes(codes:string[]){const {data,error}=await supabase.from('food_items').select('*').in('barcode',codes);if(error)throw error;return data??[];}
       });
+      await recordNutritionEvidence(supabase,persisted.item.id,captureOffNutrition(offProduct,externalCode,new Date().toISOString()));
       return jsonResponse({found:true,item:persisted.item,source:persisted.inserted?'openfoodfacts':'supabase',persisted:true});
     }catch{
       console.warn('[lookup-barcode] Catalog capture unavailable');
