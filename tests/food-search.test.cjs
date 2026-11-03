@@ -10,6 +10,7 @@ function load(file, mocks = {}, globals = {}) {
   const exports = {};
   vm.runInNewContext(output,{ exports,module: { exports },require(id) {
     if (Object.hasOwn(mocks,id)) return mocks[id];
+    if(id==='../_shared/nutritionEvidence.mjs')return require('../supabase/functions/_shared/nutritionEvidence.mjs');
     if(id==='../_shared/portionCache.mjs')return require('../supabase/functions/_shared/portionCache.mjs');
     throw new Error('Unexpected dependency: ' + id);
   },console: { log() {},warn() {},error() {} },setTimeout,clearTimeout,AbortController,Request,Response,...globals },{ filename: file });
@@ -403,6 +404,8 @@ test('actual barcode handler saves provider-labeled grams and count with insert-
  assert.equal(f.saved.off_data.measure_provenance.verification,'provider_reported');
  assert.equal(f.saved.off_data.measure_provenance.gram_weight_explicit,true);
  assert.equal(body.item.id,'fixture-catalog-id');
+ assert.equal(f.saved.off_data.nutrition_evidence.provider,'openfoodfacts');
+ assert.equal(f.saved.off_data.nutrition_evidence.facts.proteins_100g.value,8);
 });
 test('barcode identity mismatch cannot persist another product or its portion',async()=>{
  const f=scanPortionFixture('737628064502');const response=await f.request();
