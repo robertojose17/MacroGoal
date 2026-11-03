@@ -1,5 +1,8 @@
 -- REVIEW CANDIDATE ONLY. No execution without exact catalog-metadata approval.
 -- Existing food_items only; no schema/index/grant/RLS or nutrition changes.
+-- search_vector is an existing STORED GENERATED column derived from the brand.
+-- Permit only that exact generated value and brand; preserve every other field,
+-- including updated_at. No trigger/column/index definition is modified.
 -- Evidence checked 2026-11-03:
 -- USDA FDC 173263, SR Legacy: description contains the historic brand label;
 -- API has no brand/manufacturer field and only generic FoodOn/category attributes.
@@ -26,6 +29,7 @@ DECLARE
   before_row jsonb;
   after_row jsonb;
   changed integer;
+  expected_vector tsvector;
 BEGIN
   SELECT f.id,to_jsonb(f) INTO STRICT target_id,before_row
   FROM public.food_items f
@@ -43,8 +47,16 @@ BEGIN
   IF (after_row->>'brand') IS DISTINCT FROM 'Uncle Ben''s' THEN
     RAISE EXCEPTION 'Unexpected brand value; update rolled back';
   END IF;
-  IF (after_row - ARRAY['brand','updated_at']) IS DISTINCT FROM
-     (before_row - ARRAY['brand','updated_at']) THEN
+  -- Existing stored generated column: verify its exact catalog-defined result.
+  expected_vector :=
+    setweight(to_tsvector('simple'::regconfig,COALESCE(after_row->>'product_name',after_row->>'name','')),'A') ||
+    setweight(to_tsvector('simple'::regconfig,COALESCE(after_row->>'brands',after_row->>'brand','')),'B') ||
+    setweight(to_tsvector('simple'::regconfig,COALESCE(after_row->>'generic_name','')),'C');
+  IF ((after_row->>'search_vector')::tsvector) IS DISTINCT FROM expected_vector THEN
+    RAISE EXCEPTION 'Unexpected generated search value; update rolled back';
+  END IF;
+  IF (after_row - ARRAY['brand','search_vector']) IS DISTINCT FROM
+     (before_row - ARRAY['brand','search_vector']) THEN
     RAISE EXCEPTION 'Unexpected non-brand change; entire update rolled back';
   END IF;
 END;
