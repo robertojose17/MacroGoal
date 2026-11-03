@@ -9,7 +9,7 @@
  *  - Supabase items always appear before off/local items in the final list.
  */
 
-import { OpenFoodFactsProduct, extractServingSize, extractNutritionPerServing } from '@/utils/openFoodFacts';
+import { OpenFoodFactsProduct, extractServingSize, extractNutritionPerServing, normalizeUsdaProduct } from '@/utils/openFoodFacts';
 import { formatFoodRowServing } from '@/utils/servingDisplay';
 import { supabase } from '@/lib/supabase/client';
 
@@ -29,6 +29,7 @@ export interface SearchResultItem {
 }
 
 export function buildResultItem(product: OpenFoodFactsProduct, source: ResultSource): SearchResultItem {
+  product = normalizeUsdaProduct(product);
   const servingInfo = extractServingSize(product);
   const nutrition = extractNutritionPerServing(product, servingInfo.grams);
   return {
