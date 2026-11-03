@@ -170,150 +170,7 @@ const USDA_API_KEY = process.env.EXPO_PUBLIC_USDA_API_KEY ?? '';
  * Background enrichment: fetches full micronutrient data from USDA and updates
  * the food_items row. Fire-and-forget — never throws, never blocks the UI.
  */
-async function enrichWithUSDA(prod: OpenFoodFactsProduct, foodItemId: string): Promise<void> {
-  try {
-    // Check existing data_quality_score — skip if already enriched
-    const { data: existing } = await supabase
-      .from('food_items')
-      .select('data_quality_score')
-      .eq('id', foodItemId)
-      .maybeSingle();
 
-    const existingScore = (existing as any)?.data_quality_score ?? 0;
-    if (existingScore > 50) {
-      console.log('[FoodDetails] enrichWithUSDA: skipping, already enriched (score=', existingScore, ') for id=', foodItemId);
-      return;
-    }
-
-    if (prod.code) {
-      // ── Case A: has barcode — delegate to lookup-barcode edge function ──
-      console.log('[FoodDetails] enrichWithUSDA: Case A — barcode lookup for', prod.code);
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const res = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/lookup-barcode`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ barcode: prod.code.trim() }),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        console.warn('[FoodDetails] enrichWithUSDA: lookup-barcode returned', res.status, errText.slice(0, 200));
-      } else {
-        console.log('[FoodDetails] enrichWithUSDA: lookup-barcode succeeded for barcode=', prod.code);
-      }
-    } else {
-      // ── Case B: no barcode — search USDA FoodData Central directly ──
-      const foodName = (prod.product_name || prod.generic_name || '').trim();
-      if (!foodName) {
-        console.log('[FoodDetails] enrichWithUSDA: Case B — no food name, skipping');
-        return;
-      }
-      console.log('[FoodDetails] enrichWithUSDA: Case B — USDA search for', foodName);
-      const usdaUrl = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(foodName)}&dataType=Branded,Foundation,SR%20Legacy&pageSize=5`;
-      const usdaRes = await fetch(usdaUrl);
-      if (!usdaRes.ok) {
-        const errText = await usdaRes.text();
-        console.warn('[FoodDetails] enrichWithUSDA: USDA search returned', usdaRes.status, errText.slice(0, 200));
-        return;
-      }
-      const usdaJson = await usdaRes.json();
-      const foods = usdaJson?.foods;
-      if (!Array.isArray(foods) || foods.length === 0) {
-        console.log('[FoodDetails] enrichWithUSDA: USDA returned no results for', foodName);
-        return;
-      }
-      const usdaFood = foods[0];
-      console.log('[FoodDetails] enrichWithUSDA: USDA matched', usdaFood.description, '(fdcId=', usdaFood.fdcId, ')');
-
-      // Map nutrientId → column value
-      const mappedNutrients: Record<string, number> = {};
-      const nutrients: { nutrientId: number; value: number }[] = usdaFood.foodNutrients ?? [];
-      for (const n of nutrients) {
-        const col = USDA_NUTRIENT_MAP[n.nutrientId];
-        if (col && n.value != null) {
-          mappedNutrients[col] = n.value;
-        }
-      }
-
-      // Compute a simple quality score: count how many mapped fields are present
-      const filledCount = Object.keys(mappedNutrients).length;
-      const computedScore = Math.min(100, Math.round((filledCount / Object.keys(USDA_NUTRIENT_MAP).length) * 100));
-
-      console.log('[FoodDetails] enrichWithUSDA: mapped', filledCount, 'nutrients, score=', computedScore);
-
-      // Extract brand and barcode from Branded food results
-      const usdaBrand: string | null = usdaFood.brandOwner || usdaFood.brandName || null;
-      const usdaBarcode: string | null = usdaFood.gtinUpc || null;
-
-      // Extract serving info
-      let usdaServingGrams: number | null = null;
-      let usdaServingDesc: string | null = null;
-      let usdaServingCount: number | null = null;
-
-      if (usdaFood.foodPortions && usdaFood.foodPortions.length > 0) {
-        const portion = usdaFood.foodPortions[0];
-        usdaServingGrams = portion.gramWeight || null;
-        const hh: string = portion.householdServingFullText || '';
-        const match = hh.match(/^(\d+\.?\d*)\s+(.+)$/);
-        if (match) {
-          usdaServingCount = parseFloat(match[1]);
-          usdaServingDesc = match[2].trim().replace(/s$/, '');
-        } else if (hh) {
-          usdaServingDesc = hh;
-        }
-      } else if (usdaFood.servingSize && usdaFood.servingSizeUnit) {
-        if (String(usdaFood.servingSizeUnit).toLowerCase() === 'g') {
-          usdaServingGrams = usdaFood.servingSize;
-        }
-      }
-
-      console.log('[FoodDetails] enrichWithUSDA: brand=', usdaBrand, 'barcode=', usdaBarcode, 'servingGrams=', usdaServingGrams, 'servingDesc=', usdaServingDesc);
-
-      // Fetch current row to avoid overwriting existing good data
-      const { data: currentRow } = await supabase
-        .from('food_items')
-        .select('brand, barcode, serving_size, serving_description')
-        .eq('id', foodItemId)
-        .maybeSingle();
-
-      const updatePayload: Record<string, any> = {
-        source: 'usda',
-        usda_fdc_id: String(usdaFood.fdcId),
-        macros_per: '100g',
-        ...mappedNutrients,
-        data_quality_score: computedScore,
-        last_verified_at: new Date().toISOString(),
-      };
-
-      // Only fill identity fields if currently missing
-      if (!(currentRow as any)?.brand && usdaBrand) updatePayload.brand = usdaBrand;
-      if (!(currentRow as any)?.barcode && usdaBarcode) updatePayload.barcode = usdaBarcode;
-      if ((!(currentRow as any)?.serving_size || (currentRow as any).serving_size <= 0) && usdaServingGrams) {
-        updatePayload.serving_size = usdaServingGrams;
-      }
-      if (!(currentRow as any)?.serving_description && usdaServingDesc) {
-        updatePayload.serving_description = usdaServingDesc;
-        if (usdaServingCount) updatePayload.serving_count = usdaServingCount;
-      }
-
-      const { error: updateErr } = await supabase
-        .from('food_items')
-        .update(updatePayload)
-        .eq('id', foodItemId);
-
-      if (updateErr) {
-        console.warn('[FoodDetails] enrichWithUSDA: update error:', updateErr.message);
-      } else {
-        console.log('[FoodDetails] enrichWithUSDA: food_items row enriched successfully, id=', foodItemId);
-      }
-    }
-  } catch (err) {
-    console.warn('[FoodDetails] enrichWithUSDA: unexpected error (silenced):', err);
-  }
-}
 
 
 type ServingUnit = 'g' | 'oz' | 'ml' | 'fl oz' | 'cup' | 'tbsp' | 'tsp' | 'piece' | 'serving';
@@ -1701,29 +1558,13 @@ export default function FoodDetailsLayout({
         .maybeSingle();
       if (existing) {
         console.log('[FoodDetails] upsertFoodItem: found by barcode, id=', existing.id);
-        await supabase.from('food_items').update(payload).eq('id', existing.id);
-        // Non-blocking enrichment
-        enrichWithUSDA(prod, existing.id).catch(err =>
-          console.warn('[FoodDetails] enrichWithUSDA failed silently:', err)
-        );
+        // Normal selection never overwrites catalog evidence or confirmed corrections.
         return existing.id;
       }
     }
 
-    // 2. Try to find by name + brand (use limit(1) to handle duplicates gracefully)
-    let nameQuery = supabase.from('food_items').select('id').ilike('name', pName).limit(1);
-    if (pBrand) nameQuery = nameQuery.ilike('brand', pBrand);
-    const { data: existingByNameRows } = await nameQuery;
-    const existingByName = existingByNameRows?.[0] ?? null;
-    if (existingByName) {
-      console.log('[FoodDetails] upsertFoodItem: found by name+brand, id=', existingByName.id);
-      await supabase.from('food_items').update(payload).eq('id', existingByName.id);
-      // Non-blocking enrichment
-      enrichWithUSDA(prod, existingByName.id).catch(err =>
-        console.warn('[FoodDetails] enrichWithUSDA failed silently:', err)
-      );
-      return existingByName.id;
-    }
+    // Names do not establish provider identity or an equivalent formulation.
+    if (!barcode) return null;
 
     // 3. Insert new row
     const { data: inserted, error: insertErr } = await supabase
@@ -1736,10 +1577,6 @@ export default function FoodDetailsLayout({
       return null;
     }
     console.log('[FoodDetails] upsertFoodItem: inserted new food_item, id=', inserted.id);
-    // Non-blocking enrichment
-    enrichWithUSDA(prod, inserted.id).catch(err =>
-      console.warn('[FoodDetails] enrichWithUSDA failed silently:', err)
-    );
     return inserted.id;
   };
 
