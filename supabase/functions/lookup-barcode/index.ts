@@ -215,6 +215,18 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: 'Method not allowed' }, 405);
   }
 
+  // Separate authenticated operation; ordinary barcode requests retain their path.
+  try {
+    const body = await req.clone().json();
+    if (body?.operation === 'usda_portions_v1') {
+      const { handlePortionRequest } = await import('../_shared/portionEndpoint.ts');
+      const admin = createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      return await handlePortionRequest(req,admin,corsHeaders);
+    }
+  } catch {
+    return jsonResponse({error:'Invalid request'},400);
+  }
+
   let barcode: string;
   try {
     const body = await req.json();
