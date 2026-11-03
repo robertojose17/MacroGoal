@@ -1,4 +1,4 @@
-import {captureUsdaNutrition} from './nutritionEvidence.mjs';
+import {captureUsdaNutrition,recordNutritionEvidence} from './nutritionEvidence.mjs';
 import {resolvePortionsWithin,servicePortionCache} from './portionCache.mjs';
 
 // Called only by the explicit operation in the existing lookup-barcode function.
@@ -62,6 +62,7 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
      }
     }
    }
+   if(catalogId)await recordNutritionEvidence(admin,catalogId,captureUsdaNutrition(food,fdcId,new Date().toISOString()));
    return food;
   }
  },1500);
