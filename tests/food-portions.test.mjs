@@ -181,3 +181,28 @@ test('capture rejects unauthenticated or client-supplied nutrient evidence befor
  try{assert.equal((await handlePortionRequest(portionRequest({},false),f.admin,{})).status,401);assert.equal((await handlePortionRequest(portionRequest({foodPortions:[p()]}),f.admin,{})).status,400);assert.equal(calls,0);assert.equal(f.cache.size,0);assert.equal(f.insertions,0);}
  finally{globalThis.fetch=oldFetch;}
 });
+
+test('multi-unit package labels and macros describe the same one-unit selection',()=>{
+ const product={code:'fixture-package',serving_size:'4 cookies (29 g)',serving_quantity:29,nutriments:{'energy-kcal_100g':400,'energy-kcal_serving':116,'proteins_100g':8,'proteins_serving':2.32}};
+ const before=structuredClone(product), serving=extractServingSize(product);
+ assert.equal(serving.grams,7.25);
+ assert.ok(formatFoodRowServing(serving.displayText,1,serving.grams).includes('7.25'));
+ assert.equal(extractNutritionPerServing(product,serving.grams).calories,29);
+ assert.equal(extractNutritionPerServing(product,29).calories,116);
+ assert.equal(extractNutritionPerServing(product,serving.grams).protein,0.6);
+ assert.deepEqual(product,before);
+});
+test('serving-only nutrients scale from their declared mass without inventing a basis',()=>{
+ const product={code:'fixture-package',serving_quantity:30,nutriments:{'energy-kcal_serving':120,'proteins_serving':6}};
+ assert.equal(extractNutritionPerServing(product,15).calories,60);
+ assert.equal(extractNutritionPerServing(product,15).protein,3);
+ assert.equal(extractNutritionPerServing({...product,serving_quantity:undefined},15).calories,0);
+});
+test('new view uses one natural unit and only verified volume choices; old edit loader stays protected',()=>{
+ const source=readFileSync(new URL('../components/FoodDetailsLayout.tsx',import.meta.url),'utf8');
+ const start=source.indexOf('  const loadViewData = useCallback'),end=source.indexOf('  // Helper: build a minimal',start);
+ const view=source.slice(start,end);
+ assert.ok(view.includes("setNumberOfServings('1');"));
+ assert.ok(!view.includes('setNumberOfServings(unitCount'));
+ assert.ok(source.includes("if (mode === 'edit' || itemId) options.push("));
+});
