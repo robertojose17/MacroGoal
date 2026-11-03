@@ -14,8 +14,8 @@ import { IconSymbol } from '@/components/IconSymbol';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { getFavorites, removeFavoriteById, Favorite } from '@/utils/favoritesDatabase';
 import { getRecentFoods, RecentFoodItem } from '@/utils/foodDatabase';
-import { OpenFoodFactsProduct, extractServingSize, extractNutritionPerServing } from '@/utils/openFoodFacts';
-import { ResultSource, SearchResultItem, buildResultItem, mergeProducts, buildOffProductFromFoodItemId } from '@/utils/foodSearchUtils';
+import { OpenFoodFactsProduct, extractServingSize, extractNutritionPerServing, extractNutrition } from '@/utils/openFoodFacts';
+import { ResultSource, SearchResultItem, buildResultItem, mergeProducts, buildOffProductFromFoodItemId, persistUsdaSelection } from '@/utils/foodSearchUtils';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { buildSyntheticOffData } from '@/utils/servingParser';
 import { Food } from '@/types';
@@ -525,6 +525,7 @@ export default function AddFoodScreen() {
     if (mode !== 'meal-plan' || !planId) return;
     const product = item.product;
     try {
+      void persistUsdaSelection(product);
       const serving = extractServingSize(product);
       const nutrition = extractNutritionPerServing(product, serving.grams);
       console.log('[AddFood] Adding search result to meal plan:', planId, product.product_name);
@@ -566,8 +567,10 @@ export default function AddFoodScreen() {
     }
 
     try {
+      void persistUsdaSelection(product);
       const servingInfo = extractServingSize(product);
       const nutrition = extractNutritionPerServing(product, servingInfo.grams);
+      const per100 = extractNutrition(product);
 
       // Nutrition already calculated for the default serving
       const calories = nutrition.calories;
@@ -599,11 +602,11 @@ export default function AddFoodScreen() {
             brand: product.brands || null,
             serving_amount: 100,
             serving_unit: 'g',
-            calories: safeNum(nutrition.calories),
-            protein: safeNum(nutrition.protein),
-            carbs: safeNum(nutrition.carbs),
-            fats: safeNum(nutrition.fat),
-            fiber: safeNum(nutrition.fiber),
+            calories: safeNum(per100.calories),
+            protein: safeNum(per100.protein),
+            carbs: safeNum(per100.carbs),
+            fats: safeNum(per100.fat),
+            fiber: safeNum(per100.fiber),
             barcode: product.code || null,
             user_created: false,
           })
@@ -622,6 +625,8 @@ export default function AddFoodScreen() {
       // Add to draft
       await addToDraft({
         food_id: foodId,
+        ...(product._db_id ? {food_item_id:product._db_id}:{}),
+        serving_description:servingInfo.displayText,
         food_name: product.product_name || 'Unknown Product',
         food_brand: product.brands || undefined,
         serving_amount: servingInfo.grams,
