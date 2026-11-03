@@ -147,7 +147,8 @@ export function mapUsdaToOff(item: Record<string, unknown>): Record<string, unkn
   const servingSizeUnit = String(item.servingSizeUnit ?? 'g').toLowerCase();
   // Convert oz to g if needed
   const servingSizeG = servingSizeUnit === 'oz' ? servingSizeRaw * 28.3495 : servingSizeRaw;
-  const normFactor = (isBranded && servingSizeG > 0) ? (100 / servingSizeG) : 1;
+  // FDC foodNutrients are per 100g, including Branded. labelNutrients are a separate serving-based object.
+  const normFactor = 1;
 
   const nutrients = Array.isArray(item.foodNutrients)
     ? (item.foodNutrients as Record<string, unknown>[])
