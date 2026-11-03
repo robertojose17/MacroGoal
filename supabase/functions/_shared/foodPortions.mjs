@@ -72,11 +72,15 @@ export function nutritionForGrams(per100, grams) {
 export function applyUsdaPortion(product, envelope) {
   const fdcId = product?._usda_fdc_id;
   if (!id(fdcId)) return product;
-  const chosen = defaultUsdaPortion(envelope, fdcId);
+  const identityName=value=>text(value).normalize('NFKC').toLowerCase().replace(/\s+/g,' ');
+  const sameFood=identityName(product.product_name||product.generic_name)===identityName(envelope?.foodDescription);
+  const verified=sameFood?envelope:null;
+  let chosen = defaultUsdaPortion(verified, fdcId);
+  if(/^(g|gram|grams|ml|milliliter|milliliters)$/i.test(chosen.description))chosen=defaultUsdaPortion(null,fdcId);
   const grams = chosen.grams / chosen.amount;
   const fallback = chosen.key === '100g';
   const nutriments = Object.fromEntries(Object.entries(product.nutriments ?? {}).filter(([key]) => !key.endsWith('_serving')));
   return { ...product, nutriments, serving_quantity: fallback ? 100 : grams,
     serving_size: fallback ? '100 g' : '1 ' + chosen.description + ' (' + grams + ' g)',
-    _portion_evidence: readUsdaPortions(envelope, fdcId).length ? envelope : null };
+    _portion_evidence: readUsdaPortions(verified, fdcId).length ? verified : null };
 }
