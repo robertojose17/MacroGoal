@@ -51,3 +51,45 @@ test('nutrient validation preserves unknowns and rejects negative values',()=>{
  assert.equal(nutritionForGrams({calories:10},100).protein,null);
  assert.equal(nutritionForGrams({calories:10},0),null);
 });
+
+import {resolveExactPortions,resolvePortionsWithin,servicePortionCache} from '../supabase/functions/_shared/portionCache.mjs';
+const dependencies=(overrides={})=>({now:()=>date,cache:{read:async()=>null,write:async()=>{}},fetchExactFood:async()=>food([p()]),...overrides});
+test('cache hit bypasses provider; cache identity mismatch cannot leak another portion',async()=>{
+ const e=captureUsdaPortions(food([p()]),123,date); let fetches=0;
+ const dep=dependencies({cache:{read:async()=>e,write:async()=>{}},fetchExactFood:async()=>{fetches++;return food([p()]);}});
+ assert.equal((await resolveExactPortions('123',dep)).persisted,true); assert.equal(fetches,0);
+ assert.equal((await resolveExactPortions('124',dep)).envelope,null); assert.equal(fetches,1);
+});
+test('provider result is persisted with exact identity and retrieval provenance',async()=>{
+ let saved;
+ const dep=dependencies({cache:{read:async()=>null,write:async(key,value)=>{saved={key,value};}}});
+ const result=await resolveExactPortions('123',dep);
+ assert.equal(result.persisted,true); assert.equal(saved.key,'123'); assert.equal(saved.value.retrievedAt,new Date(date).toISOString());
+});
+test('write failure retains fetched evidence but never reports persisted',async()=>{
+ const dep=dependencies({cache:{read:async()=>null,write:async()=>{throw Error('fixture');}}});
+ const result=await resolveExactPortions('123',dep);
+ assert.ok(result.envelope); assert.equal(result.persisted,false);
+});
+test('provider failure and wrong preparation ID never write cache',async()=>{
+ let writes=0; const cache={read:async()=>null,write:async()=>{writes++;}};
+ for(const fetchExactFood of [async()=>{throw Error('fixture');},async()=>({...food([p()]),fdcId:456})]){
+  assert.equal((await resolveExactPortions('123',dependencies({cache,fetchExactFood}))).envelope,null);
+ }
+ assert.equal(writes,0);
+});
+test('whole operation timeout covers hung cache before provider call',async()=>{
+ let fetches=0; const dep=dependencies({cache:{read:()=>new Promise(()=>{}),write:async()=>{}},fetchExactFood:async()=>{fetches++;return food([p()]);}});
+ const result=await resolvePortionsWithin('123',dep,10);
+ assert.equal(result.envelope,null); assert.equal(fetches,0);
+});
+test('aborted request cannot fetch or persist',async()=>{
+ let reads=0; const controller=new AbortController(); controller.abort();
+ const dep=dependencies({cache:{read:async()=>{reads++;},write:async()=>{throw Error('must not write');}}});
+ assert.equal((await resolveExactPortions('123',dep,controller.signal)).persisted,false); assert.equal(reads,0);
+});
+test('service cache RPC error propagates instead of false persistence success',async()=>{
+ const admin={rpc:()=>Promise.resolve({error:{message:'fixture'},data:null})};
+ const cache=servicePortionCache(admin);
+ await assert.rejects(()=>cache.write('123',captureUsdaPortions(food([p()]),123,date)),/PORTION_CACHE_WRITE/);
+});
