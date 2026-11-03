@@ -35,7 +35,7 @@ jobs:
       - name: Install locked dependencies without lifecycle scripts
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Isolated client and backend regressions
-        run: node --test tests/purchase-reliability.test.cjs tests/sync-subscription.test.cjs tests/food-search.test.cjs
+        run: node --test tests/purchase-reliability.test.cjs tests/sync-subscription.test.cjs tests/food-search.test.cjs tests/food-portions.test.mjs
       - name: Compare application TypeScript diagnostics with baseline
         if: success() || failure()
         run: |
