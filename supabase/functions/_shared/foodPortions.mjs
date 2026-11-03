@@ -64,3 +64,19 @@ export function nutritionForGrams(per100, grams) {
   }
   return result;
 }
+
+/** Normalize only new catalog/search products, never historical diary snapshots.
+ * Original nutrient values/IDs remain unchanged. Conflicting per-serving overrides
+ * cannot override the immutable per100 basis when choosing another portion.
+ */
+export function applyUsdaPortion(product, envelope) {
+  const fdcId = product?._usda_fdc_id;
+  if (!id(fdcId)) return product;
+  const chosen = defaultUsdaPortion(envelope, fdcId);
+  const grams = chosen.grams / chosen.amount;
+  const fallback = chosen.key === '100g';
+  const nutriments = Object.fromEntries(Object.entries(product.nutriments ?? {}).filter(([key]) => !key.endsWith('_serving')));
+  return { ...product, nutriments, serving_quantity: fallback ? 100 : grams,
+    serving_size: fallback ? '100 g' : '1 ' + chosen.description + ' (' + grams + ' g)',
+    _portion_evidence: readUsdaPortions(envelope, fdcId).length ? envelope : null };
+}
