@@ -304,44 +304,16 @@ test('global guard candidate is private, role-bound and patches only verified li
  assert.ok(sql.includes('AFTER INSERT OR UPDATE ON public.food_items'));
  assert.equal((sql.match(/^BEGIN;/gm)||[]).length,1);assert.equal((sql.match(/^COMMIT;/gm)||[]).length,1);
  assert.equal((sql.match(/^CREATE FUNCTION /gm)||[]).length,5);
- assert.equal(sql.split('$fnassert.equal(sql.split('$patch$').length-1,2);
- assert.equal(sql.split("'^[0-9]{8,14}
+ assert.equal(sql.split('$fn$').length-1,10);assert.equal(sql.split('$patch$').length-1,2);
+ assert.equal(sql.split("'^[0-9]{8,14}$'").length-1,2);
  assert.ok(sql.includes('945fc10d72f144171132e0a56e8b3e43'));
  assert.ok(sql.includes('OLD.ai_verified_source'));assert.ok(sql.includes('p_expected_revision'));assert.ok(!sql.includes('p_expected_updated_at'));
  assert.ok(!/GRANT[^;]+TO (PUBLIC|anon|authenticated)/i.test(sql));
  const source=readFileSync(new URL('../supabase/functions/vision-nutrition-extract/index.ts',import.meta.url),'utf8');
  const start=source.indexOf('if (type === "correction") {',source.indexOf('let foodItem:'));
  const end=source.indexOf('} else {',start);const branch=source.slice(start,end);
- assert.ok(branch.includes('apply_verified_food_correction_v1'));assert.ok(!branch.includes('.update(values)'));
-});
-).length-1,10);assert.equal(sql.split('$patch$').length-1,2);
- assert.equal(sql.split("'^[0-9]{8,14}$'").length-1,1);
- assert.ok(sql.includes('945fc10d72f144171132e0a56e8b3e43'));
- assert.ok(sql.includes('OLD.ai_verified_source'));assert.ok(sql.includes('p_expected_revision'));assert.ok(!sql.includes('p_expected_updated_at'));
- assert.ok(!/GRANT[^;]+TO (PUBLIC|anon|authenticated)/i.test(sql));
- const source=readFileSync(new URL('../supabase/functions/vision-nutrition-extract/index.ts',import.meta.url),'utf8');
- const start=source.indexOf('if (type === "correction") {',source.indexOf('let foodItem:'));
- const end=source.indexOf('} else {',start);const branch=source.slice(start,end);
- assert.ok(branch.includes('apply_verified_food_correction_v1'));assert.ok(!branch.includes('.update(values)'));
-});
-").length-1,2);
- assert.ok(sql.includes('945fc10d72f144171132e0a56e8b3e43'));
- assert.ok(sql.includes('OLD.ai_verified_source'));assert.ok(sql.includes('p_expected_updated_at'));
- assert.ok(!/GRANT[^;]+TO (PUBLIC|anon|authenticated)/i.test(sql));
- const source=readFileSync(new URL('../supabase/functions/vision-nutrition-extract/index.ts',import.meta.url),'utf8');
- const start=source.indexOf('if (type === "correction") {',source.indexOf('let foodItem:'));
- const end=source.indexOf('} else {',start);const branch=source.slice(start,end);
- assert.ok(branch.includes('apply_verified_food_correction_v1'));assert.ok(!branch.includes('.update(values)'));
-});
-).length-1,10);assert.equal(sql.split('$patch$').length-1,2);
- assert.equal(sql.split("'^[0-9]{8,14}$'").length-1,1);
- assert.ok(sql.includes('945fc10d72f144171132e0a56e8b3e43'));
- assert.ok(sql.includes('OLD.ai_verified_source'));assert.ok(sql.includes('p_expected_updated_at'));
- assert.ok(!/GRANT[^;]+TO (PUBLIC|anon|authenticated)/i.test(sql));
- const source=readFileSync(new URL('../supabase/functions/vision-nutrition-extract/index.ts',import.meta.url),'utf8');
- const start=source.indexOf('if (type === "correction") {',source.indexOf('let foodItem:'));
- const end=source.indexOf('} else {',start);const branch=source.slice(start,end);
- assert.ok(branch.includes('apply_verified_food_correction_v1'));assert.ok(!branch.includes('.update(values)'));
+ assert.ok(branch.includes('apply_verified_food_correction_v1'));assert.ok(branch.includes('p_expected_revision:expected._nutrition_revision'));assert.ok(!branch.includes('.update(values)'));
+ assert.ok(source.includes('read_food_correction_targets_v1'));
 });
 
 test('forged verification is checked before private writes; only AFTER events audit actual upsert winners',()=>{
