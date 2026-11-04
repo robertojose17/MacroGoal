@@ -384,17 +384,17 @@ test('entire RPC migration rejects duplicate transactions and content after COMM
  assert.throws(()=>validate(sql+sql));
 });
 
-function scanPortionFixture(providerCode='012345678905',providedNutrition=null){
- let handler,saved=null,inserts=0;
+function scanPortionFixture(providerCode='012345678905',providedNutrition=null,modelResponse=null){
+ let handler,saved=null,inserts=0,aiCalls=0;
  const client={from(table){assert.equal(table,'food_items');let inserting=false;
   const query={select(){return query;},in(){return query;},maybeSingle:async()=>({data:null,error:null}),insert(row){inserts++;saved=structuredClone(row);inserting=true;return query;},single:async()=>({data:inserting?{...saved,id:'fixture-catalog-id'}:null,error:null})};return query;}};
- load('supabase/functions/lookup-barcode/index.ts',{
+ const api=load('supabase/functions/lookup-barcode/index.ts',{
   'jsr:@supabase/functions-js/edge-runtime.d.ts':{},
   'jsr:@supabase/supabase-js@2':{createClient:()=>client},
   './identity.mjs':require('../supabase/functions/lookup-barcode/identity.mjs')
- },{Deno:{env:{get:name=>name==='OPENROUTER_API_KEY'?'':'fixture'},serve:h=>{handler=h;}},
-  fetch:async()=>Response.json({status:1,product:{code:providerCode,product_name:'Fixture cookies',brands:'Fixture',serving_size:'4 cookies (29 g)',serving_quantity:29,nutriments:providedNutrition??{'energy-kcal_100g':400,proteins_100g:8,carbohydrates_100g:60,fat_100g:14}}})});
- return {request:()=>handler(new Request('https://fixture.invalid/lookup-barcode',{method:'POST',body:JSON.stringify({barcode:'012345678905'})})),get saved(){return saved;},get inserts(){return inserts;}};
+ },{Deno:{env:{get:name=>name==='OPENROUTER_API_KEY'?(modelResponse?'offline':''):'fixture'},serve:h=>{handler=h;}},
+  fetch:async url=>{if(String(url).includes('openrouter.ai')){aiCalls++;return Response.json({choices:[{message:{content:JSON.stringify(modelResponse)}}]});}return Response.json({status:1,product:{code:providerCode,product_name:'Fixture cookies',brands:'Fixture',selected_images:modelResponse?{nutrition:{display:{en:'https://images.openfoodfacts.org/fixture.jpg'}}}:undefined,serving_size:'4 cookies (29 g)',serving_quantity:29,nutriments:providedNutrition??{'energy-kcal_100g':400,proteins_100g:8,carbohydrates_100g:60,fat_100g:14}}});}});
+ return {api,get aiCalls(){return aiCalls;},request:()=>handler(new Request('https://fixture.invalid/lookup-barcode',{method:'POST',body:JSON.stringify({barcode:'012345678905'})})),get saved(){return saved;},get inserts(){return inserts;}};
 }
 test('actual barcode handler saves provider-labeled grams and count with insert-only provenance',async()=>{
  const f=scanPortionFixture();const response=await f.request(),body=await response.json();
@@ -455,4 +455,23 @@ test('actual scan capture preserves known zero and unknown fiber without changin
 test('actual scan capture cannot persist absent protein as a confirmed zero',async()=>{
  const f=scanPortionFixture('012345678905',{'energy-kcal_100g':400,carbohydrates_100g:60,fat_100g:14});
  const body=await(await f.request()).json();assert.equal(f.inserts,0);assert.equal(body.source,'openfoodfacts_unverified');assert.equal(body.item.protein,null);assert.equal(body.item.ai_verified,false);assert.equal(body.item._data_quality_warning,true);
+});
+
+const lowProviderNutrition={'energy-kcal_100g':10,proteins_100g:8,carbohydrates_100g:60,fat_100g:14,fiber_100g:9};
+test('partial model read cannot patch provider facts or write a verified catalog record',async()=>{
+ const f=scanPortionFixture('012345678905',lowProviderNutrition,{calories_per_100g:400});const body=await(await f.request()).json();
+ assert.equal(f.aiCalls,1);assert.equal(f.inserts,0);assert.equal(body.item.calories,10);assert.equal(body.item.protein,8);assert.equal(body.item.ai_verified,false);assert.equal(body.source,'openfoodfacts_unverified');
+});
+test('complete legacy label candidate remains isolated, unverified and unpersisted',async()=>{
+ const f=scanPortionFixture('012345678905',lowProviderNutrition,{calories_per_100g:400,protein_per_100g:20,carbs_per_100g:50,fat_per_100g:12,serving_size_g:25});const body=await(await f.request()).json();
+ assert.equal(f.aiCalls,1);assert.equal(f.inserts,0);assert.equal(body.persisted,false);assert.equal(body.requires_label_confirmation,true);assert.equal(body.item.ai_verified,false);assert.equal(body.item.calories,400);assert.equal(body.item.protein,20);assert.equal(body.item.fiber,null);assert.equal(body.item.serving_size,25);assert.equal(body.item._nutrition_provenance.basis,'100g');
+});
+test('scanner rejects provider identity mismatch before invoking model or persisting',async()=>{
+ const f=scanPortionFixture('000000000000',lowProviderNutrition,{calories_per_100g:400});const response=await f.request();assert.equal(response.status,503);assert.equal(f.aiCalls,0);assert.equal(f.inserts,0);assert.equal((await response.json()).error,'provider_identity_mismatch');
+});
+test('legacy parser requires one complete basis, preserves zero and rejects conflicting bases',()=>{
+ const {normalizeLegacyScanRead:parse}=scanPortionFixture().api;
+ assert.equal(parse({calories_per_100g:400,protein_per_serving_g:5,carbs_per_serving_g:10,fat_per_serving_g:2,serving_size_g:25}),null);
+ const serving={serving_size_g:25,calories_per_serving:100,protein_per_serving_g:0,carbs_per_serving_g:20,fat_per_serving_g:2};const result=parse(serving);assert.equal(result.nutrition.calories,400);assert.equal(result.nutrition.protein,0);assert.equal(result.nutrition.fiber,null);assert.equal(result.basis,'serving');
+ assert.equal(parse({...serving,calories_per_100g:700}),null);assert.equal(parse({...serving,protein_per_serving_g:'0'}),null);assert.equal(parse({...serving,serving_size_g:0}),null);assert.equal(parse({...serving,serving_size_g:Number.MIN_VALUE}),null);assert.equal(parse({...serving,calories_per_serving:-1}),null);
 });
