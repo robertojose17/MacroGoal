@@ -434,12 +434,14 @@ test('normal detail persistence cannot overwrite corrections or enrich using the
 });
 
 test('USDA search keeps kcal distinct from kJ and omits unknown optional nutrients',()=>{
+ const {api:edge}=edgeFixture();
  const food={fdcId:123,description:'Fixture food',foodNutrients:[{nutrientId:1062,nutrientName:'Energy',unitName:'kJ',value:1674},{nutrientId:1008,nutrientName:'Energy',unitName:'kcal',value:400},{nutrientId:1003,unitName:'g',value:0},{nutrientId:1004,unitName:'g',value:10},{nutrientId:1005,unitName:'g',value:20},{nutrientId:1093,unitName:'mg',value:200}]};
  const result=edge.mapUsdaToOff(food);assert.equal(result.nutriments['energy-kcal_100g'],400);assert.equal(result.nutriments.proteins_100g,0);assert.equal(result.nutriments.sodium_100g,0.2);assert.equal(Object.hasOwn(result.nutriments,'fiber_100g'),false);assert.equal(Object.hasOwn(result.nutriments,'sugars_100g'),false);
  assert.equal(edge.mapUsdaToOff({...food,foodNutrients:food.foodNutrients.filter(n=>n.nutrientId!==1008)}),null);
  assert.equal(edge.mapUsdaToOff({...food,foodNutrients:food.foodNutrients.filter(n=>n.nutrientId!==1003)}),null);
 });
 test('USDA search rejects contradictory or wrong-unit core facts and preserves identity/serving',()=>{
+ const {api:edge}=edgeFixture();
  const food={fdcId:456,description:'Exact preparation, cooked',servingSize:25,servingSizeUnit:'g',foodNutrients:[{nutrient:{id:1008,unitName:'kcal'},amount:100},{nutrient:{id:1003,unitName:'g'},amount:5},{nutrient:{id:1004,unitName:'g'},amount:3},{nutrient:{id:1005,unitName:'g'},amount:12}]};
  const result=edge.mapUsdaToOff(food);assert.equal(result._usda_fdc_id,'456');assert.equal(result.product_name,food.description);assert.equal(result.serving_quantity,'25');assert.equal(result.nutriments['energy-kcal_100g'],100);
  assert.equal(edge.mapUsdaToOff({...food,foodNutrients:[...food.foodNutrients,{nutrient:{id:1003,unitName:'g'},amount:7}]}),null);
