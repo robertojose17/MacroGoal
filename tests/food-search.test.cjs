@@ -384,7 +384,7 @@ test('entire RPC migration rejects duplicate transactions and content after COMM
  assert.throws(()=>validate(sql+sql));
 });
 
-function scanPortionFixture(providerCode='012345678905'){
+function scanPortionFixture(providerCode='012345678905',providedNutrition=null){
  let handler,saved=null,inserts=0;
  const client={from(table){assert.equal(table,'food_items');let inserting=false;
   const query={select(){return query;},in(){return query;},maybeSingle:async()=>({data:null,error:null}),insert(row){inserts++;saved=structuredClone(row);inserting=true;return query;},single:async()=>({data:inserting?{...saved,id:'fixture-catalog-id'}:null,error:null})};return query;}};
@@ -393,7 +393,7 @@ function scanPortionFixture(providerCode='012345678905'){
   'jsr:@supabase/supabase-js@2':{createClient:()=>client},
   './identity.mjs':require('../supabase/functions/lookup-barcode/identity.mjs')
  },{Deno:{env:{get:name=>name==='OPENROUTER_API_KEY'?'':'fixture'},serve:h=>{handler=h;}},
-  fetch:async()=>Response.json({status:1,product:{code:providerCode,product_name:'Fixture cookies',brands:'Fixture',serving_size:'4 cookies (29 g)',serving_quantity:29,nutriments:{'energy-kcal_100g':400,proteins_100g:8,carbohydrates_100g:60,fat_100g:14}}})});
+  fetch:async()=>Response.json({status:1,product:{code:providerCode,product_name:'Fixture cookies',brands:'Fixture',serving_size:'4 cookies (29 g)',serving_quantity:29,nutriments:providedNutrition??{'energy-kcal_100g':400,proteins_100g:8,carbohydrates_100g:60,fat_100g:14}}})});
  return {request:()=>handler(new Request('https://fixture.invalid/lookup-barcode',{method:'POST',body:JSON.stringify({barcode:'012345678905'})})),get saved(){return saved;},get inserts(){return inserts;}};
 }
 test('actual barcode handler saves provider-labeled grams and count with insert-only provenance',async()=>{
@@ -446,4 +446,13 @@ test('USDA search rejects contradictory or wrong-unit core facts and preserves i
  const result=edge.mapUsdaToOff(food);assert.equal(result._usda_fdc_id,'456');assert.equal(result.product_name,food.description);assert.equal(result.serving_quantity,'25');assert.equal(result.nutriments['energy-kcal_100g'],100);
  assert.equal(edge.mapUsdaToOff({...food,foodNutrients:[...food.foodNutrients,{nutrient:{id:1003,unitName:'g'},amount:7}]}),null);
  assert.equal(edge.mapUsdaToOff({...food,foodNutrients:food.foodNutrients.map(n=>n.nutrient.id===1003?{nutrient:{id:1003,unitName:'mg'},amount:5}:n)}),null);
+});
+
+test('actual scan capture preserves known zero and unknown fiber without changing serving or identity',async()=>{
+ const f=scanPortionFixture('012345678905',{'energy-kcal_100g':400,proteins_100g:0,carbohydrates_100g:60,fat_100g:14});
+ const body=await(await f.request()).json();assert.equal(body.persisted,true);assert.equal(f.saved.protein,0);assert.equal(f.saved.fiber,null);assert.equal(f.saved.serving_size,29);assert.equal(f.saved.barcode,'0012345678905');
+});
+test('actual scan capture cannot persist absent protein as a confirmed zero',async()=>{
+ const f=scanPortionFixture('012345678905',{'energy-kcal_100g':400,carbohydrates_100g:60,fat_100g:14});
+ const body=await(await f.request()).json();assert.equal(f.inserts,0);assert.equal(body.source,'openfoodfacts_unverified');assert.equal(body.item.protein,null);assert.equal(body.item.ai_verified,false);assert.equal(body.item._data_quality_warning,true);
 });
