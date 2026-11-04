@@ -73,3 +73,18 @@ export async function recordNutritionEvidence(admin,foodId,evidence,milliseconds
   return Boolean(result&&!result.error&&Number.isInteger(result.data));
  }catch{return false;}finally{if(timer)clearTimeout(timer);}
 }
+
+// Search uses the same ID/unit evidence as exact-food capture. Missing is never zero.
+export function usdaSearchNutriments(food){
+ const id=food?.fdcId??food?.fdcid;
+ const evidence=captureUsdaNutrition({...food,fdcId:id},id,new Date().toISOString());
+ const result={};if(!evidence)return result;
+ const choose=(ids,unit)=>{for(const id of ids){const f=evidence.facts[String(id)];if(f?.unit===unit)return f.value;}return undefined;};
+ for(const [field,ids,unit,factor] of [
+ ['energy-kcal_100g',[1008,2048,2047],'kcal',1],['proteins_100g',[1003],'g',1],
+ ['carbohydrates_100g',[1005],'g',1],['fat_100g',[1004],'g',1],['fiber_100g',[1079],'g',1],
+ ['sugars_100g',[2000,1063],'g',1],['sodium_100g',[1093],'mg',0.001]]){
+  const value=choose(ids,unit);if(value!==undefined)result[field]=value*factor;
+ }
+ return result;
+}
