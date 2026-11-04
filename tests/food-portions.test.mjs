@@ -291,10 +291,17 @@ test('concurrent correction conflict cannot return approval or overwrite a newer
  const result=await correction.handleVerifiedCorrection(checkedLabel,{row,barcode:row.barcode,isNew:false},{update:async()=>{calls++;throw Object.assign(Error('catalog_changed'),{code:'40001'});}});
  assert.equal(result.status,'error');assert.equal(calls,1);assert.equal(result.food_item,undefined);
 });
-test('insert race uses the winning row version rather than the originally absent identity',async()=>{
- const winner={id:'winner',barcode:'0012345678905',updated_at:'winner-version'};let expected;
- const result=await correction.persistVerifiedCorrection({row:null,barcode:winner.barcode,isNew:true},{name:'Exact package'},{insert:async()=>{throw {code:'23505'};},findByBarcodes:async()=>[winner],update:async(id,values,row)=>{expected=row;return {...winner,...values};}});
- assert.equal(result.id,winner.id);assert.equal(expected,winner);
+test('insert race fails visibly without reading or overwriting the winning row',async()=>{
+ let reads=0,updates=0;
+ await assert.rejects(correction.persistVerifiedCorrection({row:null,barcode:'012345678905',isNew:true},{name:'Stale proposal'},{insert:async()=>{throw {code:'23505'};},findByBarcodes:async()=>{reads++;return [{id:'winner',_nutrition_revision:9}];},update:async()=>{updates++;}}),error=>error.code==='40001');
+ assert.equal(reads,0);assert.equal(updates,0);
+});
+test('two proposals confirmed against absence cannot overwrite the first insert winner',async()=>{
+ let winner=null,updates=0;const identity={row:null,barcode:'012345678905',isNew:true};
+ const repo={insert:async values=>{await Promise.resolve();if(winner)throw {code:'23505'};winner={id:'winner',...values};return winner;},update:async()=>{updates++;throw Error('must not overwrite');}};
+ const other={...checkedLabel,product_name:'Other confirmed package',per_serving:{...checkedLabel.per_serving,calories:250}};
+ const results=await Promise.all([correction.handleVerifiedCorrection(checkedLabel,identity,repo),correction.handleVerifiedCorrection(other,identity,repo)]);
+ assert.equal(results.filter(r=>r.status==='approved').length,1);assert.equal(results.filter(r=>r.status==='error').length,1);assert.equal(updates,0);assert.equal(winner.name,checkedLabel.product_name);assert.equal(winner.calories,checkedLabel.per_serving.calories);
 });
 test('global guard candidate is private, role-bound and patches only verified live recovery baseline',()=>{
  const sql=readFileSync(new URL('../supabase/review/food-search-v2/nutrition-authority.CANDIDATE.sql',import.meta.url),'utf8');
@@ -368,4 +375,14 @@ test('protected upsert skip requires backend and scoped importer marker; other w
  assert.equal(decision(true,'',false),'error');
  assert.equal(decision(true,'usda_import_v1',false),'keep');
  assert.equal(decision(true,'',true),'write');
+});
+
+test('recovery SQL removes timestamp authority before enabling the confirmed write context',()=>{
+ const sql=readFileSync(new URL('../supabase/review/food-search-v2/nutrition-authority.CANDIDATE.sql',import.meta.url),'utf8');
+ const patch=sql.slice(sql.indexOf('-- Preserve the actual deployed recovery'));
+ assert.ok(patch.includes("jsonb_typeof(p_payload->'expected_revision') is distinct from 'number'"));
+ assert.ok(patch.includes('macrogoal_food_private.nutrition_current c where c.food_id=item.id'));
+ assert.ok(patch.includes('recovery revision patch not applied'));
+ const recoverySource=readFileSync(new URL('../supabase/functions/vision-nutrition-extract/recovery.ts',import.meta.url),'utf8');
+ assert.ok(recoverySource.includes('read_food_correction_targets_v1'));assert.ok(recoverySource.includes('nutrition_revision:identity.row?._nutrition_revision??null'));assert.ok(!recoverySource.includes('updated_at:identity'));
 });
