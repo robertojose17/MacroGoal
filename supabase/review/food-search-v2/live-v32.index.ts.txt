@@ -1,0 +1,420 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Data-quality scoring (0–13 pts)
+// ---------------------------------------------------------------------------
+function scoreProduct(p: Record<string, unknown>): number {
+  const n = (p.nutriments ?? {}) as Record<string, unknown>;
+  let score = 0;
+  const kcal = Number(n['energy-kcal_100g'] ?? n['energy-kcal'] ?? 0);
+  if (kcal > 0) score += 3;
+  const protein = Number(n['proteins_100g'] ?? n['proteins'] ?? 0);
+  if (protein > 0) score += 2;
+  const carbs = Number(n['carbohydrates_100g'] ?? n['carbohydrates'] ?? 0);
+  if (carbs > 0) score += 2;
+  const fat = Number(n['fat_100g'] ?? n['fat'] ?? 0);
+  if (fat > 0) score += 2;
+  const fiberRaw = n['fiber_100g'] ?? n['fiber'];
+  if (fiberRaw !== undefined && fiberRaw !== null && Number(fiberRaw) >= 0) score += 1;
+  const sq = Number(p.serving_quantity ?? 0);
+  if (sq > 0) score += 1;
+  const name = String(p.product_name ?? '').trim();
+  if (name.length > 0) score += 1;
+  const grade = String(p.nutriscore_grade ?? '').trim().toLowerCase();
+  if (grade && grade !== 'unknown') score += 1;
+  return score;
+}
+
+// ---------------------------------------------------------------------------
+// Composite relevance score for Supabase DB results
+// ---------------------------------------------------------------------------
+function compositeScore(
+  row: Record<string, unknown>,
+  query: string,
+): number {
+  const q = query.toLowerCase().trim();
+  const name = String(row.product_name ?? row.name ?? '').toLowerCase().trim();
+  const brand = String(row.brands ?? row.brand ?? '').toLowerCase().trim();
+
+  let score = 0;
+
+  // Name match bonuses
+  if (name === q) score += 1000;
+  else if (name.startsWith(q)) score += 500;
+  else if (name.includes(q)) score += 200;
+
+  // Brand match bonus
+  if (brand && brand.includes(q)) score += 100;
+
+  // Popularity signals
+  const logs30 = Number(row.logs_last_30d ?? 0);
+  score += logs30 * 3;
+
+  const popularity = Number(row.popularity_score ?? 0);
+  score += popularity;
+
+  const dataQuality = Number(row.data_quality_score ?? 0);
+  score += dataQuality;
+
+  return score;
+}
+
+// ---------------------------------------------------------------------------
+// Map a food_items DB row → OpenFoodFactsProduct shape
+// ---------------------------------------------------------------------------
+function mapDbRowToOff(
+  row: Record<string, unknown>,
+  query: string,
+): Record<string, unknown> {
+  const calories = Number(row.calories ?? 0);
+  const protein = Number(row.protein ?? 0);
+  const carbs = Number(row.carbs ?? 0);
+  const fat = Number(row.fat ?? 0);
+  const fiber = Number(row.fiber ?? 0);
+
+  const macrosPer = String(row.macros_per ?? '100g');
+  const servingSize = Number(row.serving_size ?? 100) || 100;
+  const multiplier = macrosPer === '100g' ? 1 : (servingSize > 0 ? 100 / servingSize : 1);
+
+  const nutriments: Record<string, number> = {
+    'energy-kcal_100g': calories * multiplier,
+    'proteins_100g': protein * multiplier,
+    'carbohydrates_100g': carbs * multiplier,
+    'fat_100g': fat * multiplier,
+    'fiber_100g': fiber * multiplier,
+  };
+
+  const extraNutriments = (row.nutriments ?? {}) as Record<string, unknown>;
+  for (const [k, v] of Object.entries(extraNutriments)) {
+    if (!(k in nutriments)) {
+      nutriments[k] = Number(v);
+    }
+  }
+
+  return {
+    code: String(row.barcode ?? row.id ?? ''),
+    product_name: String(row.product_name ?? row.name ?? '').trim(),
+    generic_name: String(row.generic_name ?? '').trim(),
+    brands: String(row.brands ?? row.brand ?? '').trim(),
+    serving_size: String(row.serving_unit ? `${servingSize} ${row.serving_unit}` : `${servingSize} g`),
+    serving_quantity: String(row.serving_quantity ?? servingSize),
+    nutriments,
+    nutriscore_grade: row.nutriscore_grade ?? null,
+    unique_scans_n: Number(row.popularity_score ?? row.search_count ?? 0),
+    _source: 'supabase',
+    _composite_score: compositeScore(row, query),
+    _data_quality_score: scoreProduct({
+      product_name: row.product_name ?? row.name,
+      serving_quantity: row.serving_quantity ?? servingSize,
+      nutriscore_grade: row.nutriscore_grade,
+      nutriments,
+    }),
+    _db_id: String(row.id ?? ''),
+    _usda_fdc_id: row.usda_fdc_id ? String(row.usda_fdc_id) : undefined,
+    _db_row: row,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Map USDA FoodData Central result → OpenFoodFactsProduct shape
+// ---------------------------------------------------------------------------
+function mapUsdaToOff(item: Record<string, unknown>): Record<string, unknown> | null {
+  const description = String(item.description ?? '').trim();
+  if (!description) return null;
+
+  const fdcId = item.fdcId ?? item.fdcid;
+  const dataType = String(item.dataType ?? item.datatype ?? '').toLowerCase();
+  const isBranded = dataType === 'branded';
+
+  // Parse serving size for branded items (needed to normalize to per-100g)
+  const servingSizeRaw = Number(item.servingSize ?? 0);
+  const servingSizeUnit = String(item.servingSizeUnit ?? 'g').toLowerCase();
+  // Convert oz to g if needed
+  const servingSizeG = servingSizeUnit === 'oz' ? servingSizeRaw * 28.3495 : servingSizeRaw;
+  const normFactor = (isBranded && servingSizeG > 0) ? (100 / servingSizeG) : 1;
+
+  const nutrients = Array.isArray(item.foodNutrients)
+    ? (item.foodNutrients as Record<string, unknown>[])
+    : [];
+
+  function getNutrient(names: string[]): number {
+    for (const n of nutrients) {
+      const nutrientName = String(
+        (n.nutrientName ?? (n.nutrient as Record<string, unknown>)?.name ?? ''),
+      ).toLowerCase();
+      for (const target of names) {
+        if (nutrientName.includes(target.toLowerCase())) {
+          const val = Number(n.value ?? (n as Record<string, unknown>).amount ?? 0);
+          return val * normFactor;
+        }
+      }
+    }
+    return 0;
+  }
+
+  const kcal = getNutrient(['energy', 'calories']);
+  const proteinG = getNutrient(['protein']);
+  const carbsG = getNutrient(['carbohydrate, by difference', 'carbohydrate']);
+  const fatG = getNutrient(['total lipid (fat)', 'total fat', 'fat']);
+  const fiberG = getNutrient(['fiber, total dietary', 'dietary fiber', 'fiber']);
+  const sugarsG = getNutrient(['sugars, total', 'total sugars', 'sugars']);
+  const sodiumMg = getNutrient(['sodium']);
+
+  const nutriments: Record<string, number> = {
+    'energy-kcal_100g': kcal,
+    'proteins_100g': proteinG,
+    'carbohydrates_100g': carbsG,
+    'fat_100g': fatG,
+    'fiber_100g': fiberG,
+    'sugars_100g': sugarsG,
+    'sodium_100g': sodiumMg / 1000, // mg → g
+  };
+
+  const brandOwner = String(item.brandOwner ?? item.brandName ?? '').trim();
+  const servingDisplay = servingSizeG > 0
+    ? `${Math.round(servingSizeG)} g`
+    : '100 g';
+
+  return {
+    code: String(fdcId ?? ''),
+    product_name: description,
+    generic_name: '',
+    brands: brandOwner,
+    serving_size: servingDisplay,
+    serving_quantity: servingSizeG > 0 ? String(Math.round(servingSizeG)) : '100',
+    nutriments,
+    nutriscore_grade: null,
+    unique_scans_n: 0,
+    _source: 'usda',
+    _usda_fdc_id: String(fdcId ?? ''),
+    _data_quality_score: scoreProduct({ product_name: description, nutriments }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Map OFacts product → OpenFoodFactsProduct shape
+// ---------------------------------------------------------------------------
+function mapOffProduct(
+  p: Record<string, unknown>,
+  score: number,
+): Record<string, unknown> {
+  return {
+    code: String(p.code ?? '').trim(),
+    product_name: String(p.product_name ?? '').trim(),
+    generic_name: String(p.generic_name ?? '').trim(),
+    brands: String(p.brands ?? '').trim(),
+    serving_size: p.serving_size ?? null,
+    serving_quantity: p.serving_quantity ?? null,
+    nutriments: (p.nutriments ?? {}) as Record<string, unknown>,
+    nutriscore_grade: p.nutriscore_grade ?? null,
+    unique_scans_n: Number(p.unique_scans_n ?? 0),
+    _source: 'openfoodfacts',
+    _data_quality_score: score,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405);
+  }
+
+  let query: string;
+  let limit: number;
+  let userId: string | undefined;
+
+  try {
+    const body = await req.json();
+    query = String(body?.query ?? '').trim();
+    limit = Math.min(Number(body?.limit ?? 30), 100);
+    userId = body?.user_id ? String(body.user_id) : undefined;
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400);
+  }
+
+  if (!query) {
+    return jsonResponse({ error: 'query is required' }, 400);
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  // -------------------------------------------------------------------------
+  // Stage 1: Supabase food_items — full-text + ilike, composite score sort
+  // -------------------------------------------------------------------------
+  const supabasePromise = (async (): Promise<Record<string, unknown>[]> => {
+    const { data: dbRows, error: dbError } = await supabase
+      .from('food_items')
+      .select('id,barcode,name,brand,product_name,generic_name,brands,calories,protein,carbs,fat,fiber,serving_size,serving_unit,serving_quantity,macros_per,nutriments,nutriscore_grade,popularity_score,search_count,logs_last_30d,data_quality_score,usda_fdc_id,source,off_data,image_url')
+      .or(
+        `name.ilike.%${query}%,brand.ilike.%${query}%,product_name.ilike.%${query}%,brands.ilike.%${query}%,generic_name.ilike.%${query}%`,
+      )
+      .limit(25);
+
+    if (dbError) {
+      console.error('[search-foods] DB error:', dbError.message);
+      return [];
+    }
+
+    const rows = (dbRows ?? []) as Record<string, unknown>[];
+    // Map and sort by composite score descending
+    return rows
+      .map((row) => mapDbRowToOff(row, query))
+      .sort((a, b) => (b._composite_score as number) - (a._composite_score as number));
+  })();
+
+  // -------------------------------------------------------------------------
+  // Stage 2: USDA FoodData Central (4s timeout)
+  // -------------------------------------------------------------------------
+  const usdaPromise = (async (): Promise<Record<string, unknown>[]> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    try {
+      const usdaUrl =
+        `https://api.nal.usda.gov/fdc/v1/foods/search` +
+        `?query=${encodeURIComponent(query)}&pageSize=15&api_key=DEMO_KEY`;
+      const res = await fetch(usdaUrl, { signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) {
+        console.warn('[search-foods] USDA HTTP error:', res.status);
+        return [];
+      }
+      const json = await res.json() as Record<string, unknown>;
+      const foods = Array.isArray(json.foods)
+        ? (json.foods as Record<string, unknown>[])
+        : [];
+      return foods
+        .map(mapUsdaToOff)
+        .filter((p): p is Record<string, unknown> => p !== null && !!p.product_name);
+    } catch (err) {
+      clearTimeout(timer);
+      if ((err as Error)?.name === 'AbortError') {
+        console.warn('[search-foods] USDA timed out');
+      } else {
+        console.error('[search-foods] USDA fetch error:', err);
+      }
+      return [];
+    }
+  })();
+
+  // -------------------------------------------------------------------------
+  // Run Stage 1 + 2 in parallel
+  // -------------------------------------------------------------------------
+  const [supabaseResult, usdaResult] = await Promise.allSettled([
+    supabasePromise,
+    usdaPromise,
+  ]);
+
+  const dbProducts =
+    supabaseResult.status === 'fulfilled' ? supabaseResult.value : [];
+  const usdaProducts =
+    usdaResult.status === 'fulfilled' ? usdaResult.value : [];
+
+  const combinedCount = dbProducts.length + usdaProducts.length;
+
+  // -------------------------------------------------------------------------
+  // Stage 3: Open Food Facts — only if Stage 1 + 2 returned < 10 results
+  // -------------------------------------------------------------------------
+  let offProducts: Record<string, unknown>[] = [];
+  if (combinedCount < 10) {
+    try {
+      const offUrl =
+        `https://world.openfoodfacts.org/cgi/search.pl` +
+        `?search_terms=${encodeURIComponent(query)}` +
+        `&search_simple=1&action=process&json=1&page_size=20&sort_by=unique_scans_n` +
+        `&fields=code,product_name,generic_name,brands,serving_size,serving_quantity,nutriments,image_url`;
+
+      const offRes = await fetch(offUrl, {
+        headers: { 'User-Agent': 'MacroGoal/1.0 (contact@macrogoal.app)' },
+      });
+      if (offRes.ok) {
+        const offJson = await offRes.json() as Record<string, unknown>;
+        const rawProducts = Array.isArray(offJson.products)
+          ? (offJson.products as Record<string, unknown>[])
+          : [];
+
+        offProducts = rawProducts
+          // Filter out nameless products — never return "Unknown Product"
+          .filter((p) => {
+            const name = String(p.product_name ?? '').trim();
+            const generic = String(p.generic_name ?? '').trim();
+            return name.length > 0 || generic.length > 0;
+          })
+          .map((p) => mapOffProduct(p, scoreProduct(p)))
+          .sort((a, b) => {
+            const scoreDiff =
+              (b._data_quality_score as number) - (a._data_quality_score as number);
+            if (scoreDiff !== 0) return scoreDiff;
+            return (b.unique_scans_n as number) - (a.unique_scans_n as number);
+          });
+      } else {
+        console.warn('[search-foods] OFacts HTTP error:', offRes.status);
+      }
+    } catch (err) {
+      console.error('[search-foods] OFacts fetch error:', err);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Merge & deduplicate
+  // Priority: our DB > USDA > OFacts
+  // Dedup key: barcode/fdcId (code field)
+  // -------------------------------------------------------------------------
+  const seen = new Set<string>();
+  const merged: Record<string, unknown>[] = [];
+
+  // 1. Our DB results first (already sorted by composite score)
+  for (const p of dbProducts) {
+    const code = String(p.code ?? '').trim();
+    const usdaId = String(p._usda_fdc_id ?? '').trim();
+    if (code && seen.has(code)) continue;
+    if (usdaId && seen.has(`usda:${usdaId}`)) continue;
+    if (code) seen.add(code);
+    if (usdaId) seen.add(`usda:${usdaId}`);
+    merged.push(p);
+  }
+
+  // 2. USDA results
+  for (const p of usdaProducts) {
+    const code = String(p.code ?? '').trim();
+    const usdaId = String(p._usda_fdc_id ?? '').trim();
+    if (code && seen.has(code)) continue;
+    if (usdaId && seen.has(`usda:${usdaId}`)) continue;
+    if (code) seen.add(code);
+    if (usdaId) seen.add(`usda:${usdaId}`);
+    merged.push(p);
+    if (merged.length >= limit) break;
+  }
+
+  // 3. OFacts results (only if we got here)
+  for (const p of offProducts) {
+    const code = String(p.code ?? '').trim();
+    if (code && seen.has(code)) continue;
+    if (code) seen.add(code);
+    merged.push(p);
+    if (merged.length >= limit) break;
+  }
+
+  return jsonResponse({ products: merged, count: merged.length });
+});

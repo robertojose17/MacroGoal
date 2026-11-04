@@ -1,3 +1,5 @@
+import { captureOffNutrition, recordNutritionEvidence } from '../_shared/nutritionEvidence.mjs';
+import { decorateCachedProducts } from '../_shared/portionCache.mjs';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { barcodeCandidates, canonicalNewBarcode, insertLookupItemOrReturnWinner } from './identity.mjs';
@@ -27,6 +29,7 @@ function sanityCheck(
   const fat = nutriments['fat_100g'] ?? nutriments['fat'] ?? 0;
   const fiber = nutriments['fiber_100g'] ?? nutriments['fiber'] ?? 0;
 
+  if (['energy-kcal_100g','proteins_100g','carbohydrates_100g','fat_100g'].some(key=>typeof nutriments[key]!=='number'||!Number.isFinite(nutriments[key])||nutriments[key]<0)) return {passes:false,reason:'missing_or_invalid_core_nutrition'};
   const macroDensity = protein + carbs + fat + fiber;
   if (macroDensity < 15) {
     return {
@@ -135,6 +138,29 @@ Return ONLY the JSON, no explanation, no markdown.`;
   }
 }
 
+// One legacy model read is a review candidate, never shared-catalog authority.
+export function normalizeLegacyScanRead(value:any){
+ if(!value||typeof value!=='object'||Array.isArray(value))return null;
+ const valid=(v:any)=>typeof v==='number'&&Number.isFinite(v)&&v>=0;
+ const fields=['calories','protein','carbs','fat','fiber'];
+ const per100=['calories_per_100g','protein_per_100g','carbs_per_100g','fat_per_100g','fiber_per_100g'];
+ const serving=['calories_per_serving','protein_per_serving_g','carbs_per_serving_g','fat_per_serving_g','fiber_per_serving_g'];
+ const grams=valid(value.serving_size_g)&&value.serving_size_g>0?value.serving_size_g:null;
+ const full100=per100.slice(0,4).every(k=>valid(value[k]));
+ const fullServing=grams!==null&&serving.slice(0,4).every(k=>valid(value[k]));
+ if(!full100&&!fullServing)return null;
+ const keys=full100?per100:serving,other=full100?serving:per100,factor=full100?1:100/grams;
+ const otherFactor=full100?(grams===null?null:100/grams):1;
+ const nutrition:Record<string,number|null>={};
+ for(let i=0;i<fields.length;i++){
+  const n=valid(value[keys[i]])?value[keys[i]]*factor:null;
+  if(n!==null&&!valid(n))return null;
+  if(n!==null&&otherFactor!==null&&valid(value[other[i]])&&Math.abs(n-value[other[i]]*otherFactor)>0.1)return null;
+  nutrition[fields[i]]=n;
+ }
+ return {nutrition,servingGrams:grams??100,basis:full100?'100g':'serving'};
+}
+
 function mapOffProductToItem(
   offProduct: Record<string, unknown>,
   aiResult: Record<string, number | null> | null,
@@ -143,57 +169,35 @@ function mapOffProductToItem(
   sanityFailReason?: string
 ) {
   const nutriments = (offProduct.nutriments ?? {}) as Record<string, number>;
-  const servingQty =
+  let servingQty =
     typeof offProduct.serving_quantity === 'number'
       ? offProduct.serving_quantity
       : parseFloat(String(offProduct.serving_quantity ?? '0')) || 0;
 
-  let cal100 =
-    nutriments['energy-kcal_100g'] ?? nutriments['energy-kcal'] ?? 0;
-  let protein100 = nutriments['proteins_100g'] ?? nutriments['proteins'] ?? 0;
-  let carbs100 =
-    nutriments['carbohydrates_100g'] ?? nutriments['carbohydrates'] ?? 0;
-  let fat100 = nutriments['fat_100g'] ?? nutriments['fat'] ?? 0;
-  let fiber100 = nutriments['fiber_100g'] ?? nutriments['fiber'] ?? 0;
+  let cal100: number | null =
+    nutriments['energy-kcal_100g'] ?? nutriments['energy-kcal'] ?? null;
+  let protein100: number | null = nutriments['proteins_100g'] ?? nutriments['proteins'] ?? null;
+  let carbs100: number | null =
+    nutriments['carbohydrates_100g'] ?? nutriments['carbohydrates'] ?? null;
+  let fat100: number | null = nutriments['fat_100g'] ?? nutriments['fat'] ?? null;
+  let fiber100: number | null = nutriments['fiber_100g'] ?? nutriments['fiber'] ?? null;
 
   if (aiResult) {
-    if (aiResult.calories_per_100g != null) {
-      cal100 = aiResult.calories_per_100g;
-    } else if (
-      aiResult.calories_per_serving != null &&
-      aiResult.serving_size_g != null &&
-      aiResult.serving_size_g > 0
-    ) {
-      cal100 = Math.round(
-        (aiResult.calories_per_serving / aiResult.serving_size_g) * 100
-      );
-    }
-    if (aiResult.protein_per_100g != null) protein100 = aiResult.protein_per_100g;
-    else if (aiResult.protein_per_serving_g != null && aiResult.serving_size_g)
-      protein100 = Math.round((aiResult.protein_per_serving_g / aiResult.serving_size_g) * 100);
-
-    if (aiResult.carbs_per_100g != null) carbs100 = aiResult.carbs_per_100g;
-    else if (aiResult.carbs_per_serving_g != null && aiResult.serving_size_g)
-      carbs100 = Math.round((aiResult.carbs_per_serving_g / aiResult.serving_size_g) * 100);
-
-    if (aiResult.fat_per_100g != null) fat100 = aiResult.fat_per_100g;
-    else if (aiResult.fat_per_serving_g != null && aiResult.serving_size_g)
-      fat100 = Math.round((aiResult.fat_per_serving_g / aiResult.serving_size_g) * 100);
-
-    if (aiResult.fiber_per_100g != null) fiber100 = aiResult.fiber_per_100g;
-    else if (aiResult.fiber_per_serving_g != null && aiResult.serving_size_g)
-      fiber100 = Math.round((aiResult.fiber_per_serving_g / aiResult.serving_size_g) * 100);
+    const read=normalizeLegacyScanRead(aiResult);
+    cal100=read?.nutrition.calories??null;protein100=read?.nutrition.protein??null;
+    carbs100=read?.nutrition.carbs??null;fat100=read?.nutrition.fat??null;fiber100=read?.nutrition.fiber??null;
+    servingQty=read?.servingGrams??100;
   }
 
   const item: Record<string, unknown> = {
     name: (offProduct.product_name as string) || (offProduct.generic_name as string) || '',
     brand: (offProduct.brands as string) || '',
     barcode: (offProduct.code as string) || '',
-    calories: Math.round(cal100 * 10) / 10,
-    protein: Math.round(protein100 * 10) / 10,
-    carbs: Math.round(carbs100 * 10) / 10,
-    fat: Math.round(fat100 * 10) / 10,
-    fiber: Math.round(fiber100 * 10) / 10,
+    calories: cal100 === null ? null : Math.round(cal100 * 10) / 10,
+    protein: protein100 === null ? null : Math.round(protein100 * 10) / 10,
+    carbs: carbs100 === null ? null : Math.round(carbs100 * 10) / 10,
+    fat: fat100 === null ? null : Math.round(fat100 * 10) / 10,
+    fiber: fiber100 === null ? null : Math.round(fiber100 * 10) / 10,
     serving_size: servingQty,
     serving_quantity: servingQty,
     macros_per: '100g' as const,
@@ -213,6 +217,18 @@ Deno.serve(async (req: Request) => {
 
   if (req.method !== 'POST') {
     return jsonResponse({ error: 'Method not allowed' }, 405);
+  }
+
+  // Only the explicit operation enters this terminal authenticated branch.
+  let portionOperation=false;
+  try {portionOperation=(await req.clone().json())?.operation==='usda_portions_v1';}
+  catch {/* Preserve the original barcode JSON validation below. */}
+  if(portionOperation){
+    try{
+      const {handlePortionRequest}=await import('../_shared/portionEndpoint.ts');
+      const admin=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      return await handlePortionRequest(req,admin,corsHeaders);
+    }catch{return jsonResponse({error:'Portion verification unavailable'},503);}
   }
 
   let barcode: string;
@@ -248,7 +264,8 @@ Deno.serve(async (req: Request) => {
 
   // If found in DB, return immediately
   if (dbRow) {
-    return jsonResponse({ found: true, item: dbRow, source: 'supabase' });
+    const decorated=await decorateCachedProducts([{_usda_fdc_id:dbRow.usda_fdc_id,product_name:dbRow.name,nutriments:{}}],supabase,150);
+    return jsonResponse({ found: true, item: {...dbRow,_portion_evidence:decorated[0]?._portion_evidence??null}, source: 'supabase' });
   }
 
   // Store supabase item for fallback
@@ -279,13 +296,48 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ found: false });
   }
 
+  // Identity must match before either provider or model data is considered.
+  if(!barcodeCandidates(String(offProduct.code??'')).some((code:string)=>barcodesToTry.includes(code))) return jsonResponse({found:false,error:'provider_identity_mismatch'},503);
+
   // Step 3: Sanity check
   const nutriments = (offProduct.nutriments ?? {}) as Record<string, number>;
   const check = sanityCheck(nutriments, offProduct.serving_quantity);
 
   if (check.passes) {
     const item = mapOffProductToItem(offProduct, null, false, false);
-    return jsonResponse({ found: true, item, source: 'openfoodfacts' });
+    const externalCode=String(item.barcode??'');
+    if(!barcodeCandidates(externalCode).some((code:string)=>barcodesToTry.includes(code))){
+      return jsonResponse({found:false,error:'provider_identity_mismatch'},503);
+    }
+    const rawLabel=String(offProduct.serving_size??'');
+    const explicitGrams=rawLabel.match(/(\d+(?:\.\d+)?)\s*g\b/i);
+    const quantity=Number(item.serving_quantity);
+    const consistent=explicitGrams&&Number.isFinite(quantity)&&quantity>0&&Math.abs(Number(explicitGrams[1])-quantity)<0.01;
+    const unit=consistent?rawLabel.match(/^(\d+(?:\.\d+)?)\s+([a-zA-Z][a-zA-Z\s]*?)\s*\(/):null;
+    const grams=consistent?quantity:100;
+    const values={
+      name:item.name,brand:item.brand,barcode:canonicalNewBarcode(externalCode),
+      calories:item.calories,protein:item.protein,carbs:item.carbs,fat:item.fat,fiber:item.fiber,
+      macros_per:'100g',serving_size:grams,serving_quantity:String(grams),serving_unit:'g',
+      serving_description:unit?unit[2].trim():null,serving_count:unit?Number(unit[1]):null,
+      source:'openfoodfacts',ai_verified:false,
+      off_data:{code:externalCode,product_name:item.name,brands:item.brand,
+        serving_size:rawLabel,serving_quantity:offProduct.serving_quantity,
+        nutrition_evidence:captureOffNutrition(offProduct,externalCode,new Date().toISOString()),
+        measure_provenance:{provider:'openfoodfacts',identifier:externalCode,verification:'provider_reported',
+          gram_weight_explicit:Boolean(consistent),retrieved_at:new Date().toISOString()}}
+    };
+    try{
+      const persisted=await insertLookupItemOrReturnWinner(values,{
+        async insert(row:Record<string,unknown>){const {data,error}=await supabase.from('food_items').insert(row).select('*').single();if(error)throw error;return data;},
+        async findByBarcodes(codes:string[]){const {data,error}=await supabase.from('food_items').select('*').in('barcode',codes);if(error)throw error;return data??[];}
+      });
+      await recordNutritionEvidence(supabase,persisted.item.id,captureOffNutrition(offProduct,externalCode,new Date().toISOString()));
+      return jsonResponse({found:true,item:persisted.item,source:persisted.inserted?'openfoodfacts':'supabase',persisted:true});
+    }catch{
+      console.warn('[lookup-barcode] Catalog capture unavailable');
+      return jsonResponse({found:true,item:{...item,serving_size:grams,serving_quantity:String(grams)},source:'openfoodfacts',persisted:false});
+    }
   }
 
   // Step 4: Sanity failed — try AI Vision
@@ -296,7 +348,7 @@ Deno.serve(async (req: Request) => {
 
   const aiResult = await verifyWithAIVision(barcode, offProduct, openrouterKey);
 
-  if (!aiResult) {
+  if (!aiResult || !normalizeLegacyScanRead(aiResult)) {
     const item = mapOffProductToItem(offProduct, null, false, true, check.reason);
     if (supabaseItem) {
       return jsonResponse({ found: true, item: supabaseItem, source: 'supabase_unverified', _data_quality_warning: true });
@@ -304,45 +356,8 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ found: true, item, source: 'openfoodfacts_unverified' });
   }
 
-  // AI Vision succeeded — build corrected item
-  const correctedItem = mapOffProductToItem(offProduct, aiResult, true, false);
-
-  // Save to food_items with ai_verified = true
-  try {
-    const upsertData = {
-      name: correctedItem.name as string,
-      brand: correctedItem.brand as string,
-      barcode: canonicalNewBarcode(correctedItem.barcode as string),
-      calories: correctedItem.calories as number,
-      protein: correctedItem.protein as number,
-      carbs: correctedItem.carbs as number,
-      fat: correctedItem.fat as number,
-      fiber: correctedItem.fiber as number,
-      serving_size: correctedItem.serving_size as number,
-      serving_quantity: String(correctedItem.serving_quantity),
-      macros_per: '100g',
-      ai_verified: true,
-      ai_verified_at: new Date().toISOString(),
-      ai_verified_source: 'gpt4o_vision',
-      source: 'openfoodfacts',
-      updated_at: new Date().toISOString(),
-    };
-
-    const persisted = await insertLookupItemOrReturnWinner(upsertData, {
-      async insert(values: Record<string, unknown>) {
-        const { data, error } = await supabase.from('food_items').insert(values).select('*').single();
-        if (error) throw error;
-        return data;
-      },
-      async findByBarcodes(codes: string[]) {
-        const { data, error } = await supabase.from('food_items').select('*').in('barcode', codes);
-        if (error) throw error;
-        return data ?? [];
-      },
-    });
-    return jsonResponse({ found: true, item: persisted.item, source: persisted.inserted ? 'ai_verified' : 'supabase' });
-  } catch (e) {
-    console.error('Insert or conflict recovery error:', e);
-    return jsonResponse({ found: false, error: 'verified_item_persistence_failed' }, 503);
-  }
+  // Preserve the review/display flow without treating a single read as verified data.
+  const correctedItem=mapOffProductToItem(offProduct,aiResult,false,true);
+  const read=normalizeLegacyScanRead(aiResult)!;
+  return jsonResponse({found:true,item:{...correctedItem,_nutrition_provenance:{kind:'single_label_read',basis:read.basis}},source:'openfoodfacts_unverified',persisted:false,requires_label_confirmation:true});
 });

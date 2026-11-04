@@ -252,12 +252,12 @@ Deno.serve(async (req) => {
     try {
       correctionIdentity = await resolveCorrectionIdentity({ food_item_id, barcode }, {
         async findById(id: string) {
-          const { data, error } = await supabase.from("food_items").select("*").eq("id", id).maybeSingle();
+          const { data, error } = await supabase.rpc("read_food_correction_targets_v1",{p_id:id,p_barcodes:null});
           if (error) throw error;
-          return data;
+          return Array.isArray(data)?data[0]??null:null;
         },
         async findByBarcodes(codes: string[]) {
-          const { data, error } = await supabase.from("food_items").select("*").in("barcode", codes);
+          const { data, error } = await supabase.rpc("read_food_correction_targets_v1",{p_id:null,p_barcodes:codes});
           if (error) throw error;
           return data ?? [];
         },
@@ -329,18 +329,18 @@ Deno.serve(async (req) => {
     if (type === "correction") {
       const identity = correctionIdentity!;
       const outcome = await handleVerifiedCorrection(aiResult, identity, {
-          async update(id: string, values: Record<string, unknown>) {
-            const { data, error } = await supabase.from("food_items").update(values).eq("id", id).select().maybeSingle();
+          async update(id: string, values: Record<string, unknown>, expected: Record<string, unknown>) {
+            const { data, error } = await supabase.rpc("apply_verified_food_correction_v1",{p_id:id,p_expected_revision:expected._nutrition_revision,p_values:values});
             if (error) throw error;
             return data;
           },
           async insert(values: Record<string, unknown>) {
-            const { data, error } = await supabase.from("food_items").insert(values).select().single();
+            const { data, error } = await supabase.rpc("apply_verified_food_correction_v1",{p_id:null,p_expected_revision:null,p_values:values});
             if (error) throw error;
             return data;
           },
           async findByBarcodes(codes: string[]) {
-            const { data, error } = await supabase.from("food_items").select("*").in("barcode", codes);
+            const { data, error } = await supabase.rpc("read_food_correction_targets_v1",{p_id:null,p_barcodes:codes});
             if (error) throw error;
             return data ?? [];
           },

@@ -1,131 +1,64 @@
-
 import { type OpenFoodFactsProduct } from './openFoodFacts';
 import { getLocalCache, setLocalCache } from './foodSearchCache';
-import { supabase, SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
+import { SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
 const SUPABASE_TIMEOUT_MS = 5000;
 
 export interface HybridSearchCallbacks {
   onLocalCacheHit?: (products: OpenFoodFactsProduct[]) => void;
   onSupabaseHit?: (products: OpenFoodFactsProduct[]) => void;
-  /** Kept for backward compat — never called (edge function handles OFacts internally) */
+  /** Compatibility only: the Edge function owns provider fallback. */
   onOpenFoodFactsHit?: (products: OpenFoodFactsProduct[]) => void;
   onError?: (stage: 'supabase' | 'off', error: Error) => void;
   onComplete?: () => void;
 }
+type SearchResponse = { products: OpenFoodFactsProduct[]; partial: boolean; cacheable: boolean };
+function aborted(): Error { const error = new Error('SEARCH_ABORTED'); error.name = 'AbortError'; return error; }
 
-async function fetchWithAbortAndTimeout(
-  url: string,
-  options: RequestInit,
-  timeoutMs: number,
-  abortSignal?: AbortSignal,
-): Promise<Response> {
+export async function fetchSearchResponse(query: string, abortSignal?: AbortSignal, timeoutMs = SUPABASE_TIMEOUT_MS): Promise<SearchResponse> {
+  if (abortSignal?.aborted) throw aborted();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
-
-  // Chain external abort signal
-  const onExternalAbort = () => controller.abort();
-  abortSignal?.addEventListener('abort', onExternalAbort);
-
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let rejectCancellation: (reason: Error) => void = () => {};
+  const cancellation = new Promise<never>((_,reject) => { rejectCancellation = reject; });
+  const onExternalAbort = () => { controller.abort(); rejectCancellation(aborted()); };
+  abortSignal?.addEventListener('abort',onExternalAbort);
+  if (abortSignal?.aborted) onExternalAbort();
+  timer = setTimeout(() => { controller.abort(); rejectCancellation(new Error('SEARCH_TIMEOUT')); },timeoutMs);
   try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-    return response;
+    // Catalog ranking is global. Do not wait on Auth or send an unused user ID.
+    // The deadline covers response decoding, even if fetch/JSON ignores abort.
+    return await Promise.race([cancellation,(async () => {
+      const response = await fetch(SUPABASE_PROJECT_URL + '/functions/v1/search-foods',{
+        method: 'POST',signal: controller.signal,
+        headers: { 'Content-Type': 'application/json','Authorization': 'Bearer ' + supabasePublicKey },
+        body: JSON.stringify({ query,limit: 30 }),
+      });
+      if (!response.ok) throw new Error('SEARCH_HTTP_' + response.status);
+      const data = await response.json();
+      if (!data || !Array.isArray(data.products)) throw new Error('SEARCH_INVALID_RESPONSE');
+      const partial = data.status === 'partial';
+      if (partial && data.products.length === 0) throw new Error('SEARCH_UNAVAILABLE');
+      return { products: data.products as OpenFoodFactsProduct[],partial,
+        cacheable: !partial && data.ranking_version === 'food-v2' };
+    })()]);
   } finally {
-    clearTimeout(timeoutId);
-    abortSignal?.removeEventListener('abort', onExternalAbort);
+    if (timer) clearTimeout(timer);
+    abortSignal?.removeEventListener('abort',onExternalAbort);
   }
 }
 
-async function fetchSupabaseSearch(
-  query: string,
-  abortSignal?: AbortSignal,
-): Promise<OpenFoodFactsProduct[] | null> {
-  const url = `${SUPABASE_PROJECT_URL}/functions/v1/search-foods`;
-
-  // Get user_id best-effort for personalized scoring
-  let userId: string | undefined;
-  try {
-    const { data } = await supabase.auth.getSession();
-    userId = data?.session?.user?.id;
-  } catch {
-    // Non-blocking — fall back to global scoring
-  }
-
-  try {
-    const response = await fetchWithAbortAndTimeout(
-      url,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabasePublicKey}`,
-        },
-        body: JSON.stringify({ query, limit: 30, user_id: userId ?? undefined }),
-      },
-      SUPABASE_TIMEOUT_MS,
-      abortSignal,
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.warn('[HybridSearch] Supabase search-foods error:', response.status, errText.slice(0, 200));
-      return null;
-    }
-
-    const data = await response.json();
-    const products: OpenFoodFactsProduct[] = Array.isArray(data?.products) ? data.products : [];
-
-    if (products.length < 1) {
-      return null;
-    }
-
-    return products;
-  } catch (err) {
-    if ((err as Error)?.name !== 'AbortError') {
-      console.warn('[HybridSearch] Supabase fetch error:', err);
-    }
-    return null;
-  }
-}
-
-export async function hybridSearch(
-  query: string,
-  callbacks: HybridSearchCallbacks,
-  abortSignal?: AbortSignal,
-): Promise<void> {
+export async function hybridSearch(query: string, callbacks: HybridSearchCallbacks, abortSignal?: AbortSignal): Promise<void> {
   const isAborted = () => abortSignal?.aborted === true;
-
-  // Stage 1: Local AsyncStorage cache — synchronous-ish, fires immediately
-  const localProducts = await getLocalCache(query);
-  if (isAborted()) {
-    callbacks.onComplete?.();
-    return;
-  }
-  if (localProducts && localProducts.length > 0) {
-    callbacks.onLocalCacheHit?.(localProducts);
-  }
-
-  // Stage 2: Supabase edge function (handles OFacts internally as fallback)
   try {
-    const products = await fetchSupabaseSearch(query, abortSignal);
-    if (isAborted()) {
-      callbacks.onComplete?.();
-      return;
-    }
-    if (products && products.length >= 1) {
-      callbacks.onSupabaseHit?.(products);
-      setLocalCache(query, products).catch(() => {});
-    }
-  } catch (err) {
-    console.warn('[HybridSearch] Supabase stage error:', err);
-    if (!isAborted()) {
-      callbacks.onError?.('supabase', err instanceof Error ? err : new Error(String(err)));
-    }
-  }
-
-  callbacks.onComplete?.();
+    const localProducts = await getLocalCache(query);
+    if (isAborted()) return;
+    if (localProducts?.length) callbacks.onLocalCacheHit?.(localProducts);
+    const result = await fetchSearchResponse(query,abortSignal);
+    if (isAborted()) return;
+    callbacks.onSupabaseHit?.(result.products);
+    if (result.cacheable) setLocalCache(query,result.products).catch(() => {});
+    if (result.partial) callbacks.onError?.('supabase',new Error('SEARCH_PARTIAL'));
+  } catch (error) {
+    if (!isAborted()) callbacks.onError?.('supabase',error instanceof Error ? error : new Error('SEARCH_UNAVAILABLE'));
+  } finally { callbacks.onComplete?.(); }
 }

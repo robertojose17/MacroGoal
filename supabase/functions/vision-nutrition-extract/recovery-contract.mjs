@@ -46,9 +46,10 @@ export function conflictsWithPhoto(candidate, photo) {
 export function confirmationPayload(candidate, binding, confirmations) {
   if (!candidateEligible(candidate, binding.barcode)) throw Error('identity_or_nutrition_unverified');
   if (!confirmations || confirmations.identity !== true || confirmations.serving !== true || confirmations.nutrition !== true || confirmations.shared !== true) throw Error('confirmation_required');
+  if (binding.id && (!Number.isSafeInteger(binding.nutrition_revision) || binding.nutrition_revision < 0)) throw Error('proposal_requires_refresh');
   const userBound=barcodeEvidence(candidate,binding.barcode)==='absent';
   return {
-    barcode: canonicalBarcode(binding.barcode), expected_id: binding.id || null, expected_updated_at: binding.updated_at || null,
+    barcode: canonicalBarcode(binding.barcode), expected_id: binding.id || null, expected_revision: binding.id ? binding.nutrition_revision : null,
     name: candidate.name, brand: candidate.brand, variant: candidate.variant,
     serving_size: candidate.serving_g, serving_quantity: candidate.serving,
     ...candidate.nutrition, fiber:candidate.nutrition.fiber ?? null, image_url:candidate.image_url || null, provenance: {...candidate.provenance,...(userBound?{identity:'user_confirmed_barcode',source_barcode:null,exact_barcode:false}:{}),label_image_url:candidate.nutrition_image_url || null},
