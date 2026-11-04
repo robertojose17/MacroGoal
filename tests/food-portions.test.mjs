@@ -300,10 +300,40 @@ test('global guard candidate is private, role-bound and patches only verified li
  const sql=readFileSync(new URL('../supabase/review/food-search-v2/nutrition-authority.CANDIDATE.sql',import.meta.url),'utf8');
  assert.ok(sql.includes("current_setting('role',true)='service_role'"));
  assert.ok(sql.includes("current_setting('macrogoal.correction_context',true)='confirmed_v1'"));
- assert.ok(sql.includes('BEFORE INSERT OR UPDATE ON public.food_items'));
+ assert.ok(sql.includes('BEFORE INSERT OR UPDATE OR DELETE ON public.food_items'));
+ assert.ok(sql.includes('AFTER INSERT OR UPDATE ON public.food_items'));
  assert.equal((sql.match(/^BEGIN;/gm)||[]).length,1);assert.equal((sql.match(/^COMMIT;/gm)||[]).length,1);
- assert.equal((sql.match(/^CREATE FUNCTION /gm)||[]).length,3);
- assert.equal(sql.split('$fn$').length-1,6);assert.equal(sql.split('$patch$').length-1,2);
+ assert.equal((sql.match(/^CREATE FUNCTION /gm)||[]).length,5);
+ assert.equal(sql.split('$fnassert.equal(sql.split('$patch$').length-1,2);
+ assert.equal(sql.split("'^[0-9]{8,14}
+ assert.ok(sql.includes('945fc10d72f144171132e0a56e8b3e43'));
+ assert.ok(sql.includes('OLD.ai_verified_source'));assert.ok(sql.includes('p_expected_revision'));assert.ok(!sql.includes('p_expected_updated_at'));
+ assert.ok(!/GRANT[^;]+TO (PUBLIC|anon|authenticated)/i.test(sql));
+ const source=readFileSync(new URL('../supabase/functions/vision-nutrition-extract/index.ts',import.meta.url),'utf8');
+ const start=source.indexOf('if (type === "correction") {',source.indexOf('let foodItem:'));
+ const end=source.indexOf('} else {',start);const branch=source.slice(start,end);
+ assert.ok(branch.includes('apply_verified_food_correction_v1'));assert.ok(!branch.includes('.update(values)'));
+});
+).length-1,10);assert.equal(sql.split('$patch$').length-1,2);
+ assert.equal(sql.split("'^[0-9]{8,14}$'").length-1,1);
+ assert.ok(sql.includes('945fc10d72f144171132e0a56e8b3e43'));
+ assert.ok(sql.includes('OLD.ai_verified_source'));assert.ok(sql.includes('p_expected_revision'));assert.ok(!sql.includes('p_expected_updated_at'));
+ assert.ok(!/GRANT[^;]+TO (PUBLIC|anon|authenticated)/i.test(sql));
+ const source=readFileSync(new URL('../supabase/functions/vision-nutrition-extract/index.ts',import.meta.url),'utf8');
+ const start=source.indexOf('if (type === "correction") {',source.indexOf('let foodItem:'));
+ const end=source.indexOf('} else {',start);const branch=source.slice(start,end);
+ assert.ok(branch.includes('apply_verified_food_correction_v1'));assert.ok(!branch.includes('.update(values)'));
+});
+").length-1,2);
+ assert.ok(sql.includes('945fc10d72f144171132e0a56e8b3e43'));
+ assert.ok(sql.includes('OLD.ai_verified_source'));assert.ok(sql.includes('p_expected_updated_at'));
+ assert.ok(!/GRANT[^;]+TO (PUBLIC|anon|authenticated)/i.test(sql));
+ const source=readFileSync(new URL('../supabase/functions/vision-nutrition-extract/index.ts',import.meta.url),'utf8');
+ const start=source.indexOf('if (type === "correction") {',source.indexOf('let foodItem:'));
+ const end=source.indexOf('} else {',start);const branch=source.slice(start,end);
+ assert.ok(branch.includes('apply_verified_food_correction_v1'));assert.ok(!branch.includes('.update(values)'));
+});
+).length-1,10);assert.equal(sql.split('$patch$').length-1,2);
  assert.equal(sql.split("'^[0-9]{8,14}$'").length-1,1);
  assert.ok(sql.includes('945fc10d72f144171132e0a56e8b3e43'));
  assert.ok(sql.includes('OLD.ai_verified_source'));assert.ok(sql.includes('p_expected_updated_at'));
@@ -312,4 +342,43 @@ test('global guard candidate is private, role-bound and patches only verified li
  const start=source.indexOf('if (type === "correction") {',source.indexOf('let foodItem:'));
  const end=source.indexOf('} else {',start);const branch=source.slice(start,end);
  assert.ok(branch.includes('apply_verified_food_correction_v1'));assert.ok(!branch.includes('.update(values)'));
+});
+
+test('forged verification is checked before private writes; only AFTER events audit actual upsert winners',()=>{
+ const sql=readFileSync(new URL('../supabase/review/food-search-v2/nutrition-authority.CANDIDATE.sql',import.meta.url),'utf8');
+ const start=sql.indexOf('CREATE FUNCTION macrogoal_food_private.guard_food_nutrition_v1'),end=sql.indexOf('CREATE FUNCTION macrogoal_food_private.audit_food_nutrition_v1');
+ const before=sql.slice(start,end);
+ assert.ok(!/INSERT INTO|UPDATE SET|DELETE FROM/.test(before));
+ assert.ok(before.includes('verification_metadata_server_only'));assert.ok(before.includes('NEW.ai_verified_source'));assert.ok(before.includes('RETURN OLD;'));
+ assert.ok(before.includes("IF TG_OP='DELETE' THEN RAISE EXCEPTION"));
+ assert.equal((sql.match(/ON DELETE RESTRICT/g)||[]).length,2);
+ const audit=sql.slice(end,sql.indexOf('CREATE FUNCTION public.read_food_correction_targets_v1'));
+ assert.ok(audit.includes('AFTER INSERT OR UPDATE'));assert.ok(audit.includes('before_value IS NOT DISTINCT FROM after_value THEN RETURN NEW'));
+ assert.ok(sql.includes('close_importer_access_first'));
+});
+test('insert and update consume one explicit normalized patch including sugar and complete restoration metadata',()=>{
+ const sql=readFileSync(new URL('../supabase/review/food-search-v2/nutrition-authority.CANDIDATE.sql',import.meta.url),'utf8');
+ const writer=sql.slice(sql.indexOf('CREATE FUNCTION public.apply_verified_food_correction_v1'),sql.indexOf('-- Preserve the actual deployed recovery'));
+ assert.ok(writer.includes("jsonb_populate_record(NULL::public.food_items,'{}'::jsonb)"));
+ assert.equal((writer.match(/replacement:=jsonb_populate_record/g)||[]).length,1);
+ assert.ok(writer.includes('INTO saved USING replacement;'));assert.ok(writer.includes('INTO saved USING replacement,p_id;'));
+ const snapshot=sql.slice(sql.indexOf('CREATE FUNCTION macrogoal_food_private.nutrition_snapshot_v1'),sql.indexOf('REVOKE ALL ON FUNCTION macrogoal_food_private.nutrition_snapshot_v1'));
+ for(const key of ['sugar','off_data','ingredients_text','allergens','nutriscore_grade','image_url','data_quality_score','ai_verified_at'])assert.ok(snapshot.includes("'"+key+"'"),key);
+ assert.ok(writer.includes("'ai_verified_source','two_read_correction_v1'"));assert.ok(writer.includes("'ai_verified_at',now()"));
+});
+test('server revision wins over edited timestamp and prevents two stale confirmations committing',async()=>{
+ let current={id:'same-id',barcode:'012345678905',updated_at:'client-edited',_nutrition_revision:4},writes=0;
+ const identity={row:structuredClone(current),barcode:current.barcode,isNew:false};
+ const repo={update:async(id,values,expected)=>{
+  await Promise.resolve();
+  if(expected._nutrition_revision!==current._nutrition_revision)throw {code:'40001'};
+  writes++;current={...current,...values,_nutrition_revision:current._nutrition_revision+1};return current;
+ }};
+ const results=await Promise.all([correction.handleVerifiedCorrection(checkedLabel,identity,repo),correction.handleVerifiedCorrection(checkedLabel,identity,repo)]);
+ assert.equal(results.filter(r=>r.status==='approved').length,1);assert.equal(writes,1);assert.equal(current.id,'same-id');assert.equal(current._nutrition_revision,5);
+});
+test('importer permission candidate changes only EXECUTE access, never its body or credentials',()=>{
+ const sql=readFileSync(new URL('../supabase/review/food-search-v2/importer-access.CANDIDATE.sql',import.meta.url),'utf8');
+ assert.ok(sql.includes('REVOKE EXECUTE ON FUNCTION public.import_usda_page(text,integer) FROM PUBLIC,anon,authenticated;'));
+ assert.ok(sql.includes('TO service_role;'));assert.ok(!/CREATE OR REPLACE|ALTER FUNCTION|api_key=|Bearer |sk-[a-z0-9]/i.test(sql));
 });
