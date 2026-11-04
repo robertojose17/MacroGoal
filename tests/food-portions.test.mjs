@@ -395,7 +395,7 @@ test('OFF preserves explicit nutrient units without assuming liquid density or m
 });
 test('refresh validates evidence and rejects malformed facts without mutating the current record',()=>{
  const candidate=evidence.captureUsdaNutrition(nutrientFood,123,date);const current={...structuredClone(candidate),revision:3};const before=structuredClone(current);
- for(const change of [{version:2},{provider:'unknown'},{facts:{}},{facts:{x:{value:-1,unit:'g',basis:'100g'}}},{facts:{x:{value:1,unit:'g',basis:'100g',grams:30}}}])assert.equal(evidence.resolveNutritionRefresh(current,{...candidate,...change},3).status,'invalid');
+ for(const change of [{facts:JSON.parse('{"__proto__":{"value":1,"unit":"g","basis":"100g"}}')},{version:2},{provider:'unknown'},{facts:{}},{facts:{x:{value:-1,unit:'g',basis:'100g'}}},{facts:{x:{value:1,unit:'g',basis:'100g',grams:30}}}])assert.equal(evidence.resolveNutritionRefresh(current,{...candidate,...change},3).status,'invalid');
  assert.equal(evidence.resolveNutritionRefresh(current,candidate,null).status,'conflict');assert.deepEqual(current,before);
 });
 test('refresh compares fact meaning rather than JSON key order and rejects older evidence',()=>{
