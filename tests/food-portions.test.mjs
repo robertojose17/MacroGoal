@@ -386,3 +386,28 @@ test('recovery SQL removes timestamp authority before enabling the confirmed wri
  const recoverySource=readFileSync(new URL('../supabase/functions/vision-nutrition-extract/recovery.ts',import.meta.url),'utf8');
  assert.ok(recoverySource.includes('read_food_correction_targets_v1'));assert.ok(recoverySource.includes('nutrition_revision:identity.row?._nutrition_revision??null'));assert.ok(!recoverySource.includes('updated_at:identity'));
 });
+
+test('OFF preserves explicit nutrient units without assuming liquid density or missing units',()=>{
+ const p={code:'012345678905',product_name:'Fixture',nutriments:{sodium_100g:0,sodium_unit:'mg','energy-kcal_100g':55,proteins_serving:3,proteins_unit:'g'}};
+ const captured=evidence.captureOffNutrition(p,p.code,date);
+ assert.equal(captured.facts.sodium_100g.value,0);assert.equal(captured.facts.sodium_100g.unit,'mg');assert.equal(captured.facts.sodium_100g.basis,'provider_100');
+ assert.equal(captured.facts['energy-kcal_100g'].unit,'provider_field');assert.equal(captured.facts.proteins_serving.unit,'g');assert.equal(captured.facts.proteins_serving.grams,undefined);
+});
+test('refresh validates evidence and rejects malformed facts without mutating the current record',()=>{
+ const candidate=evidence.captureUsdaNutrition(nutrientFood,123,date);const current={...structuredClone(candidate),revision:3};const before=structuredClone(current);
+ for(const change of [{version:2},{provider:'unknown'},{facts:{}},{facts:{x:{value:-1,unit:'g',basis:'100g'}}},{facts:{x:{value:1,unit:'g',basis:'100g',grams:30}}}])assert.equal(evidence.resolveNutritionRefresh(current,{...candidate,...change},3).status,'invalid');
+ assert.equal(evidence.resolveNutritionRefresh(current,candidate,null).status,'conflict');assert.deepEqual(current,before);
+});
+test('refresh compares fact meaning rather than JSON key order and rejects older evidence',()=>{
+ const candidate=evidence.captureUsdaNutrition(nutrientFood,123,date);const current={...structuredClone(candidate),revision:2};
+ const reordered=structuredClone(candidate);for(const key of Object.keys(reordered.facts)){const f=reordered.facts[key];reordered.facts[key]={basis:f.basis,unit:f.unit,value:f.value};}
+ assert.equal(evidence.resolveNutritionRefresh(current,reordered,2).status,'fill_missing');
+ assert.equal(evidence.resolveNutritionRefresh(current,{...candidate,retrievedAt:'2000-01-01T00:00:00Z'},2).status,'stale_evidence');
+});
+test('refresh respects formulation, units, basis and confirmed provenance',()=>{
+ const candidate=evidence.captureUsdaNutrition(nutrientFood,123,date),current={...structuredClone(candidate),revision:2};const key=Object.keys(candidate.facts)[0];
+ for(const change of [{provider:'openfoodfacts'},{identity:'456'},{description:'Different preparation'},{formulation:'other release'}])assert.equal(evidence.resolveNutritionRefresh(current,{...candidate,...change},2).status,'identity_conflict');
+ for(const change of [{unit:'mg'},{basis:'serving',grams:20}]){const next=structuredClone(candidate);next.facts[key]={...next.facts[key],...change};assert.equal(evidence.resolveNutritionRefresh(current,next,2).status,'nutrient_conflict');}
+ assert.equal(evidence.resolveNutritionRefresh({...current,confirmed:true},candidate,2).status,'protected');
+ assert.equal(evidence.shouldRefreshNutrition({retrievedAt:'2099-01-01T00:00:00Z'},Date.parse(date)),true);assert.equal(evidence.shouldRefreshNutrition({confirmed:true},Date.parse(date)),false);
+});
