@@ -13,8 +13,8 @@ export async function handleRecovery(body:any,deps:Dependencies) {
   if(!deps.enabled)return {status:'unavailable',code:'recovery_not_enabled'};
   const {supabase,userId}=deps;
   const repo={
-    async findById(id:string){const {data,error}=await supabase.from('food_items').select('*').eq('id',id).maybeSingle();if(error)throw error;return data;},
-    async findByBarcodes(codes:string[]){const {data,error}=await supabase.from('food_items').select('*').in('barcode',codes);if(error)throw error;return data||[];},
+    async findById(id:string){const {data,error}=await supabase.rpc('read_food_correction_targets_v1',{p_id:id,p_barcodes:null});if(error)throw error;return data?.[0]||null;},
+    async findByBarcodes(codes:string[]){const {data,error}=await supabase.rpc('read_food_correction_targets_v1',{p_id:null,p_barcodes:codes});if(error)throw error;return data||[];},
   };
   if(body.action==='recovery_confirm') {
     const proposal=await openDraft(body.proposal,deps.secret,userId);
@@ -31,11 +31,12 @@ export async function handleRecovery(body:any,deps:Dependencies) {
     if(!validBarcode(body.barcode))return {status:'clarify',issues:issues('barcode','invalid_barcode')};
     const identity=await resolveCorrectionIdentity({barcode:body.barcode,food_item_id:body.food_item_id},repo);
     session={version:1,kind:'session',owner:userId,expires:Date.now()+ttl,
-      submission:crypto.randomUUID(),binding:{barcode:body.barcode,id:identity.row?.id||null,updated_at:identity.row?.updated_at||null},
+      submission:crypto.randomUUID(),binding:{barcode:body.barcode,id:identity.row?.id||null,nutrition_revision:identity.row?._nutrition_revision??null},
       name:String(identity.row?.name||body.name||'').slice(0,160),brand:String(identity.row?.brand||body.brand||'').slice(0,100)};
   } else {
     session=await openDraft(body.session,deps.secret,userId);
     if(session.kind!=='session')throw Error('invalid_proposal');
+    if(session.binding?.id && (!Number.isSafeInteger(session.binding.nutrition_revision)||session.binding.nutrition_revision<0))throw Error('proposal_requires_refresh');
   }
   // Durable claim is made before provider work. Replayed/uncertain actions are not billed again.
   const phase=body.action==='recovery_photos'?'photos':'discover';
