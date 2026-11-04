@@ -20,6 +20,7 @@ GRANT EXECUTE ON FUNCTION macrogoal_food_private.nutrition_snapshot_v1(jsonb) TO
 DO $access$
 BEGIN
  IF has_function_privilege('anon','public.import_usda_page(text,integer)','EXECUTE') OR has_function_privilege('authenticated','public.import_usda_page(text,integer)','EXECUTE') THEN RAISE EXCEPTION 'close_importer_access_first'; END IF;
+ IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE oid='public.import_usda_page(text,integer)'::regprocedure AND 'macrogoal.import_context=usda_import_v1'=ANY(coalesce(proconfig,ARRAY[]::text[]))) THEN RAISE EXCEPTION 'configure_importer_context_first'; END IF;
 END;
 $access$;
 CREATE FUNCTION macrogoal_food_private.guard_food_nutrition_v1() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $fn$
@@ -40,8 +41,9 @@ BEGIN
  SELECT confirmed INTO locked FROM macrogoal_food_private.nutrition_current WHERE food_id=OLD.id;
  -- Existing verification markers are retained conservatively, not used to create private authority.
  IF (coalesce(locked,false) OR coalesce(OLD.verified,false) OR coalesce(OLD.ai_verified,false) OR coalesce(OLD.ai_verified_source,'') LIKE 'barcode_recovery:%') AND NOT coalesce(explicit_correction,false) THEN
-  -- Preserve the winner without aborting import pages that use ON CONFLICT DO UPDATE.
-  RETURN OLD;
+  -- Only the approved importer skips protected winners; corrections must not report false success.
+  IF backend AND current_setting('macrogoal.import_context',true)='usda_import_v1' THEN RETURN OLD; END IF;
+  RAISE EXCEPTION 'confirmed_nutrition_protected' USING ERRCODE='40001';
  END IF;
  RETURN NEW;
 END;
