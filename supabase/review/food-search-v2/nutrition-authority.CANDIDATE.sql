@@ -19,6 +19,7 @@ GRANT EXECUTE ON FUNCTION macrogoal_food_private.nutrition_snapshot_v1(jsonb) TO
 CREATE FUNCTION macrogoal_food_private.guard_food_nutrition_v1() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $fn$
 DECLARE before_value jsonb; after_value jsonb; state macrogoal_food_private.nutrition_current%ROWTYPE; explicit_correction boolean; next_revision integer;
 BEGIN
+ IF TG_OP='UPDATE' AND NEW.id IS DISTINCT FROM OLD.id THEN RAISE EXCEPTION 'food_identity_immutable' USING ERRCODE='22023'; END IF;
  after_value:=macrogoal_food_private.nutrition_snapshot_v1(to_jsonb(NEW));
  IF TG_OP='UPDATE' THEN before_value:=macrogoal_food_private.nutrition_snapshot_v1(to_jsonb(OLD)); END IF;
  explicit_correction:=current_setting('role',true)='service_role' AND current_setting('macrogoal.correction_context',true)='confirmed_v1';
