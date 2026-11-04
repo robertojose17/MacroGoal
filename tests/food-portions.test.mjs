@@ -349,8 +349,23 @@ test('server revision wins over edited timestamp and prevents two stale confirma
  const results=await Promise.all([correction.handleVerifiedCorrection(checkedLabel,identity,repo),correction.handleVerifiedCorrection(checkedLabel,identity,repo)]);
  assert.equal(results.filter(r=>r.status==='approved').length,1);assert.equal(writes,1);assert.equal(current.id,'same-id');assert.equal(current._nutrition_revision,5);
 });
-test('importer permission candidate changes only EXECUTE access, never its body or credentials',()=>{
+test('importer candidate restricts EXECUTE and scopes only a skip context, never its body or credentials',()=>{
  const sql=readFileSync(new URL('../supabase/review/food-search-v2/importer-access.CANDIDATE.sql',import.meta.url),'utf8');
  assert.ok(sql.includes('REVOKE EXECUTE ON FUNCTION public.import_usda_page(text,integer) FROM PUBLIC,anon,authenticated;'));
- assert.ok(sql.includes('TO service_role;'));assert.ok(!/CREATE OR REPLACE|ALTER FUNCTION|api_key=|Bearer |sk-[a-z0-9]/i.test(sql));
+ assert.ok(sql.includes('TO service_role;'));assert.ok(!/CREATE OR REPLACE|api_key=|Bearer |sk-[a-z0-9]/i.test(sql));
+ const statements=sql.split('\n').filter(line=>line.startsWith('ALTER FUNCTION'));
+ assert.deepEqual(statements,["ALTER FUNCTION public.import_usda_page(text,integer) SET macrogoal.import_context = 'usda_import_v1';"]);
+});
+
+test('protected upsert skip requires backend and scoped importer marker; other writers fail visibly',()=>{
+ const sql=readFileSync(new URL('../supabase/review/food-search-v2/nutrition-authority.CANDIDATE.sql',import.meta.url),'utf8');
+ assert.ok(sql.includes("IF backend AND current_setting('macrogoal.import_context',true)='usda_import_v1' THEN RETURN OLD; END IF;"));
+ assert.ok(sql.includes("RAISE EXCEPTION 'confirmed_nutrition_protected' USING ERRCODE='40001'"));
+ assert.ok(sql.includes('configure_importer_context_first'));
+ // Isolated decision fixture, not a PostgreSQL transaction/privilege execution.
+ const decision=(backend,context,explicit)=>explicit&&backend?'write':backend&&context==='usda_import_v1'?'keep':'error';
+ assert.equal(decision(false,'usda_import_v1',false),'error');
+ assert.equal(decision(true,'',false),'error');
+ assert.equal(decision(true,'usda_import_v1',false),'keep');
+ assert.equal(decision(true,'',true),'write');
 });
