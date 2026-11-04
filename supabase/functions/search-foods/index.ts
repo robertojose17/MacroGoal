@@ -1,3 +1,4 @@
+import { usdaSearchNutriments } from '../_shared/nutritionEvidence.mjs';
 import { decorateCachedProducts } from '../_shared/portionCache.mjs';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -154,38 +155,9 @@ export function mapUsdaToOff(item: Record<string, unknown>): Record<string, unkn
     ? (item.foodNutrients as Record<string, unknown>[])
     : [];
 
-  function getNutrient(names: string[]): number {
-    for (const n of nutrients) {
-      const nutrientName = String(
-        (n.nutrientName ?? (n.nutrient as Record<string, unknown>)?.name ?? ''),
-      ).toLowerCase();
-      for (const target of names) {
-        if (nutrientName.includes(target.toLowerCase())) {
-          const val = Number(n.value ?? (n as Record<string, unknown>).amount ?? 0);
-          return val * normFactor;
-        }
-      }
-    }
-    return 0;
-  }
-
-  const kcal = getNutrient(['energy', 'calories']);
-  const proteinG = getNutrient(['protein']);
-  const carbsG = getNutrient(['carbohydrate, by difference', 'carbohydrate']);
-  const fatG = getNutrient(['total lipid (fat)', 'total fat', 'fat']);
-  const fiberG = getNutrient(['fiber, total dietary', 'dietary fiber', 'fiber']);
-  const sugarsG = getNutrient(['sugars, total', 'total sugars', 'sugars']);
-  const sodiumMg = getNutrient(['sodium']);
-
-  const nutriments: Record<string, number> = {
-    'energy-kcal_100g': kcal,
-    'proteins_100g': proteinG,
-    'carbohydrates_100g': carbsG,
-    'fat_100g': fatG,
-    'fiber_100g': fiberG,
-    'sugars_100g': sugarsG,
-    'sodium_100g': sodiumMg / 1000, // mg → g
-  };
+  const nutriments = usdaSearchNutriments(item);
+  // Incomplete provider records cannot masquerade as zero-valued core nutrition.
+  if (['energy-kcal_100g','proteins_100g','carbohydrates_100g','fat_100g'].some(key=>!(key in nutriments))) return null;
 
   const brandOwner = String(item.brandOwner ?? item.brandName ?? '').trim();
   const servingDisplay = servingSizeG > 0
