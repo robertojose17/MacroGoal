@@ -36,7 +36,7 @@ const plainObject=value=>value!==null&&typeof value==='object'&&!Array.isArray(v
 export function validNutritionEvidence(record){
  if(!plainObject(record)||record.version!==1||!['usda','openfoodfacts'].includes(record.provider)||!/^\d{1,20}$/.test(record.identity)||!text(record.description)||!Number.isFinite(Date.parse(record.retrievedAt))||!plainObject(record.facts))return false;
  const facts=Object.entries(record.facts);
- return facts.length>0&&facts.length<=512&&facts.every(([key,fact])=>/^[a-z0-9_-]{1,100}$/.test(key)&&plainObject(fact)&&validNumber(fact.value)&&!!text(fact.unit,24)&&['100g','provider_100','serving'].includes(fact.basis)&&(fact.grams===undefined||(fact.basis==='serving'&&validNumber(fact.grams)&&fact.grams>0)));
+ return facts.length>0&&facts.length<=512&&facts.every(([key,fact])=>/^[a-z0-9_-]{1,100}$/.test(key)&&!['__proto__','prototype','constructor'].includes(key)&&plainObject(fact)&&validNumber(fact.value)&&!!text(fact.unit,24)&&['100g','provider_100','serving'].includes(fact.basis)&&(fact.grams===undefined||(fact.basis==='serving'&&validNumber(fact.grams)&&fact.grams>0)));
 }
 const sameFact=(a,b)=>a?.value===b?.value&&a?.unit===b?.unit&&a?.basis===b?.basis&&a?.grams===b?.grams;
 export function resolveNutritionRefresh(current,candidate,expectedRevision){
