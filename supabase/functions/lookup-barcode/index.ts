@@ -154,6 +154,7 @@ export function normalizeLegacyScanRead(value:any){
  const nutrition:Record<string,number|null>={};
  for(let i=0;i<fields.length;i++){
   const n=valid(value[keys[i]])?value[keys[i]]*factor:null;
+  if(n!==null&&!valid(n))return null;
   if(n!==null&&otherFactor!==null&&valid(value[other[i]])&&Math.abs(n-value[other[i]]*otherFactor)>0.1)return null;
   nutrition[fields[i]]=n;
  }
@@ -173,13 +174,13 @@ function mapOffProductToItem(
       ? offProduct.serving_quantity
       : parseFloat(String(offProduct.serving_quantity ?? '0')) || 0;
 
-  let cal100 =
+  let cal100: number | null =
     nutriments['energy-kcal_100g'] ?? nutriments['energy-kcal'] ?? null;
-  let protein100 = nutriments['proteins_100g'] ?? nutriments['proteins'] ?? null;
-  let carbs100 =
+  let protein100: number | null = nutriments['proteins_100g'] ?? nutriments['proteins'] ?? null;
+  let carbs100: number | null =
     nutriments['carbohydrates_100g'] ?? nutriments['carbohydrates'] ?? null;
-  let fat100 = nutriments['fat_100g'] ?? nutriments['fat'] ?? null;
-  let fiber100 = nutriments['fiber_100g'] ?? nutriments['fiber'] ?? null;
+  let fat100: number | null = nutriments['fat_100g'] ?? nutriments['fat'] ?? null;
+  let fiber100: number | null = nutriments['fiber_100g'] ?? nutriments['fiber'] ?? null;
 
   if (aiResult) {
     const read=normalizeLegacyScanRead(aiResult);
