@@ -152,11 +152,11 @@ function mapOffProductToItem(
       : parseFloat(String(offProduct.serving_quantity ?? '0')) || 0;
 
   let cal100 =
-    nutriments['energy-kcal_100g'] ?? nutriments['energy-kcal'] ?? 0;
-  let protein100 = nutriments['proteins_100g'] ?? nutriments['proteins'] ?? 0;
+    nutriments['energy-kcal_100g'] ?? nutriments['energy-kcal'] ?? null;
+  let protein100 = nutriments['proteins_100g'] ?? nutriments['proteins'] ?? null;
   let carbs100 =
-    nutriments['carbohydrates_100g'] ?? nutriments['carbohydrates'] ?? 0;
-  let fat100 = nutriments['fat_100g'] ?? nutriments['fat'] ?? 0;
+    nutriments['carbohydrates_100g'] ?? nutriments['carbohydrates'] ?? null;
+  let fat100 = nutriments['fat_100g'] ?? nutriments['fat'] ?? null;
   let fiber100 = nutriments['fiber_100g'] ?? nutriments['fiber'] ?? null;
 
   if (aiResult) {
@@ -192,10 +192,10 @@ function mapOffProductToItem(
     name: (offProduct.product_name as string) || (offProduct.generic_name as string) || '',
     brand: (offProduct.brands as string) || '',
     barcode: (offProduct.code as string) || '',
-    calories: Math.round(cal100 * 10) / 10,
-    protein: Math.round(protein100 * 10) / 10,
-    carbs: Math.round(carbs100 * 10) / 10,
-    fat: Math.round(fat100 * 10) / 10,
+    calories: cal100 === null ? null : Math.round(cal100 * 10) / 10,
+    protein: protein100 === null ? null : Math.round(protein100 * 10) / 10,
+    carbs: carbs100 === null ? null : Math.round(carbs100 * 10) / 10,
+    fat: fat100 === null ? null : Math.round(fat100 * 10) / 10,
     fiber: fiber100 === null ? null : Math.round(fiber100 * 10) / 10,
     serving_size: servingQty,
     serving_quantity: servingQty,
@@ -354,6 +354,8 @@ Deno.serve(async (req: Request) => {
 
   // AI Vision succeeded — build corrected item
   const correctedItem = mapOffProductToItem(offProduct, aiResult, true, false);
+
+  if (['calories','protein','carbs','fat'].some(key=>typeof correctedItem[key]!=='number'||!Number.isFinite(correctedItem[key] as number))) return jsonResponse({found:true,item:{...correctedItem,ai_verified:false,_data_quality_warning:true},source:'openfoodfacts_unverified'});
 
   // Save to food_items with ai_verified = true
   try {
