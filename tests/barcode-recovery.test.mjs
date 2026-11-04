@@ -89,10 +89,10 @@ test('discovery reserves a request and returns candidates without updating catal
   globalThis.fetch=async()=>new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:'{"urls":[]}',annotations:[]}}]}));
   try {
     const supabase={from(){return {select(){return {in:async()=>({data:[]})};}};},
-      async rpc(name,args){rpcCalls.push(name);return {data:0};}};
+      async rpc(name,args){rpcCalls.push(name);return {data:name==='read_food_correction_targets_v1'?[]:0};}};
     const result=await handleRecovery({action:'recovery_discover',barcode,name:'Fixture',brand:'Fixture'},
       {enabled:true,supabase,userId:'owner',secret:'offline',apiKey:'offline',projectUrl:'https://fixture.supabase.co'});
-    assert.equal(result.status,'review');assert.deepEqual(rpcCalls,['claim_barcode_recovery']);
+    assert.equal(result.status,'review');assert.deepEqual(rpcCalls,['read_food_correction_targets_v1','claim_barcode_recovery']);
     assert.equal((await openDraft(result.session,'offline','owner')).binding.barcode,barcode);
   } finally {globalThis.fetch=previous;}
 });
@@ -256,7 +256,7 @@ test('both source confirmation and physical-label confirmation save signed data 
  const source={...candidate(),barcode:null,barcode_evidence:'absent',nutrition_validated:true,validated:false,exact_barcode:false,nutrition:{...nutrition,fiber:null}};
  const physical={...candidate(),nutrition:{...nutrition,fiber:null},provenance:{kind:'physical_label',identity:'user_confirms_scanned_package'}};
  for(const c of [source,physical,candidate()]) {
-  const proposal=await sealDraft({version:1,kind:'candidate',owner:'owner',expires:Date.now()+60000,submission:'submission',binding:{barcode,id:'row',updated_at:'revision'},candidate:c,revision:1},'offline');
+  const proposal=await sealDraft({version:1,kind:'candidate',owner:'owner',expires:Date.now()+60000,submission:'submission',binding:{barcode,id:'row',nutrition_revision:4},candidate:c,revision:1},'offline');
   const signed=await openDraft(proposal,'offline','owner');assert.equal(signed.candidate.barcode,c.barcode);
   let savedPayload;
   const result=await handleRecovery({action:'recovery_confirm',proposal,barcode:'000000000000',calories:999,confirmations:{identity:true,serving:true,nutrition:true,shared:true}},
@@ -274,4 +274,21 @@ test('manufacturer source without GTIN offers explicit identity confirmation wit
  assert.equal(candidateEligible(c,'0810934030123'),true);
  const payload=confirmationPayload(c,{barcode:'0810934030123'},{identity:true,serving:true,nutrition:true,shared:true});
  assert.equal(payload.fiber,null);assert.equal(payload.provenance.source_barcode,null);assert.equal(payload.provenance.exact_barcode,false);
+});
+
+test('signed recovery keeps the private revision and rejects a stale proposal despite restored timestamp',async()=>{
+ const confirmations={identity:true,serving:true,nutrition:true,shared:true};let writes=0,calls=0;
+ const proposal=await sealDraft({version:1,kind:'candidate',owner:'owner',expires:Date.now()+60000,submission:'submission',binding:{barcode,id:'row',nutrition_revision:4,updated_at:'restored'},candidate:candidate(),revision:1},'offline');
+ // Isolated atomic repository fixture: production CAS is in the reviewed SQL proposal.
+ const supabase={async rpc(name,args){calls++;assert.equal(name,'confirm_barcode_recovery');assert.equal(args.p_payload.expected_revision,4);assert.equal(args.p_payload.expected_updated_at,undefined);if(args.p_payload.expected_revision!==5)return {error:{code:'40001'}};writes++;return {data:{id:'row'}};}};
+ await assert.rejects(handleRecovery({action:'recovery_confirm',proposal,expected_revision:5,expected_updated_at:'restored',confirmations},{enabled:true,userId:'owner',secret:'offline',supabase}),/save_conflict/);
+ assert.equal(calls,1);assert.equal(writes,0);
+});
+test('legacy signed recovery with an existing row must refresh before confirmation or provider work',async()=>{
+ const common={version:1,owner:'owner',expires:Date.now()+60000,submission:'submission',binding:{barcode,id:'row',updated_at:'editable'}};let calls=0;const deps={enabled:true,userId:'owner',secret:'offline',supabase:{rpc:async()=>{calls++;throw Error('must not run');}}};
+ const proposal=await sealDraft({...common,kind:'candidate',candidate:candidate(),revision:1},'offline');
+ await assert.rejects(handleRecovery({action:'recovery_confirm',proposal,confirmations:{identity:true,serving:true,nutrition:true,shared:true}},deps),/proposal_requires_refresh/);
+ const session=await sealDraft({...common,kind:'session'},'offline');
+ await assert.rejects(handleRecovery({action:'recovery_photos',session},deps),/proposal_requires_refresh/);
+ assert.equal(calls,0);
 });
