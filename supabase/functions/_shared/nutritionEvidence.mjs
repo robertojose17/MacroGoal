@@ -26,21 +26,30 @@ export function captureOffNutrition(product,expectedCode,retrievedAt){
  for(const [key,value] of Object.entries(product.nutriments??{}).slice(0,512)){
   if(!/^[a-z0-9_-]{1,80}_(100g|serving)$/.test(key)||!validNumber(value))continue;
   // OFF's _100g may represent 100ml for liquids. Retain provider basis; do not infer density.
-  facts[key]={value,unit:'provider_field',basis:key.endsWith('_serving')?'serving':'provider_100',...(key.endsWith('_serving')&&servingGrams?{grams:servingGrams}:{})};
+  facts[key]={value,unit:text(product.nutriments[key.replace(/_(100g|serving)$/, '')+'_unit'],24)||'provider_field',basis:key.endsWith('_serving')?'serving':'provider_100',...(key.endsWith('_serving')&&servingGrams?{grams:servingGrams}:{})};
  }
  if(!Object.keys(facts).length)return null;
  return {version:1,provider:'openfoodfacts',identity:code,description:text(product.product_name),formulation:text(product.last_modified_t==null?'':String(product.last_modified_t),64),retrievedAt:new Date(retrievedAt).toISOString(),facts};
 }
+
+const plainObject=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+export function validNutritionEvidence(record){
+ if(!plainObject(record)||record.version!==1||!['usda','openfoodfacts'].includes(record.provider)||!/^\d{1,20}$/.test(record.identity)||!text(record.description)||!Number.isFinite(Date.parse(record.retrievedAt))||!plainObject(record.facts))return false;
+ const facts=Object.entries(record.facts);
+ return facts.length>0&&facts.length<=512&&facts.every(([key,fact])=>/^[a-z0-9_-]{1,100}$/.test(key)&&plainObject(fact)&&validNumber(fact.value)&&!!text(fact.unit,24)&&['100g','provider_100','serving'].includes(fact.basis)&&(fact.grams===undefined||(fact.basis==='serving'&&validNumber(fact.grams)&&fact.grams>0)));
+}
+const sameFact=(a,b)=>a?.value===b?.value&&a?.unit===b?.unit&&a?.basis===b?.basis&&a?.grams===b?.grams;
 export function resolveNutritionRefresh(current,candidate,expectedRevision){
- if(!candidate||!candidate.facts)return {status:'invalid',record:current};
+ if(!validNutritionEvidence(candidate))return {status:'invalid',record:current};
  if(!current)return {status:'insert',record:structuredClone(candidate)};
- if(current.revision!==expectedRevision)return {status:'conflict',record:current};
+ if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0||current.revision!==expectedRevision)return {status:'conflict',record:current};
  if(current.provider!==candidate.provider||current.identity!==candidate.identity||current.description!==candidate.description||current.formulation!==candidate.formulation)return {status:'identity_conflict',record:current};
  if(current.confirmed===true)return {status:'protected',record:current};
+ if(Date.parse(candidate.retrievedAt)<Date.parse(current.retrievedAt))return {status:'stale_evidence',record:current};
  const facts=structuredClone(current.facts??{}),conflicts=[];
  for(const [key,value] of Object.entries(candidate.facts)){
   if(!Object.hasOwn(facts,key)||facts[key]===null)facts[key]=structuredClone(value);
-  else if(JSON.stringify(facts[key])!==JSON.stringify(value))conflicts.push(key);
+  else if(!sameFact(facts[key],value))conflicts.push(key);
  }
  // Preserve an entire existing record when a provider contradicts any known fact.
  if(conflicts.length)return {status:'nutrient_conflict',record:current,conflicts};
@@ -49,7 +58,7 @@ export function resolveNutritionRefresh(current,candidate,expectedRevision){
 export function shouldRefreshNutrition(record,now,ttlMs=30*86400000){
  if(record?.confirmed===true)return false;
  const time=Date.parse(record?.retrievedAt??'');
- return !Number.isFinite(time)||now-time>=ttlMs;
+ return !Number.isFinite(now)||!Number.isFinite(time)||time>now||now-time>=ttlMs;
 }
 
 // Best-effort append only. The RPC never updates canonical food or diary rows.
