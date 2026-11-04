@@ -126,6 +126,8 @@ BEGIN
  changed:=replace(original,'declare s public.food_submissions;','declare old_context text:=current_setting(''macrogoal.correction_context'',true); s public.food_submissions;');
  changed:=replace(changed,'  if item.id is null then','  perform set_config(''macrogoal.correction_context'',''confirmed_v1'',true);'||chr(10)||'  if item.id is null then');
  changed:=replace(changed,'  return to_jsonb(saved);','  perform set_config(''macrogoal.correction_context'',coalesce(old_context,''''),true);'||chr(10)||'  return to_jsonb(saved);');
+ changed:=replace(changed,$timestamp$or item.updated_at is distinct from (p_payload->>'expected_updated_at')::timestamptz$timestamp$,$revision$or jsonb_typeof(p_payload->'expected_revision') is distinct from 'number' or (p_payload->>'expected_revision') !~ '^(0|[1-9][0-9]*)$' or coalesce((select c.revision from macrogoal_food_private.nutrition_current c where c.food_id=item.id),0)::text is distinct from p_payload->>'expected_revision'$revision$);
+ IF position($timestamp$or item.updated_at is distinct from (p_payload->>'expected_updated_at')::timestamptz$timestamp$ in changed)>0 OR position($revision$or jsonb_typeof(p_payload->'expected_revision') is distinct from 'number' or (p_payload->>'expected_revision') !~ '^(0|[1-9][0-9]*)$' or coalesce((select c.revision from macrogoal_food_private.nutrition_current c where c.food_id=item.id),0)::text is distinct from p_payload->>'expected_revision'$revision$ in changed)=0 THEN RAISE EXCEPTION 'recovery revision patch not applied'; END IF;
  IF changed=original THEN RAISE EXCEPTION 'patch not applied'; END IF;
  EXECUTE changed;
 END;
