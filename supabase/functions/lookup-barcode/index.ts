@@ -29,6 +29,7 @@ function sanityCheck(
   const fat = nutriments['fat_100g'] ?? nutriments['fat'] ?? 0;
   const fiber = nutriments['fiber_100g'] ?? nutriments['fiber'] ?? 0;
 
+  if (['energy-kcal_100g','proteins_100g','carbohydrates_100g','fat_100g'].some(key=>typeof nutriments[key]!=='number'||!Number.isFinite(nutriments[key])||nutriments[key]<0)) return {passes:false,reason:'missing_or_invalid_core_nutrition'};
   const macroDensity = protein + carbs + fat + fiber;
   if (macroDensity < 15) {
     return {
@@ -156,7 +157,7 @@ function mapOffProductToItem(
   let carbs100 =
     nutriments['carbohydrates_100g'] ?? nutriments['carbohydrates'] ?? 0;
   let fat100 = nutriments['fat_100g'] ?? nutriments['fat'] ?? 0;
-  let fiber100 = nutriments['fiber_100g'] ?? nutriments['fiber'] ?? 0;
+  let fiber100 = nutriments['fiber_100g'] ?? nutriments['fiber'] ?? null;
 
   if (aiResult) {
     if (aiResult.calories_per_100g != null) {
@@ -195,7 +196,7 @@ function mapOffProductToItem(
     protein: Math.round(protein100 * 10) / 10,
     carbs: Math.round(carbs100 * 10) / 10,
     fat: Math.round(fat100 * 10) / 10,
-    fiber: Math.round(fiber100 * 10) / 10,
+    fiber: fiber100 === null ? null : Math.round(fiber100 * 10) / 10,
     serving_size: servingQty,
     serving_quantity: servingQty,
     macros_per: '100g' as const,
