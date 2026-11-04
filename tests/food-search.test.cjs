@@ -414,7 +414,7 @@ test('barcode identity mismatch cannot persist another product or its portion',a
 
 test('USDA Branded foodNutrients retain per100 basis independently of serving size',()=>{
  const {api:edge}=edgeFixture();
- const base={fdcId:123,description:'Fixture exact product',dataType:'Branded',servingSize:25,servingSizeUnit:'g',foodNutrients:[{nutrientName:'Energy',value:400},{nutrientName:'Protein',value:20},{nutrientName:'Carbohydrate',value:50},{nutrientName:'Total lipid (fat)',value:12}]};
+ const base={fdcId:123,description:'Fixture exact product',dataType:'Branded',servingSize:25,servingSizeUnit:'g',foodNutrients:[{nutrientId:1008,nutrientName:'Energy',unitName:'KCAL',value:400},{nutrientId:1003,nutrientName:'Protein',unitName:'G',value:20},{nutrientId:1005,nutrientName:'Carbohydrate',unitName:'G',value:50},{nutrientId:1004,nutrientName:'Total lipid (fat)',unitName:'G',value:12}]};
  const mapped=edge.mapUsdaToOff(base);
  assert.equal(mapped.nutriments['energy-kcal_100g'],400);
  assert.equal(mapped.nutriments.proteins_100g,20);
@@ -431,4 +431,17 @@ test('normal detail persistence cannot overwrite corrections or enrich using the
  assert.ok(!source.includes('enrichWithUSDA('));
  assert.ok(persistence.includes(".eq('usda_fdc_id',prod._usda_fdc_id)"));
  assert.ok(persistence.includes(".eq('barcode', barcode)"));
+});
+
+test('USDA search keeps kcal distinct from kJ and omits unknown optional nutrients',()=>{
+ const food={fdcId:123,description:'Fixture food',foodNutrients:[{nutrientId:1062,nutrientName:'Energy',unitName:'kJ',value:1674},{nutrientId:1008,nutrientName:'Energy',unitName:'kcal',value:400},{nutrientId:1003,unitName:'g',value:0},{nutrientId:1004,unitName:'g',value:10},{nutrientId:1005,unitName:'g',value:20},{nutrientId:1093,unitName:'mg',value:200}]};
+ const result=edge.mapUsdaToOff(food);assert.equal(result.nutriments['energy-kcal_100g'],400);assert.equal(result.nutriments.proteins_100g,0);assert.equal(result.nutriments.sodium_100g,0.2);assert.equal(Object.hasOwn(result.nutriments,'fiber_100g'),false);assert.equal(Object.hasOwn(result.nutriments,'sugars_100g'),false);
+ assert.equal(edge.mapUsdaToOff({...food,foodNutrients:food.foodNutrients.filter(n=>n.nutrientId!==1008)}),null);
+ assert.equal(edge.mapUsdaToOff({...food,foodNutrients:food.foodNutrients.filter(n=>n.nutrientId!==1003)}),null);
+});
+test('USDA search rejects contradictory or wrong-unit core facts and preserves identity/serving',()=>{
+ const food={fdcId:456,description:'Exact preparation, cooked',servingSize:25,servingSizeUnit:'g',foodNutrients:[{nutrient:{id:1008,unitName:'kcal'},amount:100},{nutrient:{id:1003,unitName:'g'},amount:5},{nutrient:{id:1004,unitName:'g'},amount:3},{nutrient:{id:1005,unitName:'g'},amount:12}]};
+ const result=edge.mapUsdaToOff(food);assert.equal(result._usda_fdc_id,'456');assert.equal(result.product_name,food.description);assert.equal(result.serving_quantity,'25');assert.equal(result.nutriments['energy-kcal_100g'],100);
+ assert.equal(edge.mapUsdaToOff({...food,foodNutrients:[...food.foodNutrients,{nutrient:{id:1003,unitName:'g'},amount:7}]}),null);
+ assert.equal(edge.mapUsdaToOff({...food,foodNutrients:food.foodNutrients.map(n=>n.nutrient.id===1003?{nutrient:{id:1003,unitName:'mg'},amount:5}:n)}),null);
 });
