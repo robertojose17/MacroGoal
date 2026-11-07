@@ -1,3 +1,4 @@
+import { applyUsdaPortion } from '../supabase/functions/_shared/foodPortions.mjs';
 
 /**
  * utils/servingParser.ts
@@ -110,7 +111,7 @@ export function buildSyntheticOffData(item: {
   source?: string | null;
   data_quality_score?: number | null;
   [key: string]: unknown;
-}): object {
+}, options: { preserveServing?: boolean } = {}) {
   // serving_size IS total grams of one standard serving (new architecture)
   const totalGrams = Number(item.serving_size) || 100;
   const servingCount = Number(item.serving_count) || null;
@@ -178,9 +179,13 @@ export function buildSyntheticOffData(item: {
     'selenium_100g': item.selenium_mcg != null ? Number(item.selenium_mcg) / 1000000 : undefined,
   };
 
-  return {
+  const preserveServing = options.preserveServing === true || (item.ai_verified === true && item.ai_verified_source === 'barcode_recovery:source_label');
+  const product = {
+    ...(preserveServing ? { _serving_authority: 'confirmed_correction' as const } : {}),
+    _portion_evidence: item._portion_evidence,
     code: item.barcode || undefined,
     product_name: item.name || '',
+    generic_name: item.name || '',
     brands: item.brand || '',
     serving_size: servingSizeStr,
     serving_quantity: totalGrams,
@@ -192,4 +197,5 @@ export function buildSyntheticOffData(item: {
     ingredients_text: item.ingredients_text || undefined,
     allergens_tags: item.allergens || undefined,
   };
+  return preserveServing ? product : applyUsdaPortion(product, item._portion_evidence);
 }

@@ -1,0 +1,24 @@
+{
+  "source": "verified read-only live metadata; not deployment configuration",
+  "functions": [
+    {
+      "slug": "search-foods",
+      "version": 40,
+      "verify_jwt": false,
+      "included": true
+    },
+    {
+      "slug": "lookup-barcode",
+      "version": 39,
+      "verify_jwt": false,
+      "included": true
+    },
+    {
+      "slug": "vision-nutrition-extract",
+      "version": 45,
+      "verify_jwt": true,
+      "included": false
+    }
+  ],
+  "no_deployment_performed": true
+}

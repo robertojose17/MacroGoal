@@ -1,0 +1,26 @@
+{
+  "sql/fixture.sql": {
+    "sha256": "682752e88e65f18685f803926de153009ff7342f2d0a1a86c448498b2b39faec",
+    "frozen_source": "component-tests/nutrition/tests/fixture.generated.sql"
+  },
+  "sql/01-nutrition.sql": {
+    "sha256": "46eadc8e037461fabfaae5cafa8ebc50d96db92ea47fd8a0d8504dc65d5cace9",
+    "frozen_source": "sql/01-nutrition/enrichment.CANDIDATE.sql"
+  },
+  "sql/02-off-registry.sql": {
+    "sha256": "1746fd0cf38948b6115d99c4111a281b652a86229005be1ed8692e7299049329",
+    "frozen_source": "sql/02-off-registry/off-mass.CANDIDATE.sql"
+  },
+  "sql/03-search.sql": {
+    "sha256": "552370558e383fd4add91540404d7d81c64f91d3e942b0c91597a3f574c5181b",
+    "frozen_source": "sql/03-search/search-snapshots.CANDIDATE.sql"
+  },
+  "src/offMass.mjs": {
+    "sha256": "73accc8abcbd48ddd621f6c669056e5f70c5ff6fbfe70e7c8d8c158946c79687",
+    "frozen_source": "component-tests/off-registry/src/offMass.mjs"
+  },
+  "src/provider.mjs": {
+    "sha256": "46e1b26ad520ba8a56267f5afef39254a4fd73be59d04cf527198b6136abeaa9",
+    "frozen_source": "component-tests/off-registry/src/provider.mjs"
+  }
+}

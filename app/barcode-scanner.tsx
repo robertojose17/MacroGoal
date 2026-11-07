@@ -1,23 +1,25 @@
 
-import React, { useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Linking } from 'react-native';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Linking, TextInput, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
-import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
+import { packageBarcodeInput } from '@/utils/packageBarcodeInput';
+import { recoveryRouteContext } from '@/utils/recoveryRouteContext';
 import { buildSyntheticOffData } from '@/utils/servingParser';
 
 export default function BarcodeScannerScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const es=i18n.language.startsWith('es');
   const router = useRouter();
   const params = useLocalSearchParams();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  // Match the app's fixed light-palette policy without an impossible dark comparison.
+  const isDark = false;
 
   const mode = (params.mode as string) || 'diary';
   const context = (params.context as string) || undefined;
@@ -27,6 +29,8 @@ export default function BarcodeScannerScreen() {
   const myMealId = (params.mealId as string) || undefined;
   const planId = (params.planId as string) || undefined;
 
+  const [webBarcode,setWebBarcode]=useState(''),[webError,setWebError]=useState(''),[webBusy,setWebBusy]=useState(false);
+  const webGeneration=useRef(0),webRequest=useRef<AbortController|null>(null);
   const [permission, requestPermission] = useCameraPermissions();
 
   // One-scan lock using ref (doesn't cause re-renders)
@@ -51,8 +55,10 @@ export default function BarcodeScannerScreen() {
       console.log('[BarcodeScanner] Screen focused → reset scan state');
       hasScannedRef.current = false;
       isClosingRef.current = false;
+      if(Platform.OS==='web'){webGeneration.current++;setWebBusy(false);}
 
       return () => {
+        if(Platform.OS==='web'){webGeneration.current++;isClosingRef.current=true;webRequest.current?.abort();}
         console.log('[BarcodeScanner] Screen unfocused');
       };
     }, [])
@@ -67,8 +73,12 @@ export default function BarcodeScannerScreen() {
     console.log('[BarcodeScanner] Barcode:', barcode);
     console.log('[BarcodeScanner] Routing through edge function: lookup-barcode');
 
+    const generation=webGeneration.current;
+    const current=()=>Platform.OS!=='web'||(generation===webGeneration.current&&isMountedRef.current&&!isClosingRef.current);
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      if(!current())return;
+      if(Platform.OS==='web'&&!session?.access_token){hasScannedRef.current=false;setWebError(es?'Inicia sesión para buscar este producto.':'Sign in to look up this product.');return;}
       const token = session?.access_token;
       console.log('[BarcodeScanner] Auth token present:', !!token);
 
@@ -76,28 +86,59 @@ export default function BarcodeScannerScreen() {
       console.log('[BarcodeScanner] Edge function URL:', edgeFnUrl);
 
       const controller = new AbortController();
+      if(Platform.OS==='web')webRequest.current=controller;
       const timeoutId = setTimeout(() => controller.abort(), 15000);
-      const response = await fetch(edgeFnUrl, {
+      let response:Response;
+      try {response = await fetch(edgeFnUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ barcode }),
+        body: JSON.stringify({ barcode, review_capability: 'label_confirmation_v1' }),
         signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+      });}finally{clearTimeout(timeoutId);}
+      if(!current())return;
 
       console.log('[BarcodeScanner] HTTP Status:', response.status);
 
       if (!response.ok) {
+        if (response.status === 409 || response.status === 426) {
+          const failure = await response.json().catch(() => null);
+          if(!current() || !isMountedRef.current || isClosingRef.current)return;
+          if (response.status === 426 || (failure?.status === 'update_required' && failure?.error === 'LOOKUP_REVIEW_UPDATE_REQUIRED')) {
+            router.replace({ pathname: '/search-food-confirmation', params: { ...recoveryRouteContext(params), reason: 'update_required' } });
+            return;
+          }
+          throw new Error(`HTTP error: ${response.status}`);
+        }
         const errText = await response.text();
         console.error('[BarcodeScanner] Edge function error body:', errText);
         throw new Error(`HTTP error: ${response.status}`);
       }
 
       const result = await response.json();
+      if(!current())return;
       console.log('[BarcodeScanner] Edge function result — found:', result.found, 'source:', result.source);
+
+      // A found AI-only read is still a proposal. Never forward its nutrition, ID or unsigned evidence.
+      // Existing alias collisions cannot be resolved by the current photo/manual flow.
+      if (result.capture_status === 'ambiguous_existing' || result.capture_status === 'identity_reserved') {
+        if (!current() || !isMountedRef.current || isClosingRef.current) return;
+        router.replace({ pathname: '/search-food-confirmation', params: { ...recoveryRouteContext(params), reason: 'catalog_ambiguous' } });
+        return;
+      }
+      // Present malformed flags are ambiguous contract data, not permission to use a proposal.
+      const invalidConfirmationFlag = Object.prototype.hasOwnProperty.call(result, 'requires_label_confirmation')
+        && typeof result.requires_label_confirmation !== 'boolean';
+      if (result.requires_label_confirmation === true || invalidConfirmationFlag) {
+        if (!isMountedRef.current || isClosingRef.current) return;
+        router.push({pathname:'/food-photo-capture',params:{
+          ...recoveryRouteContext(params),barcode,type:'new_product',
+          meal:mealType,date,mode,context,returnTo,mealId:myMealId || '',planId:planId || '',
+        }});
+        return;
+      }
 
       if (result.found) {
         // Always build synthetic offData from DB columns — single source of truth.
@@ -133,13 +174,14 @@ export default function BarcodeScannerScreen() {
           },
         });
       } else {
-        console.log('[BarcodeScanner] ❌ PRODUCT NOT FOUND, navigating to barcode-lookup');
+        console.log('[BarcodeScanner] ❌ PRODUCT NOT FOUND, requesting package front');
 
         if (!isMountedRef.current || isClosingRef.current) return;
         router.push({
-          pathname: '/barcode-lookup',
+          pathname: '/food-photo-capture',
           params: {
             barcode: barcode,
+            type: 'new_product',
             meal: mealType,
             date: date,
             mode: mode,
@@ -153,7 +195,7 @@ export default function BarcodeScannerScreen() {
     } catch (error: any) {
       console.error('[BarcodeScanner] ❌ LOOKUP ERROR:', error);
 
-      if (!isMountedRef.current || isClosingRef.current) return;
+      if (!current() || !isMountedRef.current || isClosingRef.current) return;
       router.push({
         pathname: '/barcode-lookup',
         params: {
@@ -168,8 +210,8 @@ export default function BarcodeScannerScreen() {
           error: error.message || 'Lookup failed',
         },
       });
-    }
-  }, [router, mealType, date, mode, context, returnTo, myMealId, planId]);
+    } finally {if(Platform.OS==='web'&&current()){setWebBusy(false);webRequest.current=null;}}
+  }, [router, mealType, date, mode, context, returnTo, myMealId, planId, es, params]);
 
   /**
    * Handle barcode scan
@@ -209,6 +251,35 @@ export default function BarcodeScannerScreen() {
     console.log('[BarcodeScanner] 🚀 STARTING LOOKUP PROCESS');
     performLookupAndNavigate(cleanBarcode);
   }, [performLookupAndNavigate]);
+
+  const submitWebBarcode=()=>{
+    if(hasScannedRef.current||isClosingRef.current||!isMountedRef.current)return;
+    const barcode=packageBarcodeInput(webBarcode);
+    if(!barcode){setWebError(es?'Ingresa los 8, 12, 13 o 14 dígitos del código del paquete.':'Enter the package code: 8, 12, 13 or 14 digits.');return;}
+    hasScannedRef.current=true;setWebError('');setWebBusy(true);
+    void performLookupAndNavigate(barcode);
+  };
+  // SDK54 web camera scanning supports QR only, not product EAN/UPC barcodes.
+  // This entry does the same lookup first; camera permission waits until package photos.
+  if(Platform.OS==='web')return (
+    <SafeAreaView style={[styles.container,{backgroundColor:isDark?colors.backgroundDark:colors.background}]} edges={['top']}>
+      <View style={[styles.permissionContainer,{gap:16}]}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={es?'Atrás':'Back'} onPress={()=>{isClosingRef.current=true;webGeneration.current++;webRequest.current?.abort();router.back();}}>
+          <Text style={{color:isDark?colors.textDark:colors.text}}>{es?'Atrás':'Back'}</Text>
+        </TouchableOpacity>
+        <Text style={[styles.permissionTitle,{color:isDark?colors.textDark:colors.text}]}>{es?'Ingresa el código del paquete':'Enter the package barcode'}</Text>
+        <Text style={[styles.permissionText,{color:isDark?colors.textSecondaryDark:colors.textSecondary}]}>{es?'En esta versión web, escribe el número bajo el código de barras. Primero buscaremos el producto; si no aparece, podrás fotografiar el empaque.':'In this web version, type the number beneath the barcode. We will look up the product first; if it is not found, you can photograph the package.'}</Text>
+        <TextInput accessibilityLabel={es?'Código de barras del paquete':'Package barcode'} value={webBarcode} onChangeText={setWebBarcode}
+          keyboardType="number-pad" inputMode="numeric" maxLength={14} editable={!webBusy} onSubmitEditing={submitWebBarcode}
+          style={{width:'100%',maxWidth:420,borderWidth:1,borderColor:colors.primary,borderRadius:12,padding:16,color:isDark?colors.textDark:colors.text}}/>
+        {!!webError&&<Text accessibilityRole="alert" style={{color:isDark?colors.textDark:colors.text}}>{webError}</Text>}
+        <TouchableOpacity accessibilityRole="button" accessibilityState={{disabled:webBusy}} disabled={webBusy} style={[styles.permissionButton,{backgroundColor:colors.primary,opacity:webBusy?0.5:1}]} onPress={submitWebBarcode}>
+          <Text style={styles.permissionButtonText}>{es?'Buscar producto':'Look up product'}</Text>
+        </TouchableOpacity>
+        {webBusy&&<ActivityIndicator/>}
+      </View>
+    </SafeAreaView>
+  );
 
   // Show loading while checking permissions
   if (!permission) {

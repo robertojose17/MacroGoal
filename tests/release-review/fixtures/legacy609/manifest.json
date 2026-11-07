@@ -1,0 +1,41 @@
+{
+  "commit": "4a1ca199f9a7ed6e8148047799d62e9e4d326eca",
+  "files": [
+    {
+      "path": "app/barcode-scanner.tsx",
+      "git_blob_sha1": "157cad40b31ff6223aff74cd359eaf9d98eb1ff1",
+      "sha256": "8a17cd9a450e654610843d7d7711190087faf624deb2456a8b64f4b05aa2818b",
+      "url": "https://github.com/robertojose17/MacroGoal/blob/4a1ca199f9a7ed6e8148047799d62e9e4d326eca/app/barcode-scanner.tsx"
+    },
+    {
+      "path": "app/barcode-lookup.tsx",
+      "git_blob_sha1": "506657bb6f9b4886b927e45c729bf4044dbddb71",
+      "sha256": "4a7988af66bbb955f0723b2e508e765317e6edd72b1f2f75b676acd880e0e987",
+      "url": "https://github.com/robertojose17/MacroGoal/blob/4a1ca199f9a7ed6e8148047799d62e9e4d326eca/app/barcode-lookup.tsx"
+    },
+    {
+      "path": "utils/foodSearchHybrid.ts",
+      "git_blob_sha1": "8a76eb03637ed96fe0adfd6b5df423d705a25746",
+      "sha256": "233abf96e6aef5d3f8bf94c016ab118fd0f6ad2bace40a95302d086e43e330ce",
+      "url": "https://github.com/robertojose17/MacroGoal/blob/4a1ca199f9a7ed6e8148047799d62e9e4d326eca/utils/foodSearchHybrid.ts"
+    },
+    {
+      "path": "utils/foodSearchCache.ts",
+      "git_blob_sha1": "a916e665d0e3672cadde4d1f92b47f0e41697aaf",
+      "sha256": "cdbfb1794cc13d567e4c9bf2418c09855d8e02d09e0d157c23fff5e4daa68bb0",
+      "url": "https://github.com/robertojose17/MacroGoal/blob/4a1ca199f9a7ed6e8148047799d62e9e4d326eca/utils/foodSearchCache.ts"
+    },
+    {
+      "path": "app/food-search.tsx",
+      "git_blob_sha1": "877a49dc9e2603de92d199372051c10406385def",
+      "sha256": "d98f1978e52902adf3ac052136ed036872a18384b632f03c58543844ffe0737d",
+      "url": "https://github.com/robertojose17/MacroGoal/blob/4a1ca199f9a7ed6e8148047799d62e9e4d326eca/app/food-search.tsx"
+    },
+    {
+      "path": "app/add-food.tsx",
+      "git_blob_sha1": "bc52b6cdc7f1dceb3a1f23213201205c3d3f9a1d",
+      "sha256": "501cae1a1a6863d4a78a51f21d63ade2f3e19ed6e8ade9933ccf9d861342d283",
+      "url": "https://github.com/robertojose17/MacroGoal/blob/4a1ca199f9a7ed6e8148047799d62e9e4d326eca/app/add-food.tsx"
+    }
+  ]
+}

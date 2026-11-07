@@ -9,7 +9,10 @@
  *  - Supabase items always appear before off/local items in the final list.
  */
 
-import { OpenFoodFactsProduct, extractServingSize, extractNutritionPerServing } from '@/utils/openFoodFacts';
+import { searchSelectionNeedsConfirmation } from './searchSelectionSafety';
+import { exactFdcId } from './catalogSelection';
+import { buildSyntheticOffData } from './servingParser';
+import { OpenFoodFactsProduct, extractServingSize, extractNutritionPerServing, normalizeUsdaProduct } from '@/utils/openFoodFacts';
 import { formatFoodRowServing } from '@/utils/servingDisplay';
 import { supabase } from '@/lib/supabase/client';
 
@@ -25,10 +28,17 @@ export interface SearchResultItem {
   displayFiber: number;
   servingText: string;
   hasNutrition: boolean;
+  requiresConfirmation?: boolean;
   source: ResultSource;
 }
 
 export function buildResultItem(product: OpenFoodFactsProduct, source: ResultSource): SearchResultItem {
+  // Keep external names/brands visible without interpreting ambiguous mass or nutrient values.
+  if (searchSelectionNeedsConfirmation(product)) return {
+    product, source, requiresConfirmation: true, hasNutrition: false, servingText: '',
+    displayCalories: NaN, displayProtein: NaN, displayCarbs: NaN, displayFats: NaN, displayFiber: NaN,
+  };
+  product = normalizeUsdaProduct(product);
   const servingInfo = extractServingSize(product);
   const nutrition = extractNutritionPerServing(product, servingInfo.grams);
   return {
@@ -38,7 +48,7 @@ export function buildResultItem(product: OpenFoodFactsProduct, source: ResultSou
     displayCarbs: nutrition.carbs,
     displayFats: nutrition.fat,
     displayFiber: nutrition.fiber,
-    servingText: formatFoodRowServing(product.serving_size, 1, servingInfo.grams),
+    servingText: formatFoodRowServing(servingInfo.displayText, 1, servingInfo.grams),
     hasNutrition: nutrition.calories > 0 || nutrition.protein > 0 || nutrition.carbs > 0 || nutrition.fat > 0,
     source,
   };
@@ -101,7 +111,7 @@ export function mergeProducts(
   const supabaseKeySet = new Set(supabaseOrder);
   for (const key of supabaseOrder) {
     const item = existing.get(key);
-    if (item && item.hasNutrition) {
+    if (item && (item.hasNutrition || item.requiresConfirmation)) {
       supabaseItems.push(item);
     }
   }
@@ -109,7 +119,7 @@ export function mergeProducts(
   // Collect non-supabase items.
   for (const [key, item] of existing.entries()) {
     if (!supabaseKeySet.has(key) && item.source !== 'supabase') {
-      if (item.hasNutrition) {
+      if (item.hasNutrition || item.requiresConfirmation) {
         clientItems.push(item);
       }
     }
@@ -120,7 +130,7 @@ export function mergeProducts(
   //  from prior batches are already in supabaseItems via the loop above, but
   //  we need to catch pre-existing supabase entries not in supabaseOrder).
   for (const [key, item] of existing.entries()) {
-    if (item.source === 'supabase' && !supabaseKeySet.has(key) && item.hasNutrition) {
+    if (item.source === 'supabase' && !supabaseKeySet.has(key) && (item.hasNutrition || item.requiresConfirmation)) {
       supabaseItems.push(item);
     }
   }
@@ -147,7 +157,7 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
              phosphorus_mg, zinc_mg, vitamin_a_mcg, vitamin_c_mg, vitamin_d_mcg, vitamin_e_mg,
              vitamin_k_mcg, vitamin_b1_mg, vitamin_b2_mg, vitamin_b3_mg, vitamin_b6_mg,
              vitamin_b12_mcg, folate_mcg, choline_mg, pantothenic_acid_mg, selenium_mcg,
-             source, usda_fdc_id, data_quality_score, ingredients_text, allergens`)
+             source, usda_fdc_id, data_quality_score, ingredients_text, allergens, ai_verified, ai_verified_source`)
     .eq('id', foodItemId)
     .maybeSingle();
 
@@ -156,76 +166,23 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
     return null;
   }
 
-  console.log('[buildOffProductFromFoodItemId] ✅ Fetched:', fi.name);
+  // Use the same canonical row adapter as barcode lookup: macros_per may be serving.
+  // Existing confirmation columns protect an explicit corrected serving, never grant writes.
+  return { ...buildSyntheticOffData(fi), _db_id: fi.id } as OpenFoodFactsProduct;
+}
 
-  // Modern path — build from columns
-  const n = fi as any;
-  const servingDesc = n.serving_description as string | null | undefined;
-  const dbServingSize2 = Number(n.serving_size);
-  const dbServingQty2  = Number(n.serving_quantity);
-  const totalGrams =
-    (dbServingSize2 > 0 ? dbServingSize2 : null) ??
-    (dbServingQty2  > 0 ? dbServingQty2  : null) ??
-    100;
-  const servingCount = Number(n.serving_count) || 1;
-  const countLabel = servingCount > 1 ? `${servingCount} ` : '1 ';
-  // Discard serving_description values that are just grams/ml (e.g. "63g", "30 g", "100ml")
-  const isJustGrams = /^\d+(\.\d+)?\s*(g|ml)$/i.test(servingDesc?.trim() ?? '');
-  const cleanServingDesc = (servingDesc && !isJustGrams) ? servingDesc : null;
-
-  const servingSizeStr = cleanServingDesc
-    ? `${countLabel}${cleanServingDesc} (${totalGrams} g)`
-    : `1 serving (${totalGrams} g)`;
-
-  // Nutrients are already per 100g (macros_per is always '100g')
-  const to100 = (val: number | null | undefined): number | undefined => {
-    if (val == null) return undefined;
-    return val; // already per 100g (macros_per is always '100g')
-  };
-
-  const product: OpenFoodFactsProduct = {
-    code: n.barcode || undefined,
-    product_name: n.name,
-    brands: n.brand || undefined,
-    serving_size: servingSizeStr,
-    serving_quantity: totalGrams,
-    _source: n.source,
-    _usda_fdc_id: n.usda_fdc_id,
-    _data_quality_score: n.data_quality_score,
-    ingredients_text: n.ingredients_text,
-    allergens_tags: n.allergens,
-    nutriments: {
-      'energy-kcal_100g': to100(n.calories),
-      'proteins_100g': to100(n.protein),
-      'carbohydrates_100g': to100(n.carbs),
-      'fat_100g': to100(n.fat),
-      'fiber_100g': to100(n.fiber),
-      'sugars_100g': to100(n.sugar_g),
-      'saturated-fat_100g': to100(n.saturated_fat_g),
-      'polyunsaturated-fat_100g': to100(n.polyunsaturated_fat_g),
-      'monounsaturated-fat_100g': to100(n.monounsaturated_fat_g),
-      'trans-fat_100g': to100(n.trans_fat_g),
-      'cholesterol_100g': n.cholesterol_mg != null ? n.cholesterol_mg / 1000 : undefined,
-      'sodium_100g': n.sodium_mg != null ? n.sodium_mg / 1000 : undefined,
-      'potassium_100g': n.potassium_mg != null ? n.potassium_mg / 1000 : undefined,
-      'calcium_100g': n.calcium_mg != null ? n.calcium_mg / 1000 : undefined,
-      'iron_100g': n.iron_mg != null ? n.iron_mg / 1000 : undefined,
-      'magnesium_100g': n.magnesium_mg != null ? n.magnesium_mg / 1000 : undefined,
-      'phosphorus_100g': n.phosphorus_mg != null ? n.phosphorus_mg / 1000 : undefined,
-      'zinc_100g': n.zinc_mg != null ? n.zinc_mg / 1000 : undefined,
-      'vitamin-a_100g': n.vitamin_a_mcg != null ? n.vitamin_a_mcg / 1000000 : undefined,
-      'vitamin-c_100g': n.vitamin_c_mg != null ? n.vitamin_c_mg / 1000 : undefined,
-      'vitamin-d_100g': n.vitamin_d_mcg != null ? n.vitamin_d_mcg / 1000000 : undefined,
-      'vitamin-e_100g': n.vitamin_e_mg != null ? n.vitamin_e_mg / 1000 : undefined,
-      'vitamin-k_100g': n.vitamin_k_mcg != null ? n.vitamin_k_mcg / 1000000 : undefined,
-      'vitamin-b6_100g': n.vitamin_b6_mg != null ? n.vitamin_b6_mg / 1000 : undefined,
-      'vitamin-b12_100g': n.vitamin_b12_mcg != null ? n.vitamin_b12_mcg / 1000000 : undefined,
-      'folate_100g': n.folate_mcg != null ? n.folate_mcg / 1000000 : undefined,
-      'selenium_100g': n.selenium_mcg != null ? n.selenium_mcg / 1000000 : undefined,
-      'choline_100g': n.choline_mg != null ? n.choline_mg / 1000 : undefined,
-    },
-  };
-
-  console.log('[buildOffProductFromFoodItemId] Built from columns, serving_size=', product.serving_size);
-  return product;
+/** Capture provider facts on use, not on every keystroke. No private diary writes. */
+export async function persistUsdaSelection(product:OpenFoodFactsProduct):Promise<string|null>{
+ const fdcId=exactFdcId(product._usda_fdc_id);
+ if(!fdcId||product._serving_authority==='confirmed_correction')return null;
+ let timer:ReturnType<typeof setTimeout>|undefined;
+ try{
+  const response:any=await Promise.race([
+   supabase.functions.invoke('lookup-barcode',{body:{operation:'usda_portions_v1',fdc_id:fdcId}}),
+   new Promise(resolve=>{timer=setTimeout(()=>resolve(null),1800);})
+  ]);
+  if(response?.error||response?.data?.fdc_id!==fdcId)return null;
+  const id=response.data.food_item_id;
+  return typeof id==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)?id:null;
+ }catch{return null;}finally{if(timer)clearTimeout(timer);}
 }

@@ -1,3 +1,7 @@
+import { catalogPackageBarcode, exactFdcId, readSavedPortion, readSavedPortionLabel, savedPortionSnapshot, portionDescription, type SavedPortion } from '@/utils/catalogSelection';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { readUsdaPortions } from '../supabase/functions/_shared/foodPortions.mjs';
+import { normalizeUsdaProduct } from '@/utils/openFoodFacts';
 import { recoveryRouteContext, macroDisplayGrams, recoveryProduct, preferRecoveryProduct, createLoadGeneration } from '@/utils/recoveryRouteContext';
 import { optionalFiber } from '@/utils/optionalFiber';
 import i18n from '@/lib/i18n';
@@ -27,7 +31,6 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platfo
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { useColorScheme } from '@/hooks/useColorScheme';
 import { useTranslation } from 'react-i18next';
 
 // ─── Micronutrient helpers ────────────────────────────────────────────────────
@@ -167,150 +170,7 @@ const USDA_API_KEY = process.env.EXPO_PUBLIC_USDA_API_KEY ?? '';
  * Background enrichment: fetches full micronutrient data from USDA and updates
  * the food_items row. Fire-and-forget — never throws, never blocks the UI.
  */
-async function enrichWithUSDA(prod: OpenFoodFactsProduct, foodItemId: string): Promise<void> {
-  try {
-    // Check existing data_quality_score — skip if already enriched
-    const { data: existing } = await supabase
-      .from('food_items')
-      .select('data_quality_score')
-      .eq('id', foodItemId)
-      .maybeSingle();
 
-    const existingScore = (existing as any)?.data_quality_score ?? 0;
-    if (existingScore > 50) {
-      console.log('[FoodDetails] enrichWithUSDA: skipping, already enriched (score=', existingScore, ') for id=', foodItemId);
-      return;
-    }
-
-    if (prod.code) {
-      // ── Case A: has barcode — delegate to lookup-barcode edge function ──
-      console.log('[FoodDetails] enrichWithUSDA: Case A — barcode lookup for', prod.code);
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const res = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/lookup-barcode`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ barcode: prod.code.trim() }),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        console.warn('[FoodDetails] enrichWithUSDA: lookup-barcode returned', res.status, errText.slice(0, 200));
-      } else {
-        console.log('[FoodDetails] enrichWithUSDA: lookup-barcode succeeded for barcode=', prod.code);
-      }
-    } else {
-      // ── Case B: no barcode — search USDA FoodData Central directly ──
-      const foodName = (prod.product_name || prod.generic_name || '').trim();
-      if (!foodName) {
-        console.log('[FoodDetails] enrichWithUSDA: Case B — no food name, skipping');
-        return;
-      }
-      console.log('[FoodDetails] enrichWithUSDA: Case B — USDA search for', foodName);
-      const usdaUrl = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(foodName)}&dataType=Branded,Foundation,SR%20Legacy&pageSize=5`;
-      const usdaRes = await fetch(usdaUrl);
-      if (!usdaRes.ok) {
-        const errText = await usdaRes.text();
-        console.warn('[FoodDetails] enrichWithUSDA: USDA search returned', usdaRes.status, errText.slice(0, 200));
-        return;
-      }
-      const usdaJson = await usdaRes.json();
-      const foods = usdaJson?.foods;
-      if (!Array.isArray(foods) || foods.length === 0) {
-        console.log('[FoodDetails] enrichWithUSDA: USDA returned no results for', foodName);
-        return;
-      }
-      const usdaFood = foods[0];
-      console.log('[FoodDetails] enrichWithUSDA: USDA matched', usdaFood.description, '(fdcId=', usdaFood.fdcId, ')');
-
-      // Map nutrientId → column value
-      const mappedNutrients: Record<string, number> = {};
-      const nutrients: { nutrientId: number; value: number }[] = usdaFood.foodNutrients ?? [];
-      for (const n of nutrients) {
-        const col = USDA_NUTRIENT_MAP[n.nutrientId];
-        if (col && n.value != null) {
-          mappedNutrients[col] = n.value;
-        }
-      }
-
-      // Compute a simple quality score: count how many mapped fields are present
-      const filledCount = Object.keys(mappedNutrients).length;
-      const computedScore = Math.min(100, Math.round((filledCount / Object.keys(USDA_NUTRIENT_MAP).length) * 100));
-
-      console.log('[FoodDetails] enrichWithUSDA: mapped', filledCount, 'nutrients, score=', computedScore);
-
-      // Extract brand and barcode from Branded food results
-      const usdaBrand: string | null = usdaFood.brandOwner || usdaFood.brandName || null;
-      const usdaBarcode: string | null = usdaFood.gtinUpc || null;
-
-      // Extract serving info
-      let usdaServingGrams: number | null = null;
-      let usdaServingDesc: string | null = null;
-      let usdaServingCount: number | null = null;
-
-      if (usdaFood.foodPortions && usdaFood.foodPortions.length > 0) {
-        const portion = usdaFood.foodPortions[0];
-        usdaServingGrams = portion.gramWeight || null;
-        const hh: string = portion.householdServingFullText || '';
-        const match = hh.match(/^(\d+\.?\d*)\s+(.+)$/);
-        if (match) {
-          usdaServingCount = parseFloat(match[1]);
-          usdaServingDesc = match[2].trim().replace(/s$/, '');
-        } else if (hh) {
-          usdaServingDesc = hh;
-        }
-      } else if (usdaFood.servingSize && usdaFood.servingSizeUnit) {
-        if (String(usdaFood.servingSizeUnit).toLowerCase() === 'g') {
-          usdaServingGrams = usdaFood.servingSize;
-        }
-      }
-
-      console.log('[FoodDetails] enrichWithUSDA: brand=', usdaBrand, 'barcode=', usdaBarcode, 'servingGrams=', usdaServingGrams, 'servingDesc=', usdaServingDesc);
-
-      // Fetch current row to avoid overwriting existing good data
-      const { data: currentRow } = await supabase
-        .from('food_items')
-        .select('brand, barcode, serving_size, serving_description')
-        .eq('id', foodItemId)
-        .maybeSingle();
-
-      const updatePayload: Record<string, any> = {
-        source: 'usda',
-        usda_fdc_id: String(usdaFood.fdcId),
-        macros_per: '100g',
-        ...mappedNutrients,
-        data_quality_score: computedScore,
-        last_verified_at: new Date().toISOString(),
-      };
-
-      // Only fill identity fields if currently missing
-      if (!(currentRow as any)?.brand && usdaBrand) updatePayload.brand = usdaBrand;
-      if (!(currentRow as any)?.barcode && usdaBarcode) updatePayload.barcode = usdaBarcode;
-      if ((!(currentRow as any)?.serving_size || (currentRow as any).serving_size <= 0) && usdaServingGrams) {
-        updatePayload.serving_size = usdaServingGrams;
-      }
-      if (!(currentRow as any)?.serving_description && usdaServingDesc) {
-        updatePayload.serving_description = usdaServingDesc;
-        if (usdaServingCount) updatePayload.serving_count = usdaServingCount;
-      }
-
-      const { error: updateErr } = await supabase
-        .from('food_items')
-        .update(updatePayload)
-        .eq('id', foodItemId);
-
-      if (updateErr) {
-        console.warn('[FoodDetails] enrichWithUSDA: update error:', updateErr.message);
-      } else {
-        console.log('[FoodDetails] enrichWithUSDA: food_items row enriched successfully, id=', foodItemId);
-      }
-    }
-  } catch (err) {
-    console.warn('[FoodDetails] enrichWithUSDA: unexpected error (silenced):', err);
-  }
-}
 
 
 type ServingUnit = 'g' | 'oz' | 'ml' | 'fl oz' | 'cup' | 'tbsp' | 'tsp' | 'piece' | 'serving';
@@ -626,8 +486,8 @@ export default function FoodDetailsLayout({
   onSaveComplete,
   onMealPlanSave,
 }: FoodDetailsLayoutProps) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  // Match the app's fixed light-palette policy without an impossible dark comparison.
+  const isDark = false;
   const router = useRouter();
   const routeContext = useLocalSearchParams();
   const latestOffData = useRef(offData);
@@ -649,6 +509,8 @@ export default function FoodDetailsLayout({
   // In edit mode, the 'default' option gramsPerUnit is derived from the saved DB grams,
   // NOT from extractServingSize — so they stay in sync.
   const [editDefaultGramsPerUnit, setEditDefaultGramsPerUnit] = useState<number | null>(null);
+  const [savedPortion, setSavedPortion] = useState<SavedPortion | null>(null);
+  const savedOffDataRef = useRef<Record<string, unknown> | null>(null);
 
   // Resolve the authoritative gram value from a product, with full fallback chain.
   // Priority: serving_quantity → parse "(Xg)" from serving_size string → plain "Xg" → 100
@@ -703,7 +565,7 @@ export default function FoodDetailsLayout({
           const gramsPerUnit = totalGrams / unitCount;
           options.push({
             key: 'natural_unit',
-            label: `1 ${singularDisplay} (${Math.round(gramsPerUnit)}g)`,
+            label: `1 ${singularDisplay} (${Number(gramsPerUnit.toFixed(2))}g)`,
             gramsPerUnit: gramsPerUnit,
           });
           // SKIP default — would be a 3rd duplicate
@@ -732,11 +594,22 @@ export default function FoodDetailsLayout({
       options.push({ key: 'default', label: t('localization.shared.serving100'), gramsPerUnit: 100 });
     }
 
+    // Only new selections receive verified choices; saved diary edit grams remain untouched.
+    if(mode!=='edit'&&!itemId&&product?._usda_fdc_id&&product._serving_authority!=='confirmed_correction'){
+      for(const p of readUsdaPortions(product._portion_evidence,product._usda_fdc_id)){
+        const grams=p.grams/p.amount;
+        options.push({key:'portion:'+p.key,label:'1 '+p.description+' ('+Number(grams.toFixed(2))+'g)',gramsPerUnit:grams});
+      }
+    }
+    if(savedPortion)options.push({key:'saved_portion',label:portionDescription(savedPortion.description,1,savedPortion.gramsPerUnit),gramsPerUnit:savedPortion.gramsPerUnit});
     // ── Standard measurement units (always present) ──────────────────────
     options.push(
       { key: 'g',     label: '1 g',     gramsPerUnit: 1 },
       { key: 'oz',    label: '1 oz',    gramsPerUnit: 28.35 },
       { key: 'lb',    label: '1 lb',    gramsPerUnit: 453.592 },
+    );
+    // Historical edits retain their saved unit choices. New foods need a verified mass/volume relationship.
+    if (mode === 'edit' || itemId) options.push(
       { key: 'ml',    label: '1 ml',    gramsPerUnit: 1 },
       { key: 'tsp',   label: t('localization.shared.teaspoon'),   gramsPerUnit: 5 },
       { key: 'tbsp',  label: t('localization.shared.tablespoon'),  gramsPerUnit: 15 },
@@ -745,7 +618,7 @@ export default function FoodDetailsLayout({
     );
 
     return options;
-  }, [product, editDefaultGramsPerUnit, mode, t]);
+  }, [product, editDefaultGramsPerUnit, savedPortion, mode, itemId, t]);
 
   // Per-100g macros from the foods table — the immutable calculation reference
   const [per100Macros, setPer100Macros] = useState<{ calories: number; protein: number; carbs: number; fats: number; fiber: number } | null>(null);
@@ -795,7 +668,27 @@ export default function FoodDetailsLayout({
     }
 
     try {
-      const parsedProduct: OpenFoodFactsProduct = JSON.parse(offData);
+      let parsedProduct: OpenFoodFactsProduct = JSON.parse(offData);
+      if(routeContext.recoverySaved==='1')parsedProduct._serving_authority='confirmed_correction';
+      const fdcId=exactFdcId(parsedProduct._usda_fdc_id);
+      if (fdcId && parsedProduct._serving_authority!=='confirmed_correction') {
+        parsedProduct._usda_fdc_id=fdcId;
+        if (!readUsdaPortions(parsedProduct._portion_evidence,parsedProduct._usda_fdc_id).length) {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            const response:any=await Promise.race([
+              supabase.functions.invoke('lookup-barcode',{body:{operation:'usda_portions_v1',fdc_id:parsedProduct._usda_fdc_id}}),
+              new Promise(resolve=>{timer=setTimeout(()=>resolve(null),1800);})
+            ]);
+            if(latestOffData.current!==offData)return;
+            if(response?.data?.fdc_id===parsedProduct._usda_fdc_id){
+              parsedProduct._portion_evidence=response.data.portion_evidence;
+              if(response.data.food_item_id)parsedProduct._db_id=response.data.food_item_id;
+            }
+          } catch {} finally {if(timer)clearTimeout(timer);}
+        }
+        parsedProduct=normalizeUsdaProduct(parsedProduct);
+      }
       // Ensure product_name is always populated — some OFacts entries have it in generic_name only
       if (!parsedProduct.product_name && parsedProduct.generic_name) {
         parsedProduct.product_name = parsedProduct.generic_name;
@@ -828,7 +721,7 @@ export default function FoodDetailsLayout({
         const singular = singularizeUnit(unitName);
         console.log('[FoodDetails] loadViewData: natural unit detected from serving_size=', parsedProduct.serving_size, '→ singular=', singular, 'gramsPerUnit=', gramsPerUnit, 'unitCount=', unitCount, 'totalGrams=', totalGrams);
         setServingAmount(gramsPerUnit);
-        setNumberOfServings(unitCount > 1 ? String(unitCount) : '1');
+        setNumberOfServings('1');
         setSelectedServingOptionKey('natural_unit');
       } else {
         // No natural unit — default serving
@@ -877,6 +770,8 @@ export default function FoodDetailsLayout({
     const servingQty = totalGrams;
     const n = (foodItem.nutriments ?? {}) as Record<string, number>;
     return {
+      // Presentation-only legacy product: no package barcode has been resolved.
+      code: '',
       product_name: foodItem.name ?? food.name,
       brands: foodItem.brand ?? food.brand ?? '',
       nutriments: {
@@ -905,6 +800,8 @@ export default function FoodDetailsLayout({
       ? (sc > 1 ? `${sc} ${desc}s (${servingAmount}g)` : `1 ${desc} (${servingAmount}g)`)
       : `${servingAmount} ${food.serving_unit}`;
     return {
+      // Presentation-only legacy product: do not invent a package identity.
+      code: '',
       product_name: food.name,
       brands: food.brand ?? '',
       nutriments: {
@@ -1052,7 +949,7 @@ export default function FoodDetailsLayout({
               ? String(n.off_data.serving_size)
               : n.serving_size ? `${n.serving_size} g` : undefined;
           mockProduct = {
-            code: n.barcode || undefined,
+            code: typeof n.barcode === 'string' ? n.barcode : '',
             product_name: n.name,
             brands: n.brand || undefined,
             serving_size: servingSize,
@@ -1148,7 +1045,7 @@ export default function FoodDetailsLayout({
       setProduct(mockProduct);
       coachDetailsOwnerRef.current=user.id;setCoachDetailsOwner(user.id);setSavedCoachServing({owner:user.id,itemId:itemId!,description:typeof privateDataItem.serving_description==='string'?privateDataItem.serving_description:null,details:localCoachDetails});
       const mealDetailsService=coachDailyServices.experience;
-       if(hasPrivateLink&&mealDetailsService){void mealDetailsService.savedDetails(savedMealId).then(async resolved=>{if(!resolved)return;const {data:{user:resolvedOwner}}=await supabase.auth.getUser();if(!isCurrent()||!resolvedOwner||resolvedOwner.id!==user.id||coachDetailsOwnerRef.current!==user.id)return;const crossDeviceDetails={...resolved,ingredients:localCoachDetails?.ingredients??[],instructions:localCoachDetails?.instructions?.length?localCoachDetails.instructions:resolved.instructions,portion:localCoachDetails?.portion||resolved.portion,source:resolved.source??localCoachDetails?.source??null};setSavedCoachServing(current=>current?.owner===user.id&&current.itemId===itemId?{...current,details:crossDeviceDetails}:current);}).catch(()=>{});}
+       if(hasPrivateLink&&mealDetailsService){void mealDetailsService.savedDetails(savedMealId).then(async (resolved: CoachPrivateMealDetails | null)=>{if(!resolved)return;const {data:{user:resolvedOwner}}=await supabase.auth.getUser();if(!isCurrent()||!resolvedOwner||resolvedOwner.id!==user.id||coachDetailsOwnerRef.current!==user.id)return;const crossDeviceDetails={...resolved,ingredients:localCoachDetails?.ingredients??[],instructions:localCoachDetails?.instructions?.length?localCoachDetails.instructions:resolved.instructions,portion:localCoachDetails?.portion||resolved.portion,source:resolved.source??localCoachDetails?.source??null};setSavedCoachServing(current=>current!==null&&current.owner===user.id&&current.itemId===itemId?{...current,details:crossDeviceDetails}:current);}).catch(()=>{});}
 
       setPer100Macros({
         calories: per100Cals,
@@ -1197,7 +1094,16 @@ export default function FoodDetailsLayout({
       const desc = (mealItem.serving_description || '').toLowerCase().trim();
       const isContinuousUnit = /^\d+(\.\d+)?\s*(g|oz|lb|ml|tsp|tbsp|cup|fl\s*oz|teaspoon|tablespoon)\b/i.test(desc);
 
-      if (isContinuousUnit) {
+      savedOffDataRef.current = (mealItem as any).off_data && typeof (mealItem as any).off_data === 'object' ? (mealItem as any).off_data : null;
+      const snapshot = readSavedPortion(savedOffDataRef.current?._macrogoal_selected_portion_v1,rawQuantity,totalGrams)
+        || (isSavedMealTable ? readSavedPortionLabel((mealItem as any).serving_unit,rawQuantity,totalGrams) : null);
+      setSavedPortion(snapshot);
+      if(snapshot){
+        setServingAmount(snapshot.gramsPerUnit);
+        setNumberOfServings(String(rawQuantity));
+        setSelectedServingOptionKey('saved_portion');
+        setEditDefaultGramsPerUnit(null);
+      } else if (isContinuousUnit) {
         // Saved with a continuous unit (g/oz/lb/ml/tsp/tbsp/cup/fl oz) — servingAmount = gramsPerUnit,
         // numberOfServings = how many of those units were consumed.
         if (/\bg\b/.test(desc)) {
@@ -1328,6 +1234,8 @@ export default function FoodDetailsLayout({
         return;
       }
       if (!food_item_id || mode !== 'view') return;
+      // Search/scan already carries a coherent USDA snapshot; do not replace its selected grams.
+      if(offData){try{if(JSON.parse(offData)._usda_fdc_id)return;}catch{}}
 
       let active = true;
       const requestedOffData = offData;
@@ -1360,7 +1268,7 @@ export default function FoodDetailsLayout({
               : n.serving_size ? `${n.serving_size} g` : undefined;
 
           const refreshedProduct: OpenFoodFactsProduct = {
-            code: n.barcode || undefined,
+            code: typeof n.barcode === 'string' ? n.barcode : '',
             product_name: n.name,
             brands: n.brand || undefined,
             serving_size: servingSize,
@@ -1437,9 +1345,10 @@ export default function FoodDetailsLayout({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const foodSource = prod.code ? 'barcode' : 'library';
-      const foodCode = prod.code || undefined;
-      const favStatus = await isFavorite(user.id, foodSource, foodCode, prod.product_name, prod.brands || undefined);
+      const foodCode = catalogPackageBarcode(prod) || undefined;
+      const foodSource = foodCode ? 'barcode' : 'library';
+      const favStatus = await isFavorite(user.id, foodSource, foodCode, prod.product_name, prod.brands || undefined)
+        || (!foodCode && !!prod.code && await isFavorite(user.id, 'barcode', prod.code, prod.product_name, prod.brands || undefined));
       console.log('[FoodDetails] checkFavoriteStatus result:', favStatus, 'for', prod.product_name);
       if (isCurrent()) setIsFav(favStatus);
     } catch (error) {
@@ -1463,15 +1372,17 @@ export default function FoodDetailsLayout({
 
       const nutrition = extractNutrition(product);
       const servingInfo = extractServingSize(product);
-      const foodSource = product.code ? 'barcode' : 'library';
-      const foodCode = product.code || undefined;
+      const foodCode = catalogPackageBarcode(product) || undefined;
+      const foodSource = foodCode ? 'barcode' : 'library';
 
       console.log('[FoodDetails] Toggling favorite for:', product.product_name, 'source:', foodSource, 'code:', foodCode);
 
+      // Legacy internal-code favorites can still be removed, but new saves never create one.
+      const legacyFavorite = !foodCode && !!product.code && await isFavorite(user.id,'barcode',product.code,product.product_name,product.brands || undefined);
       const newFavStatus = await toggleFavorite(
         user.id,
-        foodSource,
-        foodCode,
+        legacyFavorite ? 'barcode' : foodSource,
+        legacyFavorite ? product.code : foodCode,
         {
           food_name: product.product_name || product.generic_name || 'Unknown Product',
           brand: product.brands || undefined,
@@ -1510,7 +1421,9 @@ export default function FoodDetailsLayout({
     // Discrete units (default / natural_unit / natural_serving) must be whole numbers.
     // Continuous units (g/oz/lb) can be fractional.
     const isDiscrete = option.key === 'default' || option.key === 'natural_unit' || option.key === 'natural_serving';
-    if (isDiscrete) {
+    if(option.key.startsWith('portion:') || option.key==='saved_portion' || (mode!=='edit' && !!product?._portion_evidence)) {
+      setNumberOfServings(String(newNumberOfServings));
+    } else if (isDiscrete) {
       const rounded = Math.max(1, Math.round(newNumberOfServings));
       setNumberOfServings(rounded.toString());
     } else {
@@ -1560,7 +1473,12 @@ export default function FoodDetailsLayout({
    * Returns null if the product has no usable name.
    */
   const upsertFoodItem = async (prod: OpenFoodFactsProduct): Promise<string | null> => {
-    const barcode = prod.code?.trim() || null;
+    // USDA IDs are not barcodes. Existing provider rows are never overwritten by a client snapshot.
+    if(prod._usda_fdc_id){
+      const {data}=await (supabase as SupabaseClient).from('food_items').select('id').eq('usda_fdc_id',prod._usda_fdc_id).maybeSingle();
+      return data?.id??null;
+    }
+    const barcode = catalogPackageBarcode(prod);
     const pName = (prod.product_name || prod.generic_name || '').trim();
     const pBrand = (prod.brands || '').trim() || null;
     if (!pName) return null;
@@ -1664,29 +1582,13 @@ export default function FoodDetailsLayout({
         .maybeSingle();
       if (existing) {
         console.log('[FoodDetails] upsertFoodItem: found by barcode, id=', existing.id);
-        await supabase.from('food_items').update(payload).eq('id', existing.id);
-        // Non-blocking enrichment
-        enrichWithUSDA(prod, existing.id).catch(err =>
-          console.warn('[FoodDetails] enrichWithUSDA failed silently:', err)
-        );
+        // Normal selection never overwrites catalog evidence or confirmed corrections.
         return existing.id;
       }
     }
 
-    // 2. Try to find by name + brand (use limit(1) to handle duplicates gracefully)
-    let nameQuery = supabase.from('food_items').select('id').ilike('name', pName).limit(1);
-    if (pBrand) nameQuery = nameQuery.ilike('brand', pBrand);
-    const { data: existingByNameRows } = await nameQuery;
-    const existingByName = existingByNameRows?.[0] ?? null;
-    if (existingByName) {
-      console.log('[FoodDetails] upsertFoodItem: found by name+brand, id=', existingByName.id);
-      await supabase.from('food_items').update(payload).eq('id', existingByName.id);
-      // Non-blocking enrichment
-      enrichWithUSDA(prod, existingByName.id).catch(err =>
-        console.warn('[FoodDetails] enrichWithUSDA failed silently:', err)
-      );
-      return existingByName.id;
-    }
+    // Names do not establish provider identity or an equivalent formulation.
+    if (!barcode) return null;
 
     // 3. Insert new row
     const { data: inserted, error: insertErr } = await supabase
@@ -1699,10 +1601,6 @@ export default function FoodDetailsLayout({
       return null;
     }
     console.log('[FoodDetails] upsertFoodItem: inserted new food_item, id=', inserted.id);
-    // Non-blocking enrichment
-    enrichWithUSDA(prod, inserted.id).catch(err =>
-      console.warn('[FoodDetails] enrichWithUSDA failed silently:', err)
-    );
     return inserted.id;
   };
 
@@ -1720,7 +1618,7 @@ export default function FoodDetailsLayout({
       const foodName = (product.product_name || product.generic_name || 'Unknown Product').trim();
       const ingredient = {
         name: foodName,
-        grams: Math.round(totalGrams),
+        grams: totalGrams,
         kcal: Math.round(macros.calories),
         protein: Math.round(macros.protein),
         carbs: Math.round(macros.carbs),
@@ -1751,8 +1649,16 @@ export default function FoodDetailsLayout({
       const baseServing = extractServingSize(product);
       const servingsCountForDisplay = parseFloat(numberOfServings) || 1;
 
+      const verifiedPortions = product._serving_authority==='confirmed_correction' ? [] : readUsdaPortions(product._portion_evidence,product._usda_fdc_id || '');
+      const selectedPortion = selectedServingOptionKey === 'saved_portion' ? savedPortion
+        : selectedServingOptionKey.startsWith('portion:') ? (()=>{const p=readUsdaPortions(product._portion_evidence,product._usda_fdc_id || '').find(p=>'portion:'+p.key===selectedServingOptionKey);return p?{description:p.description,gramsPerUnit:p.grams/p.amount}:null;})()
+        : ['default','natural_unit'].includes(selectedServingOptionKey) && verifiedPortions.length===1 ? {description:verifiedPortions[0].description,gramsPerUnit:verifiedPortions[0].grams/verifiedPortions[0].amount} : null;
+      const portionSnapshot = selectedPortion ? savedPortionSnapshot(selectedPortion.description,servingsCountForDisplay,totalGrams) : null;
+      const saveOffData = {...(mode==='edit'?savedOffDataRef.current:product),_macrogoal_selected_portion_v1:portionSnapshot};
       let servingDescription: string;
-      if (selectedServingOptionKey === 'default') {
+      if (selectedPortion) {
+        servingDescription=portionDescription(selectedPortion.description,servingsCountForDisplay,totalGrams);
+      } else if (selectedServingOptionKey === 'default') {
         // Use the label from the 'default' servingOption to extract the unit name.
         // This is more reliable than baseServing.description in edit mode because
         // buildMockProductFromFoodItem may produce a plain-grams description (e.g. "50 g")
@@ -1869,6 +1775,7 @@ export default function FoodDetailsLayout({
               fiber: safeMacros.fiber,
               serving_description: servingDescription,
               grams: totalGrams,
+              ...(portionSnapshot || savedOffDataRef.current?._macrogoal_selected_portion_v1 ? {off_data:saveOffData} : {}),
             };
         const { error } = await supabase
           .from(itemTable ?? 'meal_items')
@@ -1895,7 +1802,14 @@ export default function FoodDetailsLayout({
         const foodName = (product.product_name || product.generic_name || 'Unknown Product').trim();
         const foodBrand = (product.brands || '').trim();
         // barcode may be undefined for search results; only include when present
-        const foodBarcode = product.code && product.code.trim().length > 0 ? product.code.trim() : null;
+        const foodBarcode = catalogPackageBarcode(product);
+        let manualFoodId: string | null = null;
+        if(product._manual_food_id){
+          if(product._manual_owner_id!==user.id)throw Error('manual_owner_changed');
+          const {data:owned,error}=await supabase.from('foods').select('id,serving_amount,serving_unit,calories,protein,carbs,fats,fiber').eq('id',product._manual_food_id).eq('created_by',user.id).maybeSingle();
+          if(error||!owned||owned.serving_amount!==100||owned.serving_unit!=='g'||owned.calories!==nutrition.calories||owned.protein!==nutrition.protein||owned.carbs!==nutrition.carbs||owned.fats!==nutrition.fat||owned.fiber!==nutrition.fiber)throw Error('manual_food_changed');
+          manualFoodId=owned.id;
+        }
 
         // CRITICAL: foods table stores per-100g values, NOT scaled serving values.
         // Using macros (scaled) here was the root cause of the null constraint violation
@@ -1916,7 +1830,7 @@ export default function FoodDetailsLayout({
 
         if (context === 'my_meals_builder' || context === 'my-meals') {
           // Step 1: Find or create the food record so we have a real food_id for the draft
-          const { data: existingFoodForDraft, error: searchErrorForDraft } = await supabase
+          const { data: existingFoodForDraft, error: searchErrorForDraft } = manualFoodId ? {data:{id:manualFoodId},error:null} : await supabase
             .from('foods')
             .select('id')
             .eq('name', foodName)
@@ -1962,7 +1876,8 @@ export default function FoodDetailsLayout({
             food_name: foodName,
             food_brand: foodBrand || undefined,
             serving_amount: servingAmount || 100,
-            serving_unit: servingUnit,
+            serving_unit: portionSnapshot ? servingDescription : servingUnit,
+            serving_description: servingDescription,
             servings_count: servingsCount,
             calories: safeMacros.calories,
             protein: safeMacros.protein,
@@ -1985,7 +1900,7 @@ export default function FoodDetailsLayout({
           }
 
           // Step 1: Find or create the food record
-          const { data: existingFood, error: searchError } = await supabase
+          const { data: existingFood, error: searchError } = manualFoodId ? {data:{id:manualFoodId},error:null} : await supabase
             .from('foods')
             .select('id')
             .eq('name', foodName)
@@ -2074,7 +1989,7 @@ export default function FoodDetailsLayout({
               fiber: safeMacros.fiber,
               serving_description: servingDescription,
               grams: totalGrams,
-              off_data: offData ? JSON.parse(offData) : null,
+              off_data: saveOffData,
             }]);
 
           if (mealItemError) {

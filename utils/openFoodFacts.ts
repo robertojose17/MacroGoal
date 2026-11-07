@@ -1,3 +1,5 @@
+import { exactFdcId } from './catalogSelection';
+import { applyUsdaPortion } from '../supabase/functions/_shared/foodPortions.mjs';
 
 import { singularizeUnit } from '@/utils/stringUtils';
 
@@ -21,10 +23,17 @@ import { singularizeUnit } from '@/utils/stringUtils';
 
 export interface OpenFoodFactsProduct {
   code: string;
+  _portion_evidence?: unknown;
+  _db_id?: string;
+  _serving_authority?: 'confirmed_correction';
+  _manual_food_id?: string;
+  _manual_owner_id?: string;
   product_name?: string;
   image_url?: string;
   generic_name?: string;
   brands?: string;
+  ingredients_text?: string;
+  allergens_tags?: string[];
   serving_size?: string;
   serving_quantity?: string | number;
   serving_unit?: string;
@@ -111,6 +120,7 @@ export interface OpenFoodFactsProduct {
     'riboflavin_100g'?: number;
     'niacin_100g'?: number;
     'folates_100g'?: number;
+    'folate_100g'?: number;
     'pantothenic-acid_100g'?: number;
 
     // Minerals
@@ -211,9 +221,9 @@ export function extractServingSize(product: OpenFoodFactsProduct): ServingSizeIn
   try {
     if (unitName && unitCount > 1) {
       // e.g. "4 cookies (29 g)" with serving_quantity=29 → grams per cookie = 7.25
-      const gramsPerUnit = parseFloat((totalGrams / unitCount).toFixed(2));
+      const gramsPerUnit = totalGrams / unitCount;
       const description = `${unitCount} ${unitName}s`;
-      const displayText = `1 ${unitName} (${gramsPerUnit} g)`;
+      const displayText = `1 ${unitName} (${Number(gramsPerUnit.toFixed(2))} g)`;
       return {
         description,
         grams: gramsPerUnit,
@@ -230,7 +240,7 @@ export function extractServingSize(product: OpenFoodFactsProduct): ServingSizeIn
       const displayText = `1 ${unitName} (${roundedGrams} g)`;
       return {
         description,
-        grams: roundedGrams,
+        grams: totalGrams,
         displayText,
         hasValidGrams,
         isEstimated: false,
@@ -252,7 +262,7 @@ export function extractServingSize(product: OpenFoodFactsProduct): ServingSizeIn
     const displayText = `1 serving (${roundedGrams} g)`;
     return {
       description,
-      grams: roundedGrams,
+      grams: totalGrams,
       displayText,
       hasValidGrams,
       isEstimated: false,
@@ -523,42 +533,38 @@ export async function searchOpenFoodFacts(query: string): Promise<OpenFoodFactsS
  */
 export function extractNutritionPerServing(
   product: OpenFoodFactsProduct,
-  servingSizeGrams: number  // total grams of the standard serving (e.g. 31 for 1 scoop)
+  servingSizeGrams: number
 ): { calories: number; protein: number; carbs: number; fat: number; fiber: number; sugars: number } {
   const nutriments = product.nutriments || {};
-  const multiplier = servingSizeGrams > 0 ? servingSizeGrams / 100 : 1;
-
-  // Helper: use _serving if available, else calculate from _100g × multiplier
-  function perServing(servingKey: string, per100Key: string, altKey?: string): number {
-    if (nutriments[servingKey as keyof typeof nutriments] != null) return Math.round(Number(nutriments[servingKey as keyof typeof nutriments]) * 10) / 10;
-    if (nutriments[per100Key as keyof typeof nutriments] != null) return Math.round(Number(nutriments[per100Key as keyof typeof nutriments]) * multiplier * 10) / 10;
-    if (altKey && nutriments[altKey as keyof typeof nutriments] != null) return Math.round(Number(nutriments[altKey as keyof typeof nutriments]) * multiplier * 10) / 10;
-    return 0;
-  }
-
-  let calories = 0;
-  if (nutriments['energy-kcal_serving'] != null) {
-    calories = Math.round(Number(nutriments['energy-kcal_serving']));
-  } else if (nutriments['energy-kcal_100g'] != null) {
-    calories = Math.round(Number(nutriments['energy-kcal_100g']) * multiplier);
-  } else if (nutriments['energy-kcal'] != null) {
-    calories = Math.round(Number(nutriments['energy-kcal']) * multiplier);
-  } else if (nutriments['energy_100g'] != null) {
-    calories = Math.round((Number(nutriments['energy_100g']) / 4.184) * multiplier);
-  }
-  if (isNaN(calories) || calories < 0) calories = 0;
-
-  const protein = perServing('proteins_serving', 'proteins_100g', 'proteins');
-  const carbs   = perServing('carbohydrates_serving', 'carbohydrates_100g', 'carbohydrates');
-  const fat     = perServing('fat_serving', 'fat_100g', 'fat');
-  const fiber   = perServing('fiber_serving', 'fiber_100g', 'fiber');
-  const sugars  = perServing('sugars_serving', 'sugars_100g', 'sugars');
-
-  console.log('[OpenFoodFacts] extractNutritionPerServing:', {
-    servingSizeGrams, multiplier, calories, protein, carbs, fat, fiber
-  });
-
-  return { calories, protein, carbs, fat, fiber, sugars };
+  const grams = Number.isFinite(servingSizeGrams) && servingSizeGrams > 0 ? servingSizeGrams : 100;
+  const originalGrams = Number(product.serving_quantity);
+  const value = (key: string): number | null => {
+    const raw = nutriments[key as keyof typeof nutriments];
+    const n = Number(raw);
+    return raw != null && Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  // A provider's _serving value describes the full labeled serving, not necessarily one selected unit.
+  const scaled = (per100Key: string, servingKey: string, alternate?: string): number => {
+    const per100 = value(per100Key) ?? (alternate ? value(alternate) : null);
+    if (per100 !== null) return per100 * grams / 100;
+    const serving = value(servingKey);
+    return serving !== null && Number.isFinite(originalGrams) && originalGrams > 0
+      ? serving * grams / originalGrams : 0;
+  };
+  const energy100 = value('energy-kcal_100g') ?? value('energy-kcal');
+  const kj100 = value('energy_100g');
+  const calories = energy100 !== null ? energy100 * grams / 100
+    : kj100 !== null ? kj100 / 4.184 * grams / 100
+    : scaled('energy-kcal_100g', 'energy-kcal_serving');
+  const rounded = (n: number) => Math.round(n * 10) / 10;
+  return {
+    calories: Math.round(calories),
+    protein: rounded(scaled('proteins_100g', 'proteins_serving', 'proteins')),
+    carbs: rounded(scaled('carbohydrates_100g', 'carbohydrates_serving', 'carbohydrates')),
+    fat: rounded(scaled('fat_100g', 'fat_serving', 'fat')),
+    fiber: rounded(scaled('fiber_100g', 'fiber_serving', 'fiber')),
+    sugars: rounded(scaled('sugars_100g', 'sugars_serving', 'sugars')),
+  };
 }
 
 /**
@@ -583,4 +589,11 @@ export function mapOpenFoodFactsToFood(product: OpenFoodFactsProduct): any {
     is_favorite: false,
     is_from_openfoodfacts: true, // Flag to indicate external source
   };
+}
+
+/** New catalog selections only; historical edit loaders must preserve saved grams. */
+export function normalizeUsdaProduct(product:OpenFoodFactsProduct):OpenFoodFactsProduct {
+ if(product._serving_authority==='confirmed_correction')return product;
+ const fdcId=exactFdcId(product._usda_fdc_id);
+ return fdcId ? applyUsdaPortion({...product,_usda_fdc_id:fdcId},product._portion_evidence) : product;
 }

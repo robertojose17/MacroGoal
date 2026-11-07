@@ -1,14 +1,16 @@
 import { recoveryRouteContext } from '@/utils/recoveryRouteContext';
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { ActivityIndicator, Image, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { buildSyntheticOffData } from '@/utils/servingParser';
 import { recoveryDiscoveryOnce, recoveryRefine, expireRecovery } from '@/utils/recoveryDiscoveryOnce';
+import { webCameraJpegBytes } from '@/utils/cameraCaptureBytes';
+import { unknownBarcodeAttempt, runUnknownAttempt, type UnknownAttempt } from '@/utils/unknownBarcodeAttempt';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 type Candidate = {
@@ -17,15 +19,19 @@ type Candidate = {
   can_confirm:boolean; proposal?:string; conflicts?:string[]; label_issue?:string;
   provenance:{kind:string;url:string;retrieved_at:string};
 };
-type Review = {session?:string;candidates?:Candidate[];photo?:Candidate|null;issues?:{field:string;reason:string}[];search_code?:string;source_links?:string[]};
-type Stage = 'search'|'results'|'front'|'label';
-export default function FoodPhotoCaptureScreen() {
+type Review = {session?:string;candidates?:Candidate[];photo?:Candidate|null;issues?:{field:string;reason:string}[];search_code?:string;source_links?:string[];next_step?:string;front_photo_url?:string;code?:string};
+type Stage = 'search'|'results'|'front'|'label'|'front_prompt'|'label_prompt'|'manual'|'unavailable';
+export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEnabled?:boolean}) {
   const params=useLocalSearchParams(),router=useRouter(),{i18n}=useTranslation();
   const es=i18n.language.startsWith('es'),dark=String(useColorScheme())==='dark';
   const tr=(en:string,spanish:string)=>es?spanish:en;
   const param=(name:string)=>typeof params[name]==='string'?params[name] as string:'';
   const name=param('name'),brand=param('brand');
-  const [stage,setStage]=useState<Stage>('search'),[busy,setBusy]=useState(true),[error,setError]=useState('');
+  const unknown=param('type')==='new_product';
+  const owner=useRef('');
+  const attempt=useRef<UnknownAttempt|null>(null),generation=useRef(0),focused=useRef(false);
+  useFocusEffect(React.useCallback(()=>{focused.current=true;generation.current++;return()=>{focused.current=false;generation.current++;};},[]));
+  const [stage,setStage]=useState<Stage>(unknown?'front_prompt':'search'),[busy,setBusy]=useState(!unknown),[error,setError]=useState('');
   const [review,setReview]=useState<Review>({}),[selected,setSelected]=useState<Candidate|null>(null);
   const [permission,requestPermission]=useCameraPermissions();
   const recoveryKey=useRef('');
@@ -45,9 +51,10 @@ export default function FoodPhotoCaptureScreen() {
     };
     return messages[code]||tr('We could not complete this step. Your product data has not been confirmed. Please try again.','No pudimos completar este paso. Los datos no se han confirmado. Inténtalo de nuevo.');
   }
-  async function request(body:Record<string,unknown>) {
+  async function request(body:Record<string,unknown>,active=()=>focused.current) {
     const {data:{session}}=await supabase.auth.getSession();
-    if(!session)throw Error('auth');
+    if(!active())throw Error('cancelled');
+    if(!session||(unknown&&owner.current!==session.user.id))throw Error('auth');
     const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),150000);
     let response:Response;
     try { response=await fetch(SUPABASE_PROJECT_URL+'/functions/v1/vision-nutrition-extract',{
@@ -56,14 +63,16 @@ export default function FoodPhotoCaptureScreen() {
     }); } catch(error) { if(body.action==='recovery_confirm')throw Error('save_unknown');throw error; } finally { clearTimeout(timer); }
     let data:any;
     try{data=await response.json();}catch(error){if(body.action==='recovery_confirm')throw Error('save_unknown');throw error;}
+    if(unknown){const {data:{session:latest}}=await supabase.auth.getSession();if(!latest||latest.user.id!==owner.current)throw Error('auth');}
     if(!response.ok||data.status==='error'||data.status==='unavailable')throw Error(data.code||'unavailable');
     return data;
   }
-  async function operation(work:()=>Promise<void>) {
+  async function operation(work:(active:()=>boolean)=>Promise<void>) {
     if(inFlight.current)return;
     inFlight.current=true;setBusy(true);setError('');
-    try{await work();}catch(e){const code=e instanceof Error?e.message:'';setError(message(code));if(['expired_proposal','request_already_used_or_limit','save_conflict'].includes(code)){expireRecovery(recoveryKey.current);setStage('search');}}
-    finally{inFlight.current=false;setBusy(false);}
+    const current=generation.current,active=()=>focused.current&&generation.current===current;
+    try{await work(active);}catch(e){if(!active())return;const code=e instanceof Error?e.message:'';setError(message(code));if(unknown&&code==='auth'){setReview({});setSelected(null);setStage('unavailable');}if(['expired_proposal','request_already_used_or_limit','save_conflict'].includes(code)){expireRecovery(recoveryKey.current);if(!unknown)setStage('search');}}
+    finally{inFlight.current=false;if(active())setBusy(false);}
   }
   async function discover(retry=false,active=()=>true) {
     if(inFlight.current)return;
@@ -76,7 +85,85 @@ export default function FoodPhotoCaptureScreen() {
     } catch(e){if(active()){setError(message(e instanceof Error?e.message:''));setStage('search');}}
     finally{inFlight.current=false;if(active())setBusy(false);}
   }
-  useEffect(()=>{let active=true;void discover(false,()=>active);return()=>{active=false;inFlight.current=false;};},[]);
+  useFocusEffect(React.useCallback(()=>{
+    let mounted=true;const current=generation.current;const active=()=>mounted&&focused.current&&current===generation.current;
+    setBusy(false);
+    if(!unknown)void discover(false,active);
+    else void (async()=>{
+      setReview({});setSelected(null);setStage('front_prompt');setError('');front.current=null;owner.current='';attempt.current=null;
+      const {data:{session}}=await supabase.auth.getSession();
+      if(!active())return;
+      if(!session){setError(message('auth'));setStage('unavailable');return;}
+      owner.current=session.user.id;
+      attempt.current=unknownBarcodeAttempt(session.user.id,param('barcode'));
+      front.current=attempt.current.frontUrl||null;
+      if(attempt.current.pending) {
+        setBusy(true);
+        try{await attempt.current.pending;}catch{/* Never automatically replay an uncertain provider request. */}
+        if(!active())return;
+        setBusy(false);
+      }
+      if(attempt.current.review)applyUnknownReview(attempt.current.review);
+      else if(attempt.current.frontUrl)setStage('unavailable');
+    })().catch(()=>{if(active()){setError(message('auth'));setStage('unavailable');setBusy(false);}});
+    return()=>{mounted=false;};
+  },[unknown,param('barcode')]));
+  function applyUnknownReview(data:Review) {
+    setReview(data);setSelected(attempt.current?.selected||null);
+    if(data.code==='barcode_now_known'||data.next_step==='reload_product'){setStage('search');return;}
+    if(data.next_step==='manual'){setStage('manual');return;}
+    setStage((data.candidates||[]).some(c=>c.can_confirm)||data.photo?.can_confirm?'results':attempt.current?.rearAttempted?'manual':'label_prompt');
+  }
+  function manualEntry() {
+    if(inFlight.current||selected)return;
+    generation.current++;
+    router.replace({pathname:'/my-foods-create',params:{...recoveryRouteContext(params),recoveryManual:'1'}});
+  }
+  async function beginUnknownPhoto(kind:'front'|'label') {
+    if(inFlight.current)return;
+    const current=generation.current;
+    if(kind==='front'&&attempt.current?.frontUrl) {
+      const a=attempt.current;inFlight.current=true;setBusy(true);
+      try {if(a.pending)await a.pending;}catch{/* Keep this attempt; never rebill on resume. */}
+      finally {inFlight.current=false;}
+      if(!focused.current||generation.current!==current)return;
+      setBusy(false);front.current=a.frontUrl||null;
+      if(a.review)applyUnknownReview(a.review);else setStage('unavailable');
+      return;
+    }
+    if(!unknownEnabled||(kind==='label'&&!review.session)) {
+      setError(tr('Photo recovery is unavailable for this attempt. You can continue to the next option.','La recuperación por foto no está disponible en este intento. Puedes continuar a la siguiente opción.'));
+      setStage('unavailable');return;
+    }
+    inFlight.current=true;
+    try {
+      const granted=permission?.granted||(await requestPermission()).granted;
+      if(!focused.current||generation.current!==current)return;
+      if(!granted){setError(tr('Camera access is unavailable. Continue to the next option or go back.','La cámara no está disponible. Continúa a la siguiente opción o vuelve atrás.'));setStage(kind==='front'?'unavailable':'manual');return;}
+      setError('');setStage(kind);
+    }catch{if(focused.current&&generation.current===current){setError(tr('The camera could not open. Continue to the next option.','No se pudo abrir la cámara. Continúa a la siguiente opción.'));setStage(kind==='front'?'unavailable':'manual');}}finally{inFlight.current=false;}
+  }
+  async function captureUnknown() {
+    const kind=stage;
+    await operation(async active=>{
+      const {data:{session}}=await supabase.auth.getSession();if(!active())return;if(!session)throw Error('auth');
+      if(owner.current&&owner.current!==session.user.id)throw Error('auth');owner.current=session.user.id;
+      const a=attempt.current||unknownBarcodeAttempt(session.user.id,param('barcode'));attempt.current=a;
+      // Never reinterpret an uncertain initial request as a new billable attempt.
+      if(kind==='front'&&a.frontUrl){if(a.review)applyUnknownReview(a.review);else setStage('unavailable');return;}
+      try {
+      const photo=await camera.current?.takePictureAsync({quality:0.8,...(Platform.OS==='web'?{base64:true,imageType:'jpg' as const}:{})});if(!active())return;
+      if(!photo?.uri)throw Error('capture_failed');
+      const url=await upload(photo,kind,active);if(!active())return;
+      if(kind==='front'){a.frontUrl=url;front.current=url;}
+      else a.rearAttempted=true;
+        const data=await runUnknownAttempt(a,()=>request(kind==='front'
+          ?{action:'recovery_discover',barcode:param('barcode'),photo_front_url:url,request_id:a.requestId}
+          :{action:'recovery_photos',session:review.session,photo_label_url:url},active));
+        if(active())applyUnknownReview(data);
+      }catch(e){if(active())setStage(kind==='front'?'unavailable':'manual');throw e;}
+    });
+  }
   async function beginPhotos() {
     if(!review.session)return;
     if(!permission?.granted) {
@@ -85,39 +172,48 @@ export default function FoodPhotoCaptureScreen() {
     }
     front.current=null;setError('');setStage('front');
   }
-  async function upload(uri:string,kind:string) {
+  async function upload(photo:{uri:string;base64?:string},kind:string,active=()=>focused.current) {
     const {data:{session}}=await supabase.auth.getSession();if(!session)throw Error('auth');
-    const base64=await FileSystem.readAsStringAsync(uri,{encoding:FileSystem.EncodingType.Base64});
-    const binary=atob(base64),bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
+    if(!active())throw Error('cancelled');
+    let bytes:Uint8Array;
+    if(Platform.OS==='web')bytes=webCameraJpegBytes(photo);
+    else {
+      const base64=await FileSystem.readAsStringAsync(photo.uri,{encoding:FileSystem.EncodingType.Base64});
+      const binary=atob(base64);bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
+    }
+    if(!active())throw Error('cancelled');
+    if(unknown&&owner.current!==session.user.id)throw Error('auth');
     const path='submissions/'+session.user.id+'/'+Date.now()+'_'+kind+'.jpg';
     const {error:uploadError}=await supabase.storage.from('food-photos').upload(path,bytes,{contentType:'image/jpeg',upsert:false});
     if(uploadError)throw Error('upload_failed');
     return supabase.storage.from('food-photos').getPublicUrl(path).data.publicUrl;
   }
   async function capture() {
-    await operation(async()=>{
-      const photo=await camera.current?.takePictureAsync({quality:0.8});
-      if(!photo?.uri)throw Error('capture_failed');
-      const url=await upload(photo.uri,stage);
+    if(unknown){await captureUnknown();return;}
+    await operation(async active=>{
+      const photo=await camera.current?.takePictureAsync({quality:0.8,...(Platform.OS==='web'?{base64:true,imageType:'jpg' as const}:{})});
+      if(!active())return;if(!photo?.uri)throw Error('capture_failed');
+      const url=await upload(photo,stage,active);if(!active())return;
       if(stage==='front'){front.current=url;setStage('label');return;}
       const data=await recoveryRefine(recoveryKey.current,()=>request({action:'recovery_photos',session:review.session,photo_front_url:front.current,photo_label_url:url})).catch(error=>{setStage('search');throw error;});
-      setReview(data);setStage('results');
+      if(active()){setReview(data);setStage('results');}
     });
   }
   async function select(candidate:Candidate) {
     if(inFlight.current||!candidate.can_confirm||!candidate.proposal)return;
     // An uncertain save can only retry its original signed proposal/receipt.
     if(selected&&selected.proposal!==candidate.proposal)return;
-    setSelected(candidate);setSaving(true);
-    try { await operation(async()=>{
-      const data=await request({action:'recovery_confirm',proposal:candidate.proposal,confirmations:{identity:true,serving:true,nutrition:true,shared:true}});
+    setSelected(candidate);if(unknown&&attempt.current)attempt.current.selected=candidate;setSaving(true);
+    try { await operation(async active=>{
+      const data=await request({action:'recovery_confirm',proposal:candidate.proposal,confirmations:{identity:true,serving:true,nutrition:true,shared:true}},active);
+      if(!active())return;
       if(data.status!=='approved'||!data.food_item?.id)throw Error('save_unknown');
       finish(data.food_item);
-    }); } finally {setSaving(false);}
+    }); } finally {if(focused.current)setSaving(false);}
   }
   function finish(saved:any) {
     const destination={pathname:'/food-details' as const,params:{
-      offData:JSON.stringify(buildSyntheticOffData(saved)),food_item_id:saved.id,source:'barcode',
+      offData:JSON.stringify(buildSyntheticOffData(saved,{preserveServing:true})),food_item_id:saved.id,source:'barcode',
       ...recoveryRouteContext(params),recoverySaved:'1',
     }};
     if(param('type')==='correction')router.dismissTo(destination);
@@ -158,10 +254,10 @@ export default function FoodPhotoCaptureScreen() {
   const cameraStage=stage==='front'||stage==='label';
   return <SafeAreaView style={[styles.screen,{backgroundColor:background}]} edges={['top','bottom']}>
     <View style={styles.header}>
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel={tr('Back','Atrás')} disabled={saving} onPress={()=>{if(cameraStage)setStage('results');else router.back();}}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={tr('Back','Atrás')} disabled={saving} onPress={()=>{generation.current++;if(cameraStage){setBusy(false);setStage(unknown?(stage==='front'?'front_prompt':'label_prompt'):'results');}else router.back();}}>
         <Text style={[styles.back,{color:ink}]}>{'\u2039'}</Text>
       </TouchableOpacity>
-      <Text style={[styles.heading,{color:ink}]}>{tr('Correct product data','Corregir datos del producto')}</Text>
+      <Text style={[styles.heading,{color:ink}]}>{unknown?tr('Find your product','Encuentra tu producto'):tr('Correct product data','Corregir datos del producto')}</Text>
     </View>
     {cameraStage?<View style={{flex:1}}>
       <CameraView ref={camera} style={{flex:1}} facing="back"/>
@@ -174,7 +270,29 @@ export default function FoodPhotoCaptureScreen() {
     </View>:<ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {!!error&&<Text accessibilityRole="alert" style={styles.warning}>{error}</Text>}
       {busy&&<View style={styles.loading}><ActivityIndicator/><Text style={{color:ink}}>{saving?tr('Saving product data','Guardando los datos del producto'):tr('Searching for your product data','Buscando los datos de tu producto')}</Text></View>}
-      {!busy&&stage==='search'&&!!error&&button(tr('Retry this scanned product','Reintentar este producto escaneado'),()=>void discover(true))}
+      {!unknown&&!busy&&stage==='search'&&!!error&&button(tr('Retry this scanned product','Reintentar este producto escaneado'),()=>void discover(true))}
+      {unknown&&!busy&&stage==='front_prompt'&&<>
+        <Text style={[styles.title,{color:ink}]}>{tr('Photograph the package front','Toma una foto del frente del empaque')}</Text>
+        <Text style={[styles.text,{color:ink}]}>{tr('We will use the name, brand and flavor to search online. You choose your product before anything is saved.','Usaremos el nombre, la marca y el sabor para buscar en internet. Tú eliges el producto antes de guardar nada.')}</Text>
+        {button(tr('Take front photo','Tomar foto del frente'),()=>void beginUnknownPhoto('front'))}
+      </>}
+      {unknown&&!busy&&stage==='label_prompt'&&<>
+        <Text style={[styles.title,{color:ink}]}>{tr('Try the nutrition label','Prueba con la etiqueta nutricional')}</Text>
+        <Text style={[styles.text,{color:ink}]}>{tr('No usable online option is available. Photograph the back with the serving size and all nutrition rows.','No hay una opción utilizable de internet. Fotografía la parte de atrás con la porción y todos los nutrientes.')}</Text>
+        {button(tr('Take rear label photo','Tomar foto de la etiqueta de atrás'),()=>void beginUnknownPhoto('label'))}
+        {button(tr('Label unavailable — enter manually','Etiqueta no disponible — ingresar manualmente'),()=>setStage('manual'),false,true)}
+      </>}
+      {unknown&&!busy&&stage==='unavailable'&&<>
+        <Text style={[styles.title,{color:ink}]}>{tr('Photo recovery unavailable','Recuperación por foto no disponible')}</Text>
+        <Text style={[styles.text,{color:ink}]}>{tr('We could not obtain a usable photo review session. A rear photo cannot be analyzed in this attempt. You can go back or enter the product manually; no new online search will run automatically.','No pudimos obtener una sesión de revisión utilizable. No podemos analizar la foto de atrás en este intento. Puedes volver o ingresar el producto manualmente; no se hará otra búsqueda automáticamente.')}</Text>
+        {button(tr('Continue to manual entry','Continuar al ingreso manual'),()=>setStage('manual'),!!selected)}
+      </>}
+      {unknown&&!busy&&stage==='manual'&&<>
+        <Text style={[styles.title,{color:ink}]}>{tr('Enter the product manually','Ingresa el producto manualmente')}</Text>
+        <Text style={[styles.text,{color:ink}]}>{tr('We could not recover complete product data. Enter the values from your package and review them before adding.','No pudimos recuperar datos completos. Ingresa los valores del empaque y revísalos antes de añadirlos.')}</Text>
+        {button(tr('Enter manually','Ingresar manualmente'),manualEntry,!!selected)}
+      </>}
+      {unknown&&!busy&&stage==='search'&&button(tr('Look up updated product','Consultar producto actualizado'),()=>router.replace({pathname:'/barcode-lookup',params:{...recoveryRouteContext(params),barcode:param('barcode')}}))}
       {(!busy||saving)&&stage==='results'&&<>
         <Text style={[styles.title,{color:ink}]}>{review.photo?tr('Compare with your package','Compara con tu empaque'):usableCandidates.length?tr('Product data found','Datos del producto encontrados'):tr('Package photos needed','Necesitamos fotos del empaque')}</Text>
         {!!review.search_code&&<Text style={styles.warning}>{tr('Web search could not finish. You can continue with clear package photos.','La búsqueda web no pudo terminar. Puedes continuar con fotos claras del empaque.')}</Text>}
@@ -185,7 +303,8 @@ export default function FoodPhotoCaptureScreen() {
         {(review.issues||[]).map((issue,index)=><Text key={index} style={styles.warning}>{issue.field==='analysis'
           ?tr('The analysis service could not finish. This does not mean your label is wrong. Please try a new photo attempt later.','El servicio de análisis no pudo terminar. Esto no significa que tu etiqueta esté mal. Intenta otra lectura más tarde.')
           :tr('Please show clearly: ','Muestra claramente: ')+(issue.field==='front'?tr('the product name, brand and exact variant','el nombre, marca y variante exactos'):fieldNames[issue.field]||fieldNames.label)+(issue.reason==='reads_disagree'?tr(' — the two readings disagree.',' — las dos lecturas no coinciden.'):'.')}</Text>)}
-        {button(review.photo?tr('Retake package photos','Volver a tomar fotos'):usableCandidates.length?tr('None of these — take package photos','Ninguno de estos — tomar fotos del empaque'):tr('Take package photos','Tomar fotos del empaque'),()=>void beginPhotos(),!review.session||!!selected,true)}
+        {!unknown&&button(review.photo?tr('Retake package photos','Volver a tomar fotos'):usableCandidates.length?tr('None of these — take package photos','Ninguno de estos — tomar fotos del empaque'):tr('Take package photos','Tomar fotos del empaque'),()=>void beginPhotos(),!review.session||!!selected,true)}
+        {unknown&&button(attempt.current?.rearAttempted?tr('These values are not usable — enter manually','Estos valores no sirven — ingresar manualmente'):tr('None of these — photograph rear label','Ninguno de estos — fotografiar etiqueta de atrás'),()=>setStage(attempt.current?.rearAttempted?'manual':'label_prompt'),!!selected,true)}
       </>}
     </ScrollView>}
   </SafeAreaView>;

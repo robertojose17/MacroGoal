@@ -1,3 +1,4 @@
+import { searchSelectionNeedsConfirmation, searchConfirmationRoute } from '@/utils/searchSelectionSafety';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -15,7 +16,6 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
-import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { type OpenFoodFactsProduct } from '@/utils/openFoodFacts';
 import { ResultSource, SearchResultItem, buildResultItem, mergeProducts } from '@/utils/foodSearchUtils';
@@ -44,11 +44,11 @@ const ResultRow = React.memo(
     isDark: boolean;
     onPress: (item: SearchResultItem) => void;
   }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const productName = item.product.product_name || item.product.generic_name || '';
     const brand = item.product.brands || '';
     const badge = SOURCE_BADGE[item.source];
-    const isVerified = item.source === 'supabase';
+    const isVerified = item.product._source === 'supabase' && !searchSelectionNeedsConfirmation(item.product);
 
     const handlePress = useCallback(() => {
       console.log('[FoodSearch] Product tapped:', productName, '| source:', item.source);
@@ -101,7 +101,7 @@ const ResultRow = React.memo(
                     </Text>
                   )}
                   <Text style={[styles.noNutritionText, { color: colors.warning || '#FF9500' }]}>
-                    {t('foodSearch.nutritionNotAvailable')}
+                    {item.requiresConfirmation ? (i18n.language.startsWith('es') ? 'Confirma la etiqueta nutricional' : 'Confirm nutrition label') : t('foodSearch.nutritionNotAvailable')}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -118,8 +118,7 @@ const ResultRow = React.memo(
     );
   },
   (prev, next) =>
-    prev.item.product.code === next.item.product.code &&
-    prev.item.source === next.item.source &&
+    prev.item === next.item &&
     prev.isDark === next.isDark,
 );
 
@@ -128,11 +127,11 @@ ResultRow.displayName = 'ResultRow';
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function FoodSearchScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  // Match the app's fixed light-palette policy without an impossible dark comparison.
+  const isDark = false;
 
   const mealType = (params.meal as string) || 'breakfast';
   const date = (params.date as string) || toLocalDateString();
@@ -149,7 +148,7 @@ export default function FoodSearchScreen() {
   const [hasSearched, setHasSearched] = useState(false);
 
   const searchInputRef = useRef<TextInput>(null);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   // Accumulated results map for the current query (reset on new query)
   const resultsMapRef = useRef<Map<string, SearchResultItem>>(new Map());
@@ -200,6 +199,7 @@ export default function FoodSearchScreen() {
         onSupabaseHit: (products) => {
           if (controller.signal.aborted) return;
           console.log('[FoodSearch] onSupabaseHit —', products.length, 'products');
+          resultsMapRef.current = new Map(); // Server response replaces provisional cache, including [].
           const merged = mergeProducts(resultsMapRef.current, products, 'supabase', query);
           setResults(merged);
         },
@@ -212,6 +212,11 @@ export default function FoodSearchScreen() {
         onError: (stage, error) => {
           if (controller.signal.aborted) return;
           console.warn('[FoodSearch] Search error at stage:', stage, error.message);
+          if (error.message === 'SEARCH_REVIEW_UPDATE_REQUIRED') {
+            resultsMapRef.current.clear(); setResults([]);
+            setErrorMessage(i18n.language.startsWith('es') ? 'Actualiza MacroGoal para revisar este alimento de forma segura. No se ha añadido nada.' : 'Update MacroGoal to review this food safely. Nothing has been added.');
+            return;
+          }
           // Only show error if we have no results at all
           setResults(prev => {
             if (prev.length === 0) {
@@ -224,19 +229,12 @@ export default function FoodSearchScreen() {
           if (controller.signal.aborted) return;
           console.log('[FoodSearch] Search complete for query:', query);
           setIsSearching(false);
-          // If still no results after all stages, show empty message
-          setResults(prev => {
-            if (prev.length === 0) {
-              setErrorMessage(null); // let renderEmptyState handle it
-            }
-            return prev;
-          });
         },
       },
       controller.signal,
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [i18n.language, t]);
 
   useEffect(() => {
     if (debounceTimerRef.current) {
@@ -244,7 +242,12 @@ export default function FoodSearchScreen() {
       debounceTimerRef.current = null;
     }
 
+    abortControllerRef.current?.abort();
+    resultsMapRef.current = new Map();
+    setResults([]);
+    setErrorMessage(null);
     const trimmedQuery = searchQuery.trim();
+    setIsSearching(trimmedQuery.length >= 2);
 
     if (trimmedQuery.length === 0) {
       console.log('[FoodSearch] Query empty — clearing results');
@@ -285,12 +288,16 @@ export default function FoodSearchScreen() {
 
   const handleSelectProduct = useCallback(
     (item: SearchResultItem) => {
+      if (searchSelectionNeedsConfirmation(item.product)) {
+        router.push(searchConfirmationRoute(item.product, { ...params, meal: mealType, date, mode, context, returnTo, mealId: targetMealId, planId }));
+        return;
+      }
       console.log('[FoodSearch] Product selected:', item.product.product_name, '| source:', item.source);
       console.log('[FoodSearch] Navigating to food-details, context:', context, 'returnTo:', returnTo);
-      if (item.source === 'supabase' && item.product.code) {
-        console.log('[FoodSearch] Logging food usage for supabase product:', item.product.code);
+      if (item.source === 'supabase' && item.product._db_id) {
+        console.log('[FoodSearch] Logging food usage for catalog item:', item.product._db_id);
         try {
-          logFoodUsage(item.product.code).catch(() => {});
+          logFoodUsage(item.product._db_id, 'search');
         } catch {
           // fire-and-forget, never block navigation
         }
@@ -310,7 +317,7 @@ export default function FoodSearchScreen() {
         },
       });
     },
-    [mealType, date, mode, context, returnTo, targetMealId, planId, router],
+    [mealType, date, mode, context, returnTo, targetMealId, planId, router, params],
   );
 
   const renderResultItem = useCallback(
@@ -468,6 +475,7 @@ export default function FoodSearchScreen() {
               value={searchQuery}
               onChangeText={(text) => {
                 console.log('[FoodSearch] Search input changed:', text);
+                abortControllerRef.current?.abort();
                 setSearchQuery(text);
               }}
               autoCapitalize="none"
@@ -478,6 +486,7 @@ export default function FoodSearchScreen() {
               <TouchableOpacity
                 onPress={() => {
                   console.log('[FoodSearch] Clear search button pressed');
+                  abortControllerRef.current?.abort();
                   setSearchQuery('');
                 }}
                 style={styles.clearButton}

@@ -1,0 +1,129 @@
+name: Library barcode source validation
+on:
+  push:
+    branches: [codex/library-barcode-ready-20261106]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: library-barcode-validation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  application:
+    if: github.ref == 'refs/heads/codex/library-barcode-ready-20261106'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_NO_DOTENV: '1'
+      EXPO_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      - name: Require complete pinned-base checkout and actual candidate files
+        id: source
+        run: node scripts/ci/check-complete-checkout.cjs
+      - name: Install exact package manager without lifecycle scripts
+        if: steps.source.outcome == 'success'
+        run: npm install --global pnpm@10.21.0 --ignore-scripts --no-audit --no-fund
+      - name: Install full locked app dependencies without lifecycle scripts
+        id: dependencies
+        run: node scripts/ci/run-stage.cjs install-app
+      - name: Full repository lint
+        if: always() && steps.dependencies.outcome == 'success'
+        run: node scripts/ci/run-stage.cjs lint
+      - name: Absolute application TypeScript diagnostics
+        if: always() && steps.dependencies.outcome == 'success'
+        run: node scripts/ci/run-stage.cjs app-types
+      - name: Client integration regressions against actual checkout
+        if: always() && steps.dependencies.outcome == 'success'
+        run: node scripts/ci/run-stage.cjs client-regressions
+      - name: Existing purchase and subscription regressions
+        if: always() && steps.dependencies.outcome == 'success'
+        run: node scripts/ci/run-stage.cjs purchase-regressions
+      - name: Install locked isolated synthetic SQL test tooling
+        id: sql_tooling
+        if: always() && steps.dependencies.outcome == 'success'
+        run: node scripts/ci/run-stage.cjs install-test-tooling
+      - name: Actual endpoint and synthetic SQL contract regressions
+        if: always() && steps.dependencies.outcome == 'success' && steps.sql_tooling.outcome == 'success'
+        run: node scripts/ci/run-stage.cjs backend-contracts
+      - name: Offline iOS JavaScript export only
+        if: always() && steps.dependencies.outcome == 'success'
+        run: node scripts/ci/run-stage.cjs export-ios
+      - name: Offline web JavaScript export only
+        if: always() && steps.dependencies.outcome == 'success'
+        run: node scripts/ci/run-stage.cjs export-web
+      - name: Preserve all application diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-barcode-application-${{ github.sha }}
+          path: .ci-results/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  deno:
+    if: github.ref == 'refs/heads/codex/library-barcode-ready-20261106'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.5.6
+      - name: Actual Deno check of candidate endpoints with dependency lock gate
+        run: node scripts/ci/run-stage.cjs deno-candidate
+      - name: Actual Deno check of unchanged repository vision, not live v45
+        if: always()
+        run: node scripts/ci/run-stage.cjs deno-repository-vision
+      - name: Preserve Deno errors and generated dependency locks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-barcode-deno-${{ github.sha }}
+          path: .ci-results/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  native-postgresql:
+    if: github.ref == 'refs/heads/codex/library-barcode-ready-20261106'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      # PostgreSQL 16 is supplied by this runner image; missing tools fail.
+      # The harness pulls official postgrest/postgrest:v13.0.7, records its
+      # registry digest, then executes its resolved immutable local image ID.
+      # Runtime network is disabled; both services use fresh local Unix sockets.
+      - name: Native PostgreSQL concurrency and actual local HTTP permission tests
+        run: python3 scripts/ci/native-database/run.py --postgrest
+      - name: Preserve native database and local HTTP diagnostics on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-barcode-native-postgresql-${{ github.sha }}
+          path: scripts/ci/native-database/results/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

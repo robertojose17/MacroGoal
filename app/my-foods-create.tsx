@@ -1,14 +1,16 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, Alert, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
-import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
+import { recoveryRouteContext } from '@/utils/recoveryRouteContext';
+import { createManualRecoverySave } from '@/utils/manualRecoverySave';
+import { manualRecoveryProduct } from '@/utils/manualRecoveryProduct';
 import { addToDraft } from '@/utils/myMealsDraft';
 
 import { trackFirstMealIfNeeded } from '@/utils/onboardingAnalytics';
@@ -17,9 +19,13 @@ import { logFoodUsage } from '@/utils/logFoodUsage';
 export default function MyFoodsCreateScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const { t } = useTranslation();
+  // Match the app's fixed light-palette policy without an impossible dark comparison.
+  const isDark = false;
+  const { t, i18n } = useTranslation();
+  const recoveryManual=params.recoveryManual==='1';
+  const recoverySave=useRef(createManualRecoverySave());
+  const recoverySaving=useRef(false),recoveryGeneration=useRef(0);
+  useFocusEffect(useCallback(()=>{recoveryGeneration.current++;return()=>{recoveryGeneration.current++;};},[]));
 
   const mode = (params.mode as string) || undefined;
   const mealType = (params.meal as string) || 'breakfast';
@@ -91,6 +97,12 @@ export default function MyFoodsCreateScreen() {
       return;
     }
 
+    if(recoveryManual && !manualRecoveryProduct({name:foodName,brand,servingAmount,servingUnit,calories,protein,carbs,fats,fiber})) {
+      Alert.alert(t('common.error'),i18n.language.startsWith('es')?'Ingresa una porción en gramos y calorías, proteína, carbohidratos, grasa y fibra válidos. Ingresa 0 solo si la etiqueta indica cero.':'Enter a serving in grams and valid calories, protein, carbohydrates, fat and fiber. Enter 0 only when the label says zero.');return;
+    }
+    if(recoveryManual&&recoverySaving.current)return;
+    if(recoveryManual)recoverySaving.current=true;
+    const generation=recoveryGeneration.current;
     setSaving(true);
 
     try {
@@ -102,9 +114,11 @@ export default function MyFoodsCreateScreen() {
         return;
       }
 
+      if(recoveryManual&&generation!==recoveryGeneration.current)return;
       console.log('[MyFoodsCreate] User ID:', user.id);
 
       const isLibraryMode = effectiveMode === 'library';
+      const recoveryProduct = recoveryManual ? manualRecoveryProduct({name:foodName,brand,servingAmount,servingUnit,calories,protein,carbs,fats,fiber}) : null;
       const payload = {
         name: foodName.trim(),
         brand: brand.trim() || null,
@@ -115,13 +129,27 @@ export default function MyFoodsCreateScreen() {
         carbs: parseFloat(carbs) || 0,
         fats: parseFloat(fats) || 0,
         fiber: parseFloat(fiber) || 0,
+        ...(recoveryProduct ? {serving_amount:100,serving_unit:'g',calories:recoveryProduct.nutriments['energy-kcal_100g'],protein:recoveryProduct.nutriments.proteins_100g,carbs:recoveryProduct.nutriments.carbohydrates_100g,fats:recoveryProduct.nutriments.fat_100g,fiber:recoveryProduct.nutriments.fiber_100g!} : {}),
         user_created: true,
         created_by: user.id,
       };
 
       console.log('[MyFoodsCreate] Inserting food payload:', payload);
 
-      const { data: foodData, error: foodError } = await supabase
+      const { data: foodData, error: foodError } = recoveryManual
+        ? {data:await recoverySave.current(user.id,payload,{
+            insert:async row=>{
+              const {data:{user:current}}=await supabase.auth.getUser();
+              if(current?.id!==user.id||generation!==recoveryGeneration.current)throw Error('manual_owner_changed');
+              return await supabase.from('foods').insert(row).select().single();
+            },
+            read:async(id,owner)=>{
+              const {data:{user:current}}=await supabase.auth.getUser();
+              if(current?.id!==owner)throw Error('manual_owner_changed');
+              return await supabase.from('foods').select('*').eq('id',id).eq('created_by',owner).maybeSingle();
+            },
+          }),error:null}
+        : await supabase
         .from('foods')
         .insert(payload)
         .select()
@@ -147,6 +175,18 @@ export default function MyFoodsCreateScreen() {
       const baseCarbs = parseFloat(carbs) || 0;
       const baseFats = parseFloat(fats) || 0;
       const baseFiber = parseFloat(fiber) || 0;
+
+      // Unknown-barcode manual entry remains user-entered, with no barcode/catalog authority.
+      // Save the custom food only; the next screen requires a separate Add action.
+      if(recoveryManual) {
+        const {data:{user:current}}=await supabase.auth.getUser();
+        if(current?.id!==user.id)throw Error('manual_owner_changed');
+        if(generation!==recoveryGeneration.current)return;
+        if(mode==='library'){Alert.alert(t('common.success'),t('myFoodsCreate.customFoodCreated'),[{text:t('common.ok'),onPress:()=>router.back()}]);return;}
+        const product=manualRecoveryProduct({name:foodName,brand,servingAmount,servingUnit,calories,protein,carbs,fats,fiber});
+        router.replace({pathname:'/food-details',params:{...recoveryRouteContext(params),offData:JSON.stringify({...product,_manual_food_id:foodData.id,_manual_owner_id:user.id}),source:'search'}});
+        return;
+      }
 
       // ── MODE: mymeal ──────────────────────────────────────────────────────
       if (effectiveMode === 'mymeal') {
@@ -223,6 +263,17 @@ export default function MyFoodsCreateScreen() {
         },
       ]);
     } catch (error) {
+      if(recoveryManual) {
+        if(generation!==recoveryGeneration.current)return;
+        const code=error instanceof Error?error.message:'';
+        const es=i18n.language.startsWith('es');
+        const message=code==='manual_payload_changed'
+          ?(es?'El intento anterior puede haberse guardado. Restaura los valores originales y reintenta para comprobarlo antes de crear otro alimento.':'The previous attempt may have saved. Restore the original values and retry to check it before creating another food.')
+          :code==='manual_owner_changed'
+          ?(es?'La cuenta cambió. Vuelve a la cuenta original para comprobar este intento.':'The account changed. Return to the original account to check this attempt.')
+          :(es?'No pudimos confirmar si se guardó. Reintenta sin cambiar los valores para comprobar el mismo alimento. Salir y volver a abrir este formulario inicia otro intento.':'We could not confirm the save. Retry without changing the values to check the same food. Leaving and reopening this form starts another attempt.');
+        Alert.alert(t('common.error'),message);return;
+      }
       console.error('[MyFoodsCreate] Unexpected error in handleSave:', error);
       if (error instanceof Error) {
         console.error('[MyFoodsCreate] Error message:', error.message);
@@ -230,12 +281,13 @@ export default function MyFoodsCreateScreen() {
       }
       Alert.alert(t('common.error'), t('common.unexpectedError'));
     } finally {
+      recoverySaving.current=false;
       setSaving(false);
     }
   };
 
   const mealTypeCapitalized = mealType.charAt(0).toUpperCase() + mealType.slice(1);
-  const buttonLabel = effectiveMode === 'mymeal'
+  const buttonLabel = recoveryManual ? (i18n.language.startsWith('es')?(mode==='library'?'Guardar alimento':'Guardar alimento y revisar'):(mode==='library'?'Save food':'Save food and review')) : effectiveMode === 'mymeal'
     ? t('myFoodsCreate.addToMyMeal')
     : effectiveMode === 'diary'
       ? t('myFoodsCreate.addToMeal', { meal: mealTypeCapitalized })
@@ -464,7 +516,7 @@ export default function MyFoodsCreateScreen() {
 
               <View style={styles.macroInput}>
                 <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                  {t('myFoodsCreate.fiberG')}
+                  {recoveryManual?(i18n.language.startsWith('es')?'Fibra (g), requerida':'Fiber (g), required'):t('myFoodsCreate.fiberG')}
                 </Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
@@ -479,6 +531,8 @@ export default function MyFoodsCreateScreen() {
             </View>
           </View>
 
+          {recoveryManual&&mode==='library'&&<Text style={{color:isDark?colors.textDark:colors.text,marginBottom:12}}>{i18n.language.startsWith('es')?'Guardarás los datos ingresados por ti en la lista compartida de alimentos por 100 g. No se añaden a tu diario o plan.':'This saves your entered data to the shared food list per 100 g. Nothing is added to your diary or plan.'}</Text>}
+          {recoveryManual&&mode!=='library'&&<Text style={{color:isDark?colors.textDark:colors.text,marginBottom:12}}>{i18n.language.startsWith('es')?'Guardarás los datos ingresados por ti en la lista compartida de alimentos por 100 g. La siguiente pantalla conserva la porción que ingresaste. Revísalo y pulsa Añadir en la siguiente pantalla; aún no se añade a tu diario o plan.':'This saves your entered data to the shared food list per 100 g. The next screen keeps your entered serving. Review it and tap Add on the next screen; nothing is added to your diary or plan yet.'}</Text>}
           <TouchableOpacity
             style={[styles.saveButton, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
             onPress={handleSave}

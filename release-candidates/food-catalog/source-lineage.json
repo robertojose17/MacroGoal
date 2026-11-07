@@ -1,0 +1,301 @@
+{
+  "repository": "robertojose17/MacroGoal",
+  "base_commit": "5c3c2ac0d6ffd3d8f523307737a0147f7f5703eb",
+  "frozen_client_zip_sha256": "a40c2d34fb0c682b11db28dfc986e2e8a65e7c073dd61e7424a3376a9afb0d48",
+  "frozen_backend_zip_sha256": "17743668fa4ed4ce006623df4b04fd95287a7b00017a9fc591ba0bc122141d2f",
+  "client_source_count": 32,
+  "backend_source_count": 11,
+  "overlap_count": 1,
+  "final_source_count": 43,
+  "shared_foodPortions_sha256": "4e35b3395b0f0ea5c1fe75f3736c276feeecbac250e3cb8f0bdfba36258d46af",
+  "files": [
+    {
+      "path": "app/add-food.tsx",
+      "origin": "client-v5+reviewed-readiness-fix",
+      "sha256": "d40d4fbc140abae296a03a3ed293bac31e237f1d79d2383f762c231c63f7a44c",
+      "base_blob_sha1": "9c9c3d786796e255b0b692a045cd392f6d593cce",
+      "frozen_client_v5_sha256": "fcdd43aa2e3a78e7984db796a54052dd2e0abc96300230040c7d205b511399de"
+    },
+    {
+      "path": "app/barcode-lookup.tsx",
+      "origin": "client-v5+reviewed-readiness-fix",
+      "sha256": "0c9d7b39ba79d508a05b2dfabdbb0609fc9381c6e094987ca53ad17a4a83db94",
+      "base_blob_sha1": "506657bb6f9b4886b927e45c729bf4044dbddb71",
+      "frozen_client_v5_sha256": "ae8e0a35f77de3317248d42032515f8484b154f76cbb0f256d124baa821960ad"
+    },
+    {
+      "path": "app/barcode-scanner.tsx",
+      "origin": "client-v5+reviewed-readiness-fix",
+      "sha256": "31952a193f550b0dd4f1c349f7bc151e3e9deee628e6dee18b5bfdf10168ea6c",
+      "base_blob_sha1": "157cad40b31ff6223aff74cd359eaf9d98eb1ff1",
+      "frozen_client_v5_sha256": "429c554166272759927bfa787a14a6398611bbee2c34e76de06cd0bc50d61fbe"
+    },
+    {
+      "path": "app/food-photo-capture.tsx",
+      "origin": "client-v5",
+      "sha256": "b425bdcd9bc9a041cf114fbf93157f515141130d696127e3f16d34aeec70e4ba",
+      "base_blob_sha1": "386a222f7469ccf9bbdc57a7428c8f13b117ff83"
+    },
+    {
+      "path": "app/food-search.tsx",
+      "origin": "client-v5+reviewed-readiness-fix",
+      "sha256": "70f4d4c160948e8aefccb03980798adfbeb8662b09f05fc1128dcfe110dd34d3",
+      "base_blob_sha1": "8556183fc9f85d3d5a3784b3c25f3eddf80b572d",
+      "frozen_client_v5_sha256": "a05f09376753548493e9addc3f16679968209c5a4ca01223b9dd8a9208eab8bd"
+    },
+    {
+      "path": "app/my-foods-create.tsx",
+      "origin": "client-v5+reviewed-readiness-fix",
+      "sha256": "1909cb15ad3b1d0ea330623142f4396e35710986248e4aedca43ee50bfb52478",
+      "base_blob_sha1": "8d071acde5b6f29bdb2015734f06038cb34e00fa",
+      "frozen_client_v5_sha256": "35917b343440ebccdca9a77f949857cb90d090f4cd4e25c2fd4e466fa8eeebc7"
+    },
+    {
+      "path": "app/search-food-confirmation.tsx",
+      "origin": "client-v5",
+      "sha256": "f6cf592303a3d2481159c81057c664ad51e6ad59cf845290a6923a00a8109552",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "components/BarcodeRecoveryScreen.tsx",
+      "origin": "client-v5",
+      "sha256": "49f7d666e689f2f377c81105e20be0f4440a9036239a727d54c59971c9fd129b",
+      "base_blob_sha1": "7203817601531d0ffe54ea1935d5150ce984ffa6"
+    },
+    {
+      "path": "components/FoodDetailsLayout.tsx",
+      "origin": "client-v5+reviewed-readiness-fix",
+      "sha256": "95fee6b95ded7568c73d80fbed08ac3ee3cec56ad51243b81c2c699d5aaedc34",
+      "base_blob_sha1": "2cf3f47673e8cd14fe0c9ba84aa3cc13260e1c10",
+      "frozen_client_v5_sha256": "f44baeeade2bd0806e18d7d47b2184c73fa39efce8d718a9b7801f8daec1d3c4"
+    },
+    {
+      "path": "release-candidates/food-catalog/sql/01-nutrition/enrichment.CANDIDATE.sql",
+      "origin": "inactive-sql-candidate",
+      "sha256": "46eadc8e037461fabfaae5cafa8ebc50d96db92ea47fd8a0d8504dc65d5cace9",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "release-candidates/food-catalog/sql/02-off-registry/off-mass.CANDIDATE.sql",
+      "origin": "inactive-sql-candidate",
+      "sha256": "1746fd0cf38948b6115d99c4111a281b652a86229005be1ed8692e7299049329",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "release-candidates/food-catalog/sql/03-search/search-snapshots.CANDIDATE.sql",
+      "origin": "inactive-sql-candidate",
+      "sha256": "552370558e383fd4add91540404d7d81c64f91d3e942b0c91597a3f574c5181b",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "supabase/functions/_shared/foodPortions.d.mts",
+      "origin": "client-v5",
+      "sha256": "d641ba0f9ad82a493486bdc6798ccf193c2ef5083a70951cc0ad036aacf5579d",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "supabase/functions/_shared/foodPortions.mjs",
+      "origin": "client-v5+composed-backend",
+      "sha256": "4e35b3395b0f0ea5c1fe75f3736c276feeecbac250e3cb8f0bdfba36258d46af",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "supabase/functions/_shared/nutritionProvider.mjs",
+      "origin": "composed-backend",
+      "sha256": "46e1b26ad520ba8a56267f5afef39254a4fd73be59d04cf527198b6136abeaa9",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "supabase/functions/_shared/nutritionRefresh.mjs",
+      "origin": "composed-backend",
+      "sha256": "da782f8a6f9132599cbcfa54bbaefe9403124ba1ba2c759cd12204c6a093cd60",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "supabase/functions/_shared/offMass.mjs",
+      "origin": "composed-backend",
+      "sha256": "73accc8abcbd48ddd621f6c669056e5f70c5ff6fbfe70e7c8d8c158946c79687",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "supabase/functions/_shared/portionCache.mjs",
+      "origin": "composed-backend",
+      "sha256": "0863ff4f7087260ca22d905f90cdda7b307e0e376cc4dba0486e8e7329b2ae30",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "supabase/functions/_shared/portionEndpoint.ts",
+      "origin": "composed-backend",
+      "sha256": "d112fabbc92d7905ee017c4411cae1fd4f6fd38b31f8df2b46b531c856d54d0a",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "supabase/functions/_shared/searchHydration.mjs",
+      "origin": "composed-backend",
+      "sha256": "85502f73b8f97a01beac8abfb653e7ee678f49fab9fc3ec162359a3f1d4bcb9d",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "supabase/functions/lookup-barcode/identity.mjs",
+      "origin": "composed-backend",
+      "sha256": "b70394495d826c51667923cb5d32598c9ae0caa2aa2ea4a4efeae3bb558d9863",
+      "base_blob_sha1": "38b9dab286f0832d22530e1a30f2dd55c4d0a8f3"
+    },
+    {
+      "path": "supabase/functions/lookup-barcode/index.ts",
+      "origin": "composed-backend",
+      "sha256": "340392771f8980a52421edc9ea4a8e1c8f1e1be3da85d2408ab1c473ce77751f",
+      "base_blob_sha1": "8a32939a59d311653613d7502a4ba6e5b9e07ee5"
+    },
+    {
+      "path": "supabase/functions/search-foods/index.ts",
+      "origin": "composed-backend",
+      "sha256": "80fce41874d79bccbfeb6321dffa080d0306a9b521ead57997a5dfbaa4e9e3a0",
+      "base_blob_sha1": "678bdb246cb820fda9ca2e9194c06cde77c0cda1"
+    },
+    {
+      "path": "supabase/functions/search-foods/searchCore.ts",
+      "origin": "composed-backend",
+      "sha256": "546b8f7e31074daa6e6a7768c7b256fae9d8234288fc706ee0e727bd15187033",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "tests/barcode-recovery-ui.test.mjs",
+      "origin": "client-v5",
+      "sha256": "98b8a5a18803c3b0bf02bf94554eb7d6dd3d56682d12fc20a55141dc793c134d",
+      "base_blob_sha1": "3260be941a0c7d2d985a83f1a493d3b811385ef6"
+    },
+    {
+      "path": "tests/barcode-unconfirmed-lookup.test.cjs",
+      "origin": "client-v5",
+      "sha256": "7a3824065ad7752f6fe3c5153f69aee913006e7452170c052a0deab276b402f2",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "tests/camera-capture-bytes.test.mjs",
+      "origin": "client-v5",
+      "sha256": "eb6e02824cc1ed26032207a9d391fb9434f5e508aae466e7a2767bcafb4ef367",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "tests/check-client.cjs",
+      "origin": "client-v5",
+      "sha256": "00766e5cec30eb3eaaa7632b1f29c6e3192d8ee570326c44147ec929ed0f31c1",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "tests/client-readiness.test.cjs",
+      "origin": "reviewed-readiness-regression",
+      "sha256": "6ac92fbdce59bf8954b81070ff59ad9315bb4af9196e57823c640606f386e5b3",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "tests/library-barcode-integration.test.cjs",
+      "origin": "client-v5",
+      "sha256": "12b554939d25fc9ed32cea1d16a93f676d0868879965e9ddc3a505adb50e8739",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "tests/manual-recovery-save.test.mjs",
+      "origin": "client-v5",
+      "sha256": "68b176f563d36ac067ff0143f8fd2b4bad3d33b21c857a08781e99a4e90a1127",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "tests/search-selection-safety.test.cjs",
+      "origin": "client-v5",
+      "sha256": "7cf4291037603ba11e02fb555aed074a6a7936014596399bebb81ae970870e65",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "tests/unknown-barcode-callbacks.cjs",
+      "origin": "client-v5",
+      "sha256": "461e01f022c3906d84a69754009b9905f2ec323d84401fc41398dfce4acd85a2",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "tests/unknown-barcode-client.test.mjs",
+      "origin": "client-v5",
+      "sha256": "c2496afe2f3555cec9fcf43f92221d0196d6b0f82a78b859a1eb836e9da419b7",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "utils/cameraCaptureBytes.ts",
+      "origin": "client-v5",
+      "sha256": "0d94cab4cf1526a84cb192e171968e2adc011faaa35be08e75d8ae627fd94ab2",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "utils/catalogSelection.ts",
+      "origin": "client-v5",
+      "sha256": "89fc2ec94c55292a6e4591d37655f10195ed12a91e705352b05e82fe3f6aba65",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "utils/foodSearchCache.ts",
+      "origin": "client-v5",
+      "sha256": "838a3169e6ad293200c6afdc328bfd20b86f4e5a037941a2dda5d164f3b324c4",
+      "base_blob_sha1": "37f8fbcb0383c19b2e6a23462df3c0c29330c725"
+    },
+    {
+      "path": "utils/foodSearchHybrid.ts",
+      "origin": "client-v5",
+      "sha256": "6c3d1f102b504bc11809b34ee02f51806f08519aefc9929a07242a34cffd5bc1",
+      "base_blob_sha1": "1667dfc47d297f793399684212d6dd521e368c30"
+    },
+    {
+      "path": "utils/foodSearchUtils.ts",
+      "origin": "client-v5",
+      "sha256": "a629271e86078f4f3ad6353f2df6341db3b7269f9019b73b86816c3166e3ea25",
+      "base_blob_sha1": "5420f0b8e6d74ff2acbe16ab73a3184848745c01"
+    },
+    {
+      "path": "utils/manualRecoveryProduct.ts",
+      "origin": "client-v5",
+      "sha256": "9a6ce37b46d639aa197c4491910c98af00762ac12252b59d578573d7863705a4",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "utils/manualRecoverySave.ts",
+      "origin": "client-v5",
+      "sha256": "68ccc6f7aa0c8688605d00cd3d21ced882a75331a72b9b73c8f8e5556f240f30",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "utils/openFoodFacts.ts",
+      "origin": "client-v5+reviewed-readiness-fix",
+      "sha256": "b0c5d2386c33d2b6846cc3d6f73f4437f6a615a8b4a291e6a8e1dabd94f1a1b3",
+      "base_blob_sha1": "6370da2e448d1e41d4344ad5f6352ce7e7a8f5b0",
+      "frozen_client_v5_sha256": "0118a4dd42be78ba11f6f01803744de3439a36f843d7390376c8aeee3d5eca73"
+    },
+    {
+      "path": "utils/packageBarcodeInput.ts",
+      "origin": "client-v5",
+      "sha256": "750d869fb4533de01e68dcf0090da45313584a9009c724dbac499508e5a95ed8",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "utils/searchSelectionSafety.ts",
+      "origin": "client-v5",
+      "sha256": "1a6771551b59413c5d9672cc9ba3b7bab5d3d3807856129bdc5eb4698816766f",
+      "base_blob_sha1": null
+    },
+    {
+      "path": "utils/servingParser.ts",
+      "origin": "client-v5",
+      "sha256": "5ff16252208432cd35ef45be9ff92d4e31d5c354e847a60af204b5004a8816c8",
+      "base_blob_sha1": "16c88da88ef7b907279d3d77133182ab015a26da"
+    },
+    {
+      "path": "utils/unknownBarcodeAttempt.ts",
+      "origin": "client-v5",
+      "sha256": "7322e1e744d805f853d36a9c43f278d0b199eed8ada34c4c5b039ce243a2869f",
+      "base_blob_sha1": null
+    }
+  ],
+  "inactive_sql_count": 3,
+  "readiness_changed_source_count": 7,
+  "readiness_new_test_count": 1,
+  "client_readiness_manifest_sha256": "f4871bdd813dd0d88f70a2a303f17dcc7872d6385e939d59375f0cc054c92d3a",
+  "lineage_note": "Frozen V5 remains unchanged. Seven final client sources incorporate the independently reviewed follow-on; all other V5 and all composed backend source bytes remain exact."
+}

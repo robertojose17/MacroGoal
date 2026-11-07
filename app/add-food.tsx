@@ -1,3 +1,4 @@
+import { searchSelectionNeedsConfirmation, searchConfirmationRoute } from '@/utils/searchSelectionSafety';
 import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
 import type { PremiumFlow } from '@/utils/premiumCheckpointContract';
 import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
@@ -9,13 +10,13 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
-import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import SwipeToDeleteRow from '@/components/SwipeToDeleteRow';
 import { getFavorites, removeFavoriteById, Favorite } from '@/utils/favoritesDatabase';
 import { getRecentFoods, RecentFoodItem } from '@/utils/foodDatabase';
-import { OpenFoodFactsProduct, extractServingSize, extractNutritionPerServing } from '@/utils/openFoodFacts';
-import { ResultSource, SearchResultItem, buildResultItem, mergeProducts, buildOffProductFromFoodItemId } from '@/utils/foodSearchUtils';
+import { catalogPackageBarcode } from '@/utils/catalogSelection';
+import { OpenFoodFactsProduct, extractServingSize, extractNutritionPerServing, extractNutrition } from '@/utils/openFoodFacts';
+import { ResultSource, SearchResultItem, buildResultItem, mergeProducts, buildOffProductFromFoodItemId, persistUsdaSelection } from '@/utils/foodSearchUtils';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { buildSyntheticOffData } from '@/utils/servingParser';
 import { Food } from '@/types';
@@ -62,7 +63,7 @@ interface SavedMeal {
 }
 
 export default function AddFoodScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<any>() || {};
 
@@ -80,8 +81,8 @@ export default function AddFoodScreen() {
   console.log('[AddFood] Mode:', mode);
   console.log('[AddFood] Plan ID:', planId);
   
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  // Match the app's fixed light-palette policy without an impossible dark comparison.
+  const isDark = false;
   const { isPremium } = usePremium();
 
   const date = (params.date as string) || toLocalDateString();
@@ -102,7 +103,7 @@ export default function AddFoodScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchResultsMapRef = useRef<Map<string, SearchResultItem>>(new Map());
   const currentSearchQueryRef = useRef<string>('');
@@ -112,7 +113,7 @@ export default function AddFoodScreen() {
   const [currentBanner, setCurrentBanner] = useState<BannerEvent | null>(null);
   const [bannerEventId, setBannerEventId] = useState(0);
   const bannerOpacity = useRef(new Animated.Value(0)).current;
-  const bannerTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const eventIdCounterRef = useRef(0);
   const isProcessingRef = useRef(false);
 
@@ -419,6 +420,7 @@ export default function AddFoodScreen() {
         onSupabaseHit: (products) => {
           if (controller.signal.aborted) return;
           console.log('[AddFood] onSupabaseHit —', products.length, 'products');
+          searchResultsMapRef.current = new Map(); // Server response replaces provisional cache, including [].
           const merged = mergeProducts(searchResultsMapRef.current, products, 'supabase', query);
           setSearchResults(merged);
         },
@@ -431,6 +433,11 @@ export default function AddFoodScreen() {
         onError: (_stage, _error) => {
           if (controller.signal.aborted) return;
           console.warn('[AddFood] Search error at stage:', _stage, _error.message);
+          if (_error.message === 'SEARCH_REVIEW_UPDATE_REQUIRED') {
+            searchResultsMapRef.current.clear(); setSearchResults([]);
+            setSearchError(i18n.language.startsWith('es') ? 'Actualiza MacroGoal para revisar este alimento de forma segura. No se ha añadido nada.' : 'Update MacroGoal to review this food safely. Nothing has been added.');
+            return;
+          }
           setSearchResults(prev => {
             if (prev.length === 0) setSearchError(t('localization.screens.connectionError'));
             return prev;
@@ -444,13 +451,18 @@ export default function AddFoodScreen() {
       },
       controller.signal,
     );
-  }, [t]);
+  }, [t, i18n.language]);
 
   /**
    * Handle search input change with debouncing
    */
   const handleSearchChange = useCallback((text: string) => {
     console.log('[AddFood] Search input changed:', text);
+    searchAbortRef.current?.abort(); // Invalidate immediately, before the debounce interval.
+    searchResultsMapRef.current = new Map();
+    setSearchResults([]);
+    setSearchError(null);
+    setHasSearched(false);
     setSearchQuery(text);
 
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
@@ -490,6 +502,10 @@ export default function AddFoodScreen() {
    * CRITICAL: Pass context through to Food Details
    */
   const handleOpenSearchResultDetails = useCallback((item: SearchResultItem) => {
+    if (searchSelectionNeedsConfirmation(item.product)) {
+      router.push(searchConfirmationRoute(item.product, { ...params, meal: mealType, date, mode, context, returnTo, planId }));
+      return;
+    }
     console.log('[AddFood] ========== OPENING SEARCH RESULT DETAILS ==========');
     console.log('[AddFood] Product:', item.product.product_name, '| source:', item.source);
     console.log('[AddFood] Context:', context);
@@ -509,16 +525,21 @@ export default function AddFoodScreen() {
         planId: planId || '',
       },
     });
-  }, [router, mealType, date, context, returnTo, mode, planId]);
+  }, [router, mealType, date, context, returnTo, mode, planId, params]);
 
   /**
    * FAST ADD: Add search result directly to meal plan
    * Only available in meal-plan mode
    */
   const handleQuickAddSearchResultToMealPlan = useCallback(async (item: SearchResultItem) => {
+    if (searchSelectionNeedsConfirmation(item.product)) {
+      router.push(searchConfirmationRoute(item.product, { ...params, meal: mealType, date, mode, context, returnTo, planId }));
+      return;
+    }
     if (mode !== 'meal-plan' || !planId) return;
     const product = item.product;
     try {
+      void persistUsdaSelection(product);
       const serving = extractServingSize(product);
       const nutrition = extractNutritionPerServing(product, serving.grams);
       console.log('[AddFood] Adding search result to meal plan:', planId, product.product_name);
@@ -542,13 +563,17 @@ export default function AddFoodScreen() {
       Alert.alert(t('common.error'), t('addFood.failedToAddToPlan'));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, planId, date, mealType, showSuccessBanner]);
+  }, [mode, planId, date, mealType, showSuccessBanner, router, params, context, returnTo]);
 
   /**
    * FAST ADD: Add search result directly to My Meal draft
    * Only available in my_meals_builder context
    */
   const handleQuickAddSearchResult = useCallback(async (item: SearchResultItem) => {
+    if (searchSelectionNeedsConfirmation(item.product)) {
+      router.push(searchConfirmationRoute(item.product, { ...params, meal: mealType, date, mode, context, returnTo, planId }));
+      return;
+    }
     const product = item.product;
     console.log('[AddFood] ========== QUICK ADD SEARCH RESULT ==========');
     console.log('[AddFood] Product:', product.product_name, '| source:', item.source);
@@ -560,8 +585,11 @@ export default function AddFoodScreen() {
     }
 
     try {
+      const capturedFoodItemId = await persistUsdaSelection(product);
+      const packageBarcode = catalogPackageBarcode(product);
       const servingInfo = extractServingSize(product);
       const nutrition = extractNutritionPerServing(product, servingInfo.grams);
+      const per100 = extractNutrition(product);
 
       // Nutrition already calculated for the default serving
       const calories = nutrition.calories;
@@ -573,11 +601,11 @@ export default function AddFoodScreen() {
       // Ensure food exists in database
       let foodId: string | null = null;
 
-      if (product.code) {
+      if (packageBarcode) {
         const { data: existingFood } = await supabase
           .from('foods')
           .select('id')
-          .eq('barcode', product.code)
+          .eq('barcode', packageBarcode)
           .maybeSingle();
 
         if (existingFood) {
@@ -593,18 +621,18 @@ export default function AddFoodScreen() {
             brand: product.brands || null,
             serving_amount: 100,
             serving_unit: 'g',
-            calories: safeNum(nutrition.calories),
-            protein: safeNum(nutrition.protein),
-            carbs: safeNum(nutrition.carbs),
-            fats: safeNum(nutrition.fat),
-            fiber: safeNum(nutrition.fiber),
-            barcode: product.code || null,
+            calories: safeNum(per100.calories),
+            protein: safeNum(per100.protein),
+            carbs: safeNum(per100.carbs),
+            fats: safeNum(per100.fat),
+            fiber: safeNum(per100.fiber),
+            barcode: packageBarcode,
             user_created: false,
           })
           .select()
           .single();
 
-        if (foodError) {
+        if (foodError || !newFood) {
           console.error('[AddFood] Error creating food:', foodError);
           Alert.alert(t('common.error'), t('addFood.failedToAdd'));
           return;
@@ -613,9 +641,17 @@ export default function AddFoodScreen() {
         foodId = newFood.id;
       }
 
+      // A successful request still needs a usable persisted ID before creating a draft.
+      if (typeof foodId !== 'string' || !foodId.trim()) {
+        Alert.alert(t('common.error'), t('addFood.failedToAdd'));
+        return;
+      }
+
       // Add to draft
       await addToDraft({
         food_id: foodId,
+        ...((product._db_id || capturedFoodItemId) ? {food_item_id:product._db_id || capturedFoodItemId!}:{}),
+        serving_description:servingInfo.displayText,
         food_name: product.product_name || 'Unknown Product',
         food_brand: product.brands || undefined,
         serving_amount: servingInfo.grams,
@@ -639,7 +675,7 @@ export default function AddFoodScreen() {
       console.error('[AddFood] Error quick adding search result:', error);
       Alert.alert(t('common.error'), t('addFood.failedToAdd'));
     }
-  }, [context, showSuccessBanner, t]);
+  }, [context, showSuccessBanner, t, router, params, mealType, date, mode, returnTo, planId]);
 
   const handleCopyFromPrevious = useCallback(() => {
     console.log('[AddFood] Navigating to copy-from-previous');
@@ -658,7 +694,7 @@ export default function AddFoodScreen() {
         planId: planId || '',
       },
     });
-  }, [router, mealType, date, context, returnTo, mode, planId]);
+  }, [router, mealType, date, context, returnTo, mode, planId, params]);
 
   const handleAIMealEstimator = useCallback((premiumFlow?: PremiumFlow) => {
     console.log('[AddFood] AI Meal Estimator button pressed');
@@ -754,7 +790,7 @@ export default function AddFoodScreen() {
         planId: planId || '',
       },
     });
-  }, [router, mealType, date, context, returnTo, mode, planId]);
+  }, [router, mealType, date, context, returnTo, mode, planId, params]);
 
   /**
    * Open food details for a favorite
@@ -901,13 +937,19 @@ export default function AddFoodScreen() {
           .select()
           .single();
 
-        if (foodError) {
+        if (foodError || !newFood) {
           console.error('[AddFood] Error creating food:', foodError);
           Alert.alert(t('common.error'), t('addFood.failedToAdd'));
           return;
         }
 
         foodId = newFood.id;
+      }
+
+      // A successful request still needs a usable persisted ID before creating a draft.
+      if (typeof foodId !== 'string' || !foodId.trim()) {
+        Alert.alert(t('common.error'), t('addFood.failedToAdd'));
+        return;
       }
 
       // Add to draft
@@ -1159,7 +1201,7 @@ export default function AddFoodScreen() {
   }, [favorites, t]);
 
   const renderSearchResultItem = useCallback((item: SearchResultItem, index: number) => {
-    const displayName = item.product.product_name || 'Unknown Product';
+    const displayName = item.product.product_name || item.product.generic_name || 'Unknown Product';
     const displayBrand = item.product.brands || '';
     const calories = Math.round(item.displayCalories);
     const protein = Math.round(isFinite(item.displayProtein) ? item.displayProtein : 0);
@@ -1187,15 +1229,17 @@ export default function AddFoodScreen() {
             ) : null}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
               <Text style={{ fontSize: 12, color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
-                {item.servingText}
+                {item.requiresConfirmation ? (i18n.language.startsWith('es') ? 'Confirma la etiqueta nutricional' : 'Confirm nutrition label') : item.servingText}
               </Text>
+              {!item.requiresConfirmation && <>
               <Text style={{ fontSize: 12, fontWeight: '600', color: '#E74C3C' }}>P {protein}g</Text>
               <Text style={{ fontSize: 12, fontWeight: '600', color: '#3498DB' }}>C {carbs}g</Text>
               <Text style={{ fontSize: 12, fontWeight: '600', color: '#F39C12' }}>F {fat}g</Text>
+              </>}
             </View>
           </View>
 
-          <View style={{ alignItems: 'flex-end', justifyContent: 'center', marginRight: 8 }}>
+          {!item.requiresConfirmation && <View style={{ alignItems: 'flex-end', justifyContent: 'center', marginRight: 8 }}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? colors.textDark : colors.text }}>
               {calories}
             </Text>
@@ -1203,6 +1247,8 @@ export default function AddFoodScreen() {
               kcal
             </Text>
           </View>
+
+          }
 
           {/* Show quick-add button in my_meals_builder or meal-plan mode */}
           {context === 'my_meals_builder' ? (
@@ -1252,7 +1298,7 @@ export default function AddFoodScreen() {
         </TouchableOpacity>
       </React.Fragment>
     );
-  }, [isDark, context, mode, handleOpenSearchResultDetails, handleQuickAddSearchResult, handleQuickAddSearchResultToMealPlan]);
+  }, [isDark, i18n.language, context, mode, handleOpenSearchResultDetails, handleQuickAddSearchResult, handleQuickAddSearchResultToMealPlan]);
 
   const renderFavoriteItem = useCallback((favorite: Favorite, index: number) => {
     const multiplier = favorite.default_grams / 100;

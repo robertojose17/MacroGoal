@@ -1,17 +1,17 @@
+// Alias only a checksum-valid UPC12/EAN13 pair. Invalid legacy codes remain
+// exact-match only; never remove a leading zero to manufacture another identity.
+export function validRetailBarcode(barcode) {
+  if(typeof barcode!=='string'||!/^\d{12,13}$/.test(barcode))return false;
+  const body=barcode.slice(0,-1);let sum=0;
+  for(let i=0;i<body.length;i++)sum+=Number(body[i])*((body.length-1-i)%2===0?3:1);
+  return String((10-sum%10)%10)===barcode.at(-1);
+}
 export function canonicalNewBarcode(barcode) {
-  if (!/^\d{12}$/.test(barcode)) return barcode;
-  const body = barcode.slice(0, -1);
-  let sum = 0;
-  for (let i = 0; i < body.length; i++) {
-    const fromRight = body.length - 1 - i;
-    sum += Number(body[i]) * (fromRight % 2 === 0 ? 3 : 1);
-  }
-  if (String((10 - (sum % 10)) % 10) !== barcode.at(-1)) return barcode;
-  return `0${barcode}`;
+  return typeof barcode==='string'&&barcode.length===12&&validRetailBarcode(barcode)?`0${barcode}`:barcode;
 }
 
 export function barcodeCandidates(barcode) {
-  if (typeof barcode !== 'string' || !/^\d{12,13}$/.test(barcode)) return [barcode];
+  if (!validRetailBarcode(barcode)) return [barcode];
   const canonical = canonicalNewBarcode(barcode);
   if (canonical.length === 13 && canonical.startsWith('0')) return [canonical, canonical.slice(1)];
   return [barcode];

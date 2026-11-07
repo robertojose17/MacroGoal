@@ -5,10 +5,10 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
-import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
+import { recoveryRouteContext } from '@/utils/recoveryRouteContext';
 import { buildSyntheticOffData } from '@/utils/servingParser';
 
 // CRITICAL: Timeout constant
@@ -27,8 +27,8 @@ export default function BarcodeLookupScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  // Match the app's fixed light-palette policy without an impossible dark comparison.
+  const isDark = false;
 
   const barcode = (params.barcode as string) || '';
   const mealType = (params.meal as string) || 'breakfast';
@@ -117,7 +117,7 @@ export default function BarcodeLookupScreen() {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ barcode }),
+        body: JSON.stringify({ barcode, review_capability: 'label_confirmation_v1' }),
       });
 
       console.log('[BarcodeLookup] Waiting for response (max 10s)...');
@@ -132,6 +132,15 @@ export default function BarcodeLookupScreen() {
       console.log('[BarcodeLookup] HTTP STATUS:', response.status);
 
       if (!response.ok) {
+        if (response.status === 409 || response.status === 426) {
+          const failure = await response.json().catch(() => null);
+          if(!isMountedRef.current)return;
+          if (response.status === 426 || (failure?.status === 'update_required' && failure?.error === 'LOOKUP_REVIEW_UPDATE_REQUIRED')) {
+            router.replace({ pathname: '/search-food-confirmation', params: { ...recoveryRouteContext(params), reason: 'update_required' } });
+            return;
+          }
+          throw new Error(`HTTP error: ${response.status}`);
+        }
         const errText = await response.text();
         console.error('[BarcodeLookup] Edge function error body:', errText);
         throw new Error(`HTTP error: ${response.status}`);
@@ -147,6 +156,23 @@ export default function BarcodeLookupScreen() {
       }
 
       console.log('[BarcodeLookup] Edge function result — found:', result.found, 'source:', result.source);
+
+      // found=true does not authorize treating an unconfirmed AI read as a canonical product.
+      // Existing alias collisions cannot be resolved by the current photo/manual flow.
+      if (result.capture_status === 'ambiguous_existing' || result.capture_status === 'identity_reserved') {
+        if (!isMountedRef.current) return;
+        router.replace({ pathname: '/search-food-confirmation', params: { ...recoveryRouteContext(params), reason: 'catalog_ambiguous' } });
+        return;
+      }
+      // Present malformed flags are ambiguous contract data, not permission to use a proposal.
+      const invalidConfirmationFlag = Object.prototype.hasOwnProperty.call(result, 'requires_label_confirmation')
+        && typeof result.requires_label_confirmation !== 'boolean';
+      if (result.requires_label_confirmation === true || invalidConfirmationFlag) {
+        router.replace({pathname:'/food-photo-capture',params:{
+          ...recoveryRouteContext(params),barcode,type:'new_product',meal:mealType,date,mode,
+        }});
+        return;
+      }
 
       if (result.found) {
         console.log('[BarcodeLookup] ✅ PRODUCT FOUND via', result.source, '— building synthetic off_data from item (macros_per forced to 100g)');
@@ -173,8 +199,7 @@ export default function BarcodeLookupScreen() {
         // Product not found in cache or OFF
         console.log('[BarcodeLookup] ❌ PRODUCT NOT FOUND');
         console.log('[BarcodeLookup] Barcode:', barcode);
-        setNotFound(true);
-        setLoading(false);
+        router.replace({pathname:'/food-photo-capture',params:{...recoveryRouteContext(params),barcode,type:'new_product'}});
       }
     } catch (error: any) {
       console.error('[BarcodeLookup] ❌ LOOKUP ERROR:', error);

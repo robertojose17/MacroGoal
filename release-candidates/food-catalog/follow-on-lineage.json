@@ -1,0 +1,76 @@
+{
+  "initial_validation_tree": "f447aaf5d4e51681c9d4f21534a73fe768779e3a",
+  "initial_publication_payload_sha256": "5d95f04f1deface1eb8dbf110463c36fd58b0cdc87b5dd06c7f013b575155373",
+  "client_manifest_sha256": "f4871bdd813dd0d88f70a2a303f17dcc7872d6385e939d59375f0cc054c92d3a",
+  "client_files": [
+    {
+      "path": "app/add-food.tsx",
+      "sha256": "d40d4fbc140abae296a03a3ed293bac31e237f1d79d2383f762c231c63f7a44c",
+      "bytes": 95572,
+      "original_sha256": "fcdd43aa2e3a78e7984db796a54052dd2e0abc96300230040c7d205b511399de"
+    },
+    {
+      "path": "app/barcode-lookup.tsx",
+      "sha256": "0c9d7b39ba79d508a05b2dfabdbb0609fc9381c6e094987ca53ad17a4a83db94",
+      "bytes": 23059,
+      "original_sha256": "ae8e0a35f77de3317248d42032515f8484b154f76cbb0f256d124baa821960ad"
+    },
+    {
+      "path": "app/barcode-scanner.tsx",
+      "sha256": "31952a193f550b0dd4f1c349f7bc151e3e9deee628e6dee18b5bfdf10168ea6c",
+      "bytes": 23267,
+      "original_sha256": "429c554166272759927bfa787a14a6398611bbee2c34e76de06cd0bc50d61fbe"
+    },
+    {
+      "path": "app/food-search.tsx",
+      "sha256": "70f4d4c160948e8aefccb03980798adfbeb8662b09f05fc1128dcfe110dd34d3",
+      "bytes": 24239,
+      "original_sha256": "a05f09376753548493e9addc3f16679968209c5a4ca01223b9dd8a9208eab8bd"
+    },
+    {
+      "path": "app/my-foods-create.tsx",
+      "sha256": "1909cb15ad3b1d0ea330623142f4396e35710986248e4aedca43ee50bfb52478",
+      "bytes": 30129,
+      "original_sha256": "35917b343440ebccdca9a77f949857cb90d090f4cd4e25c2fd4e466fa8eeebc7"
+    },
+    {
+      "path": "components/FoodDetailsLayout.tsx",
+      "sha256": "95fee6b95ded7568c73d80fbed08ac3ee3cec56ad51243b81c2c699d5aaedc34",
+      "bytes": 109295,
+      "original_sha256": "f44baeeade2bd0806e18d7d47b2184c73fa39efce8d718a9b7801f8daec1d3c4"
+    },
+    {
+      "path": "tests/client-readiness.test.cjs",
+      "sha256": "6ac92fbdce59bf8954b81070ff59ad9315bb4af9196e57823c640606f386e5b3",
+      "bytes": 9752,
+      "original_sha256": null
+    },
+    {
+      "path": "utils/openFoodFacts.ts",
+      "sha256": "b0c5d2386c33d2b6846cc3d6f73f4437f6a615a8b4a291e6a8e1dabd94f1a1b3",
+      "bytes": 21417,
+      "original_sha256": "0118a4dd42be78ba11f6f01803744de3439a36f843d7390376c8aeee3d5eca73"
+    }
+  ],
+  "native_package_manifest_sha256": "6cc79697818156db6a39e3d00d1b4ae34e99137a511d9274dcb7918124ba9ce9",
+  "native_file_count": 13,
+  "native_files": {
+    "scripts/ci/native-database/.gitignore": "3eee86435e69d845524717fcb550f3e64eaa113da652f0603e41d1f5170bfcbd",
+    "scripts/ci/native-database/README.md": "476664850cc2db236a18b45048fc67bf6af195a22d67c095d09b4ee3459f4e48",
+    "scripts/ci/native-database/checks.py": "cc5a5147bee032617d8a9eec7bbe6af5f7a6bd48c55a2411316c2f00bfef88d7",
+    "scripts/ci/native-database/frozen-inputs.json": "e86ffde1e1bad7046f3094c53e1a1ec8006f1845e5a0123f81a155eba5ae54a8",
+    "scripts/ci/native-database/postgrest_checks.py": "96108e387432a0e20247ca4ee5a9c84b5fc7833e34a06b7e958b92de236f7c7f",
+    "scripts/ci/native-database/run.py": "711d08507785f7a9fc547537ae0848490d02f89c8261c55f139e9f77ec460943",
+    "scripts/ci/native-database/sample.mjs": "55f73c7667664278fac53dbc7e81c3f8e74ae2b4fbb9dd76ac8674dadb8b25b4",
+    "scripts/ci/native-database/sql/01-nutrition.sql": "46eadc8e037461fabfaae5cafa8ebc50d96db92ea47fd8a0d8504dc65d5cace9",
+    "scripts/ci/native-database/sql/02-off-registry.sql": "1746fd0cf38948b6115d99c4111a281b652a86229005be1ed8692e7299049329",
+    "scripts/ci/native-database/sql/03-search.sql": "552370558e383fd4add91540404d7d81c64f91d3e942b0c91597a3f574c5181b",
+    "scripts/ci/native-database/sql/fixture.sql": "682752e88e65f18685f803926de153009ff7342f2d0a1a86c448498b2b39faec",
+    "scripts/ci/native-database/src/offMass.mjs": "73accc8abcbd48ddd621f6c669056e5f70c5ff6fbfe70e7c8d8c158946c79687",
+    "scripts/ci/native-database/src/provider.mjs": "46e1b26ad520ba8a56267f5afef39254a4fd73be59d04cf527198b6136abeaa9"
+  },
+  "runtime_sql_changes": false,
+  "vision_or_ai_coach_changes": false,
+  "release_ready": false,
+  "reviewed_native_workflow_sha256": "544194a5d1c4dded44c6000398c33e78458b65b540dc6118001556465cd56d0b"
+}
