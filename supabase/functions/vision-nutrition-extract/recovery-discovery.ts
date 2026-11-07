@@ -1,3 +1,4 @@
+import {SERVING_ASSOCIATION_REASONS} from './serving-association.mjs';
 import { createRecoveryBudget, RECOVERY_BUDGET_LIMITS, recoverySourceResourceKey, recoverySourceExcluded, recoverySourceDependency } from './recovery-budget.mjs';
 import { literalServingGrams } from './serving-mass.mjs';
 import { productGallery, sourceLabelCandidates, recoverSourceLabels } from './source-gallery.mjs';
@@ -182,6 +183,7 @@ export function sourceLabelDiagnostics(reading:any) {
       mass_basis:b.mass_basis==='single_package_net_weight'?'single_package_net_weight':'label_grams',
       column_count:Number.isSafeInteger(b.column_count)?Math.max(0,Math.min(b.column_count,10)):0,
       has_mass:b.has_mass===true,mass_from_declared_line:b.mass_from_declared_line===true,mass_value_type:['null','number','string'].includes(b.mass_value_type)?b.mass_value_type:'missing_or_other',
+      serving_association_reason:SERVING_ASSOCIATION_REASONS.includes(b.serving_association_reason)?b.serving_association_reason:null,
       selected_header_present:typeof b.selected_header_present==='boolean'?b.selected_header_present:null,
       serving_header_association:typeof b.serving_header_association==='boolean'?b.serving_header_association:null,
       package_proof_valid:b.package_proof_valid===true};

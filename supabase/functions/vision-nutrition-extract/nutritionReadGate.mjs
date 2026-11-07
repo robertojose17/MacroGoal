@@ -1,3 +1,4 @@
+import {servingAssociation} from './serving-association.mjs';
 const NUTRIENTS = ['calories', 'protein', 'carbs', 'fat', 'fiber'];
 const RETAKE = 'Could not verify the nutrition label consistently. Please retake the label photo clearly.';
 
@@ -207,7 +208,13 @@ function bilingualUnitQuantity(value) {
   const count = Number(match[1]), grams = match[2] === undefined ? null : Number(match[2]);
   return Number.isFinite(count) && count > 0 && (grams === null || (Number.isFinite(grams) && grams > 0)) ? {count, grams} : null;
 }
-function columnMatchesServing(header, servingSize, servingQuantity, servingEvidence) {
+function columnMatchesServing(header, servingSize, servingQuantity, servingEvidence, packageMass=false) {
+  // Additive repair: preserve the established association grammar. Only a
+  // previously rejected label can enter the separately proven literal route.
+  if(legacyColumnMatchesServing(header,servingSize,servingQuantity,servingEvidence))return true;
+  return !packageMass && servingAssociation(header,servingSize,servingQuantity,servingEvidence).ok;
+}
+function legacyColumnMatchesServing(header, servingSize, servingQuantity, servingEvidence) {
   const value = normalizeText(header);
   if (/\bunit\s*\/\s*unidad\b/i.test(servingQuantity + ' ' + servingEvidence)) {
     const quantity = bilingualUnitQuantity(servingQuantity);
@@ -276,9 +283,10 @@ export function labelBasisDiagnostics(result) {
     column_count:Array.isArray(result?.detected_columns)?Math.min(result.detected_columns.length,10):0,
     has_mass:typeof result?.serving_size_g==='number'&&result.serving_size_g>0,
     mass_from_declared_line:declaredServingMassFallback(result)!==null,
+    serving_association_reason:result?.selected_basis!=='per_serving'||result?.serving_mass_basis==='single_package_net_weight'?'not_applicable':servingAssociation(result?.selected_column_header,result?.serving_size_g,result?.serving_quantity,servingCountEvidence(result)).reason,
     selected_header_present:!!text(result?.selected_column_header),
     serving_header_association:result?.selected_basis==='per_serving' && !!text(result?.selected_column_header)
-      ? columnMatchesServing(result.selected_column_header,resolvedServingMass(result),result.serving_quantity,servingCountEvidence(result)) : null,
+      ? columnMatchesServing(result.selected_column_header,resolvedServingMass(result),result.serving_quantity,servingCountEvidence(result),result.serving_mass_basis==='single_package_net_weight') : null,
     mass_value_type:result?.serving_size_g===null?'null':['number','string'].includes(typeof result?.serving_size_g)?typeof result.serving_size_g:'missing_or_other',
     package_proof_valid:!!packageServingEvidence(result)};
 }
@@ -302,9 +310,10 @@ export function validateNutritionLabelRead(result, { requireProduct = false } = 
   const headerKey = !per100 && result.serving_size_g == null ? literalHeaderKey : normalizeText;
   const servingQuantity = per100 ? '100 g' : text(result.serving_quantity);
   const servingEvidence = per100 ? selectedColumn : servingCountEvidence(result);
-  if (!selectedColumn || (!per100 && (selectedBasis !== 'per_serving' || !columnMatchesServing(selectedColumn, servingSize, servingQuantity, servingEvidence)))) return invalid('serving', 'basis_unclear');
+  if (!selectedColumn || (!per100 && (selectedBasis !== 'per_serving' || !columnMatchesServing(selectedColumn, servingSize, servingQuantity, servingEvidence,result.serving_mass_basis==='single_package_net_weight')))) return invalid('serving', 'basis_unclear');
   if (!Array.isArray(detectedColumns) || !detectedColumns.length || !detectedColumns.every(value => typeof value === 'string' && text(value))) return invalid();
   if (!detectedColumns.some(value => normalizeText(value) === normalizeText(selectedColumn))) return invalid();
+  if(!per100 && !legacyColumnMatchesServing(selectedColumn,servingSize,servingQuantity,servingEvidence) && detectedColumns.filter(value=>normalizeText(value)===normalizeText(selectedColumn)).length!==1)return invalid('serving','basis_unclear');
   if (typeof servingSize !== 'number' || !Number.isFinite(servingSize) || servingSize <= 0 || !servingQuantity) return invalid('serving_g', 'grams_unreadable');
   const packageMass=result.serving_mass_basis==='single_package_net_weight';
   if(packageMass && !['not_applicable','as_sold'].includes(result.package_evidence?.preparation))return invalid('preparation','state_unclear');
@@ -361,6 +370,13 @@ export function compareNutritionLabelReads(firstResult, secondResult) {
   if (!first.ok) return first;
   const second = validateNutritionLabelRead(secondResult);
   if (!second.ok) return second;
+  // Normalize new aliases only when BOTH complete reads prove their own basis.
+  // Otherwise retain the preexisting comparison, including legacy shorthand.
+  const associations=[firstResult,secondResult].map(r=>r.selected_basis==='per_serving'&&r.serving_mass_basis!=='single_package_net_weight'?servingAssociation(r.selected_column_header,resolvedServingMass(r),r.serving_quantity,servingCountEvidence(r)):null);
+  if(associations.every(a=>a?.ok)){
+    first.reading.servingQuantity=normalizeText(associations[0].canonicalQuantity);
+    second.reading.servingQuantity=normalizeText(associations[1].canonicalQuantity);
+  }
   if (['columns_v1','columns_v2'].includes(firstResult?.transcription_diagnostics?.schema) || ['columns_v1','columns_v2'].includes(secondResult?.transcription_diagnostics?.schema)) {
     // Preserve original headers across source-only semantic aliases, never log these strings.
     const sourceHeaderKey = value => literalHeaderKey(normalizeDeclaredColumnTypography(value));
@@ -465,7 +481,7 @@ export function readableLabelEvidence(result) {
   const grams=per100?100:resolvedServingMass(result);
   const headerKey=!per100&&result.serving_size_g==null?literalHeaderKey:normalizeText;
   if (typeof grams!=='number'||!Number.isFinite(grams)||grams<=0) return null;
-  if (!per100 && (result.selected_basis!=='per_serving'||!columnMatchesServing(header,grams,result.serving_quantity,servingCountEvidence(result))||!(result.serving_mass_basis==='single_package_net_weight'?packageServingEvidence(result):hasGramServingEvidence(result.serving_size_evidence,grams)))) return null;
+  if (!per100 && (result.selected_basis!=='per_serving'||!columnMatchesServing(header,grams,result.serving_quantity,servingCountEvidence(result),result.serving_mass_basis==='single_package_net_weight')||!(result.serving_mass_basis==='single_package_net_weight'?packageServingEvidence(result):hasGramServingEvidence(result.serving_size_evidence,grams)))) return null;
   const nutrition={};
   for (const nutrient of NUTRIENTS) {
     const row=result.nutrients?.[nutrient];

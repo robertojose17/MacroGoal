@@ -9,7 +9,7 @@ function fixture(){
 }
 test('literal full printed bilingual heading and calorie row pass without altering printed amounts',()=>{
  const raw=fixture();assert.equal(validateNutritionLabelRead(raw,{requireProduct:true}).ok,true);
- assert.deepEqual(labelBasisDiagnostics(raw),{basis:'per_serving',mass_basis:'label_grams',column_count:1,has_mass:true,mass_from_declared_line:false,mass_value_type:'number',package_proof_valid:false,selected_header_present:true,serving_header_association:true});
+ assert.deepEqual(labelBasisDiagnostics(raw),{basis:'per_serving',mass_basis:'label_grams',column_count:1,has_mass:true,mass_from_declared_line:false,mass_value_type:'number',package_proof_valid:false,serving_association_reason:'matched',selected_header_present:true,serving_header_association:true});
 });
 test('same bilingual label with one-language calorie evidence passes all nutrition checks',()=>{
  const raw=fixture();raw.nutrients.calories.printed_text='Calories 60';const result=validateNutritionLabelRead(raw,{requireProduct:true});assert.equal(result.ok,true);assert.equal(result.reading.servingSize,16);assert.equal(result.reading.nutrients.fat.value,2.5);
