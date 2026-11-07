@@ -14,6 +14,7 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const VISION_MODEL = "google/gemini-2.5-flash";
+const PHYSICAL_LABEL_MODEL = "openai/gpt-6.1-sol";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false },
@@ -108,7 +109,7 @@ If an image itself is illegible, use readability "unclear". If readable images o
     { type: "image_url", image_url: { url: labelDataUri } },
     { type: "image_url", image_url: { url: frontDataUri } },
     { type: "text", text: prompt },
-  ], signal, bounded, providerFetch, sourceLabel ? declaredColumnResponseFormat(true) : undefined);
+  ], signal, bounded, providerFetch, sourceLabel ? declaredColumnResponseFormat(true) : undefined, sourceLabel);
 }
 
 async function callIndependentLabelRead(labelDataUri: string, frontDataUri: string, signal?: AbortSignal, bounded=false, providerFetch:typeof fetch=fetch, sourceLabel=false): Promise<{ text: string; finishReason: string | null }> {
@@ -144,10 +145,10 @@ Return ONLY valid JSON, without markdown:
     { type: "image_url", image_url: { url: labelDataUri } },
     { type: "image_url", image_url: { url: frontDataUri } },
     { type: "text", text: prompt },
-  ], signal, bounded, providerFetch, sourceLabel ? declaredColumnResponseFormat(false) : undefined);
+  ], signal, bounded, providerFetch, sourceLabel ? declaredColumnResponseFormat(false) : undefined, sourceLabel);
 }
 
-async function requestVision(stage: string, content: unknown[], signal?: AbortSignal, bounded=false, providerFetch:typeof fetch=fetch, responseFormat?: ReturnType<typeof declaredColumnResponseFormat>): Promise<{ text: string; finishReason: string | null }> {
+async function requestVision(stage: string, content: unknown[], signal?: AbortSignal, bounded=false, providerFetch:typeof fetch=fetch, responseFormat?: ReturnType<typeof declaredColumnResponseFormat>, sourceLabel=false): Promise<{ text: string; finishReason: string | null }> {
   const res = await providerFetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -157,11 +158,11 @@ async function requestVision(stage: string, content: unknown[], signal?: AbortSi
       "X-Title": "Macro Goal Nutrition Validator",
     },
     body: JSON.stringify({
-      model: VISION_MODEL,
+      model: sourceLabel ? VISION_MODEL : PHYSICAL_LABEL_MODEL,
       messages: [{ role: "user", content }],
-      temperature: 0.1,
-      max_tokens: 1536,
-      ...(bounded ? {provider:{allow_fallbacks:false,require_parameters:true,max_price:{prompt:2.5,completion:15}}} : {}),
+      ...(sourceLabel ? {temperature:0.1,max_tokens:1536} : {max_tokens:4096,reasoning:{effort:"low"}}),
+      ...(sourceLabel && bounded ? {provider:{allow_fallbacks:false,require_parameters:true,max_price:{prompt:2.5,completion:15}}} : {}),
+      ...(!sourceLabel ? {provider:{only:["openai"],order:["openai"],ignore:["openai/flex","openai/fast","openai/ultrafast"],allow_fallbacks:false,require_parameters:true,max_price:{prompt:2,completion:10}}} : {}),
       ...(responseFormat ? {response_format:responseFormat, ...(!bounded ? {provider:{allow_fallbacks:false,require_parameters:true,max_price:{prompt:2.5,completion:15}}} : {})} : {}),
     }),
     ...(signal ? { signal } : {}),
@@ -171,7 +172,7 @@ async function requestVision(stage: string, content: unknown[], signal?: AbortSi
   const choice = data.choices?.[0];
   const usage = data.usage ?? {};
   console.log("[VisionNutrition] model_usage", {
-    model: VISION_MODEL,
+    model: sourceLabel ? VISION_MODEL : PHYSICAL_LABEL_MODEL,
     stage,
     prompt_tokens: Number.isFinite(usage.prompt_tokens) ? usage.prompt_tokens : null,
     completion_tokens: Number.isFinite(usage.completion_tokens) ? usage.completion_tokens : null,
@@ -321,7 +322,7 @@ Deno.serve(async (req) => {
         return { result: extractJSON(response.text), finishReason: response.finishReason };
       },
     );
-    const verificationUsage = { model: VISION_MODEL, model_calls: gate.calls };
+    const verificationUsage = { model: PHYSICAL_LABEL_MODEL, model_calls: gate.calls };
     if (!gate.ok) return jsonResponse({ status: "error", message: gate.message, verification_usage: verificationUsage });
 
     // Only validated primary-read values are persisted; the second read is an independent gate.

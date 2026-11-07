@@ -34,7 +34,8 @@ export function createReceiptFetch({fetcher=fetch,persist,submission,revision,de
     if(String(url)!==chatEndpoint&&!isResponses)return fetcher(url,init);
     if(blocked || Date.now()>=deadline)throw Error('receipt_store_unavailable');
     const request=JSON.parse(String(init?.body||'{}'));
-    if(!['google/gemini-2.5-pro','google/gemini-2.5-flash'].includes(request.model))throw Error('unexpected_receipt_model');
+    const physicalSol=request.model==='openai/gpt-6.1-sol'&&!isResponses&&!request.tools&&!request.plugins&&!request.response_format;
+    if(!physicalSol&&!['google/gemini-2.5-pro','google/gemini-2.5-flash'].includes(request.model))throw Error('unexpected_receipt_model');
     const toolTypes=Array.isArray(request.tools)?request.tools.map(t=>t?.type):[];
     if(isResponses&&(!toolTypes.length||toolTypes.some(t=>!['openrouter:web_search','openrouter:web_fetch'].includes(t))))throw Error('unexpected_receipt_tool');
     let receipt={attempt_id:crypto.randomUUID(),revision,model:request.model,
