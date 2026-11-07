@@ -1,0 +1,58 @@
+{
+  "object": "response",
+  "status": "completed",
+  "error": null,
+  "incomplete_details": null,
+  "usage": {
+    "server_tool_use_details": {
+      "tool_calls_requested": 3,
+      "tool_calls_executed": 3
+    }
+  },
+  "output": [
+    {
+      "type": "reasoning",
+      "status": "completed"
+    },
+    {
+      "type": "reasoning",
+      "status": "completed"
+    },
+    {
+      "type": "openrouter:web_fetch",
+      "status": "completed",
+      "httpStatus": 200,
+      "url": "https://example.com/product/2",
+      "content": "Product description without a nutrition panel."
+    },
+    {
+      "type": "openrouter:web_fetch",
+      "status": "completed",
+      "httpStatus": 200,
+      "url": "https://example.com/product/3",
+      "content": "Product description without a nutrition panel."
+    },
+    {
+      "type": "openrouter:web_fetch",
+      "status": "completed",
+      "httpStatus": 200,
+      "url": "https://example.com/product/4",
+      "content": "Product description without a nutrition panel."
+    },
+    {
+      "type": "reasoning",
+      "status": "completed"
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "{\"proposals\":[]}"
+        }
+      ]
+    }
+  ]
+}
