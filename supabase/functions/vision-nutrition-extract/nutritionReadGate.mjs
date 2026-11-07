@@ -198,20 +198,29 @@ function bilingualUnitServing(value, declaration = false) {
   const count = Number(match[1]), grams = Number(match[2]);
   return Number.isFinite(count) && count > 0 && Number.isFinite(grams) && grams > 0 ? {count, grams} : null;
 }
+// Quantity text may omit the gram suffix or use either printed language. This
+// parser supplies no mass: only the full declaration plus explicit scalar can.
+function bilingualUnitQuantity(value) {
+  const raw = text(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const match = /^(\d+(?:\.\d+)?)\s+(?:unit\s*\/\s*unidad|unit|unidad)(?:\s*\(\s*(\d+(?:\.\d+)?)\s*g\s*\))?$/.exec(raw);
+  if (!match) return null;
+  const count = Number(match[1]), grams = match[2] === undefined ? null : Number(match[2]);
+  return Number.isFinite(count) && count > 0 && (grams === null || (Number.isFinite(grams) && grams > 0)) ? {count, grams} : null;
+}
 function columnMatchesServing(header, servingSize, servingQuantity, servingEvidence) {
   const value = normalizeText(header);
   if (/\bunit\s*\/\s*unidad\b/i.test(servingQuantity + ' ' + servingEvidence)) {
-    const quantity = bilingualUnitServing(servingQuantity);
+    const quantity = bilingualUnitQuantity(servingQuantity);
     const declaration = bilingualUnitServing(servingEvidence, true);
     if (!quantity || !declaration || quantity.count !== declaration.count
-      || quantity.grams !== declaration.grams || quantity.grams !== servingSize) return false;
+      || (quantity.grams !== null && quantity.grams !== declaration.grams) || declaration.grams !== servingSize) return false;
   }
   if (/\bunit\s*\/\s*unidad\b/i.test(header)) {
     const column = bilingualUnitServing(text(header).replace(/^per\s+/i, ''));
-    const quantity = bilingualUnitServing(servingQuantity);
+    const quantity = bilingualUnitQuantity(servingQuantity);
     const declaration = bilingualUnitServing(servingEvidence, true);
     return !!column && !!quantity && !!declaration && column.count === quantity.count
-      && column.count === declaration.count && column.grams === quantity.grams
+      && column.count === declaration.count && (quantity.grams === null || column.grams === quantity.grams)
       && column.grams === declaration.grams && column.grams === servingSize;
   }
   if (/\b(?:per|por)\s*100\s*(?:g|grams?)\b|\bper\s*100g\b/.test(value)) return false;
@@ -325,6 +334,11 @@ export function validateNutritionLabelRead(result, { requireProduct = false } = 
     };
   }
 
+  // Canonicalize only this proven equivalent bilingual quantity. Both reads
+  // must still independently establish the same count, mass, header and rows.
+  const bilingualDeclaration = !per100 && bilingualUnitServing(servingEvidence, true);
+  const canonicalQuantity = bilingualDeclaration && bilingualUnitQuantity(servingQuantity)
+    ? `${bilingualDeclaration.count} unit (${bilingualDeclaration.grams}g)` : servingQuantity;
   return {
     ok: true,
     reading: {
@@ -334,7 +348,7 @@ export function validateNutritionLabelRead(result, { requireProduct = false } = 
       packageIdentity:packageMass?packageServingEvidence(result).identity:null,
       detectedColumns: [...new Set(detectedColumns.map(normalizeText))].sort(),
       servingSize,
-      servingQuantity: normalizeText(servingQuantity),
+      servingQuantity: normalizeText(canonicalQuantity),
       nutrients,
     },
     productName: text(result.product_name),
