@@ -14,10 +14,10 @@ test('search type annotation leaves the exact original source and emitted JavaSc
   const annotation = '// @ts-types="../_shared/searchHydration.d.mts"\n';
   assert.ok(text.startsWith(annotation));
   const original = text.slice(annotation.length);
-  assert.equal(sha256(original), '80fce41874d79bccbfeb6321dffa080d0306a9b521ead57997a5dfbaa4e9e3a0');
+  assert.equal(sha256(original), '33ea6254dd70ac1b19f5c1a5095ff38a69f98f50b60d4c11d7c5bc613cdde9f5');
   const compilerOptions = { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, removeComments: true };
   assert.equal(ts.transpileModule(text, { compilerOptions }).outputText, ts.transpileModule(original, { compilerOptions }).outputText);
-  assert.equal(sha256(fs.readFileSync(path.join(root, 'supabase/functions/_shared/searchHydration.mjs'))), '85502f73b8f97a01beac8abfb653e7ee678f49fab9fc3ec162359a3f1d4bcb9d');
+  assert.equal(sha256(fs.readFileSync(path.join(root, 'supabase/functions/_shared/searchHydration.mjs'))), '76029d8f3a758bb399dcf19aea784759eb511dfa5a8fac5b841c9607740565f6');
 });
 
 test('strict contract preserves unknown data and narrows nutrition and authority without any', () => {

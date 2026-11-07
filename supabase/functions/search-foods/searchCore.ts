@@ -1,5 +1,5 @@
 export type Product = Record<string, unknown>;
-export type Provider = (query: string, signal: AbortSignal) => Promise<Product[]>;
+export type Provider = (query: string, signal: AbortSignal, deadlineMs?: number) => Promise<Product[]>;
 export type ProviderState = 'ok' | 'unavailable' | 'skipped';
 export const RANKING_VERSION = 'food-v2';
 export function firstText(...values: unknown[]): string {
@@ -121,7 +121,7 @@ async function bounded(provider: Provider, query: string, ms: number, stage: 'db
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const products = await Promise.race([
-      Promise.resolve().then(() => provider(query,controller.signal)),
+      Promise.resolve().then(() => provider(query,controller.signal,started + ms)),
       new Promise<never>((_,reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('SEARCH_TIMEOUT')); },ms); }),
     ]);
     if (!Array.isArray(products)) throw new Error('SEARCH_INVALID_RESPONSE');

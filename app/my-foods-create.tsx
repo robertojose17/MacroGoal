@@ -1,3 +1,5 @@
+import type { Tables } from '@/lib/supabase/types';
+import { foodLogIds } from '@/utils/foodPersistence';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, Alert, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
@@ -16,6 +18,8 @@ import { addToDraft } from '@/utils/myMealsDraft';
 import { trackFirstMealIfNeeded } from '@/utils/onboardingAnalytics';
 import { logFoodUsage } from '@/utils/logFoodUsage';
 
+type ManualFoodPayload = Pick<Tables<'foods'>, 'name' | 'brand' | 'serving_amount' | 'serving_unit' | 'calories' | 'protein' | 'carbs' | 'fats' | 'fiber' | 'user_created' | 'created_by'>;
+
 export default function MyFoodsCreateScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -23,7 +27,7 @@ export default function MyFoodsCreateScreen() {
   const isDark = false;
   const { t, i18n } = useTranslation();
   const recoveryManual=params.recoveryManual==='1';
-  const recoverySave=useRef(createManualRecoverySave());
+  const recoverySave=useRef(createManualRecoverySave<ManualFoodPayload, Tables<'foods'>>());
   const recoverySaving=useRef(false),recoveryGeneration=useRef(0);
   useFocusEffect(useCallback(()=>{recoveryGeneration.current++;return()=>{recoveryGeneration.current++;};},[]));
 
@@ -155,6 +159,7 @@ export default function MyFoodsCreateScreen() {
         .select()
         .single();
 
+      if (!foodData && !foodError) throw Error('manual_save_unknown');
       if (foodError) {
         console.error('[MyFoodsCreate] Error creating food:', foodError);
         console.error('[MyFoodsCreate] Error details:', {
@@ -219,7 +224,6 @@ export default function MyFoodsCreateScreen() {
           p_date: date,
           p_meal_type: mealType,
           p_food_id: foodData.id,
-          p_food_item_id: null,
           p_quantity: 1,
           p_calories: baseCalories,
           p_protein: baseProtein,
@@ -238,8 +242,9 @@ export default function MyFoodsCreateScreen() {
           return;
         }
 
-        const mealId = rpcData?.meal_id;
-        console.log('[MyFoodsCreate] log_food RPC success, meal_id:', mealId, 'meal_item_id:', rpcData?.meal_item_id);
+        const loggedIds = foodLogIds(rpcData);
+        const mealId = loggedIds.meal_id;
+        console.log('[MyFoodsCreate] log_food RPC success, meal_id:', mealId, 'meal_item_id:', loggedIds.meal_item_id);
 
         // Log food usage (fire-and-forget)
         console.log('[MyFoodsCreate] Logging food usage, food_id:', foodData.id);

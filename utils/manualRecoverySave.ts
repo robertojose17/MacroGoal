@@ -1,8 +1,7 @@
 type Payload = Record<string, string | number | boolean | null>;
-type Row = Payload & {id: string};
-type Services = {
-  insert(payload: Row): Promise<{data: Row | null; error?: unknown}>;
-  read(id: string, owner: string): Promise<{data: Row | null; error?: unknown}>;
+type Services<P extends Payload, R extends P & {id: string}> = {
+  insert(payload: P & {id: string}): Promise<{data: R | null; error?: unknown}>;
+  read(id: string, owner: string): Promise<{data: R | null; error?: unknown}>;
 };
 function nonce() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -12,13 +11,13 @@ function nonce() {
 }
 // A form-lifetime insertion identity, not an authorization token. Never upserts.
 // A remount/restart creates a new attempt; no cross-session deduplication claim.
-export function createManualRecoverySave() {
-  let bound: Row | undefined;
-  let pending: Promise<Row> | undefined;
-  let saved: Row | undefined;
-  const matches = (row: Row | null) => !!row && !!bound &&
+export function createManualRecoverySave<P extends Payload = Payload, R extends P & {id: string} = P & {id: string}>() {
+  let bound: (P & {id: string}) | undefined;
+  let pending: Promise<R> | undefined;
+  let saved: R | undefined;
+  const matches = (row: R | null) => !!row && !!bound &&
     Object.keys(bound).every(key => row[key] === bound![key]);
-  return function save(owner: string, payload: Payload, services: Services): Promise<Row> {
+  return function save(owner: string, payload: P, services: Services<P, R>): Promise<R> {
     if (!owner || payload.created_by !== owner) return Promise.reject(Error('manual_owner_changed'));
     if (bound && bound.created_by !== owner) return Promise.reject(Error('manual_owner_changed'));
     if (bound && (Object.keys(payload).length !== Object.keys(bound).length - 1 ||

@@ -21,7 +21,9 @@ test('actual hook with native AbortSignal presents one inline notice and explici
 test('actual screen keeps reply check in transcript and suppresses duplicate alert in conversation path',()=>{
  const source=fs.readFileSync(path.join(__dirname,'../app/(tabs)/coach.tsx'),'utf8');
  assert.doesNotMatch(source,/Recover pending response|Recuperar la respuesta pendiente/);
- assert.ok(source.indexOf("'Retry message'")<source.indexOf('</ScrollView>',source.indexOf("'Retry message'")));
+ const retryLabel=source.indexOf("'Retry message'"),viewportStart=source.lastIndexOf('<PremiumCheckpointScrollView',retryLabel),viewportEnd=source.indexOf('</PremiumCheckpointScrollView>',retryLabel);
+ assert.ok(retryLabel>=0&&viewportStart>=0&&viewportStart<retryLabel&&viewportEnd>retryLabel);
+ assert.ok(source.lastIndexOf('</PremiumCheckpointScrollView>',retryLabel)<viewportStart);
  assert.match(source,/if \(!COACH_CONVERSATION_READY && !e\?\.isSubscriptionError\)/);
  assert.match(source,/if \(!trimmed[^\n]+COACH_CONVERSATION_READY && conversationPending/);
 });

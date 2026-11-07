@@ -1,3 +1,4 @@
+import { foodJsonSnapshot, savedMealForFoodDetails, savedMealFoodUpdate, savedMealPortionForDetails } from '@/utils/foodPersistence';
 import { catalogPackageBarcode, exactFdcId, readSavedPortion, readSavedPortionLabel, savedPortionSnapshot, portionDescription, type SavedPortion } from '@/utils/catalogSelection';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { readUsdaPortions } from '../supabase/functions/_shared/foodPortions.mjs';
@@ -850,17 +851,14 @@ export default function FoodDetailsLayout({
         return;
       }
 
-      const { data: mealItem, error } = await supabase
-        .from(itemTable ?? 'meal_items')
-        .select(`
-          *,
-          food_name,
-          food_brand,
-          foods!left(*),
-          food_item_id
-        `)
-        .eq('id', itemId)
-        .single();
+      // Keep each query tied to its real table so joins and nullable fields stay typed.
+      const result = itemTable === 'saved_meal_items'
+        ? await supabase.from('saved_meal_items').select('*, foods!left(*)').eq('id', itemId).single()
+        : await supabase.from('meal_items').select('*, foods!left(*)').eq('id', itemId).single();
+      const { error } = result;
+      const mealItem = result.data && ('saved_meal_id' in result.data
+        ? savedMealForFoodDetails(result.data)
+        : result.data);
 
       if (!isCurrent()) return;
       if (error || !mealItem) {
@@ -877,12 +875,15 @@ export default function FoodDetailsLayout({
         return;
       }
 
+      // Validate saved mass/count before exposing a product that could be saved again.
+      const savedTablePortion = 'saved_meal_id' in mealItem ? savedMealPortionForDetails(mealItem) : null;
+
       // Use food_name/food_brand columns as fallback when foods JOIN is null
       const food = mealItem.foods ?? (
-        (mealItem as any).food_name
+        mealItem.food_name
           ? {
-              name: (mealItem as any).food_name,
-              brand: (mealItem as any).food_brand ?? undefined,
+              name: mealItem.food_name,
+              brand: mealItem.food_brand ?? undefined,
               calories: mealItem.calories ?? 0,
               protein: mealItem.protein ?? 0,
               carbs: mealItem.carbs ?? 0,
@@ -1065,25 +1066,19 @@ export default function FoodDetailsLayout({
         setFoodItemRef({ serving_size: 100, macros_per: '100g' });
       }
 
-      // ── Source of truth: the grams saved in DB ──────────────────────────
-      // saved_meal_items uses serving_amount + servings_count; meal_items uses grams + quantity.
-      // Single source of truth for totalGrams (in priority order):
-      // 1. saved_meal_items: serving_amount × servings_count
-      // 2. mealItem.grams — what was actually saved (meal_items)
-      // 3. Invert the calorie formula — works for legacy entries where grams is null
-      // 4. quantity × food.serving_amount — last resort
+      // Both row contracts now expose total saved grams and the original count.
       const isSavedMealTable = (itemTable ?? 'meal_items') === 'saved_meal_items';
       let totalGrams: number;
       let rawQuantity: number;
-      if (isSavedMealTable && (mealItem as any).serving_amount != null && (mealItem as any).servings_count != null) {
-        totalGrams = (mealItem as any).serving_amount * (mealItem as any).servings_count;
-        rawQuantity = (mealItem as any).servings_count;
+      if ('saved_meal_id' in mealItem) {
+        totalGrams = mealItem.grams;
+        rawQuantity = mealItem.quantity;
       } else if (mealItem.grams != null && mealItem.grams > 0) {
         totalGrams = mealItem.grams;
         rawQuantity = mealItem.quantity || 1;
-      } else if (mealItem.calories > 0 && food.calories > 0) {
+      } else if ((mealItem.calories ?? 0) > 0 && food.calories > 0) {
         // foods.calories is per-100g; invert: totalGrams = (item_calories / per100_calories) * 100
-        totalGrams = (mealItem.calories / food.calories) * 100;
+        totalGrams = ((mealItem.calories ?? 0) / food.calories) * 100;
         rawQuantity = mealItem.quantity || 1;
       } else {
         totalGrams = (mealItem.quantity || 1) * (food.serving_amount || 100);
@@ -1096,7 +1091,8 @@ export default function FoodDetailsLayout({
 
       savedOffDataRef.current = (mealItem as any).off_data && typeof (mealItem as any).off_data === 'object' ? (mealItem as any).off_data : null;
       const snapshot = readSavedPortion(savedOffDataRef.current?._macrogoal_selected_portion_v1,rawQuantity,totalGrams)
-        || (isSavedMealTable ? readSavedPortionLabel((mealItem as any).serving_unit,rawQuantity,totalGrams) : null);
+        || (isSavedMealTable ? readSavedPortionLabel(mealItem.serving_unit,rawQuantity,totalGrams) : null)
+        || savedTablePortion;
       setSavedPortion(snapshot);
       if(snapshot){
         setServingAmount(snapshot.gramsPerUnit);
@@ -1181,6 +1177,7 @@ export default function FoodDetailsLayout({
       await checkFavoriteStatus(mockProduct, isCurrent);
     } catch (error) {
       if (!isCurrent()) return;
+      if (itemTable === 'saved_meal_items') setProduct(null);
       console.error('Error in loadEditItem:', error);
       Alert.alert(t('common.error'), t('foodDetails.failedToAdd'));
       router.back();
@@ -1531,7 +1528,7 @@ export default function FoodDetailsLayout({
             ? `1 ${servingDesc} (${totalServingGrams} g)`
             : `${totalServingGrams} g`;
         console.log('[FoodDetails] upsertFoodItem: canonical serving_size=', canonicalServingSize);
-        return { ...prod, serving_size: canonicalServingSize };
+        return foodJsonSnapshot({ ...prod, serving_size: canonicalServingSize });
       })(),
     };
 
@@ -1654,7 +1651,7 @@ export default function FoodDetailsLayout({
         : selectedServingOptionKey.startsWith('portion:') ? (()=>{const p=readUsdaPortions(product._portion_evidence,product._usda_fdc_id || '').find(p=>'portion:'+p.key===selectedServingOptionKey);return p?{description:p.description,gramsPerUnit:p.grams/p.amount}:null;})()
         : ['default','natural_unit'].includes(selectedServingOptionKey) && verifiedPortions.length===1 ? {description:verifiedPortions[0].description,gramsPerUnit:verifiedPortions[0].grams/verifiedPortions[0].amount} : null;
       const portionSnapshot = selectedPortion ? savedPortionSnapshot(selectedPortion.description,servingsCountForDisplay,totalGrams) : null;
-      const saveOffData = {...(mode==='edit'?savedOffDataRef.current:product),_macrogoal_selected_portion_v1:portionSnapshot};
+      const saveOffData = foodJsonSnapshot({...(mode==='edit'?savedOffDataRef.current:product),_macrogoal_selected_portion_v1:portionSnapshot});
       let servingDescription: string;
       if (selectedPortion) {
         servingDescription=portionDescription(selectedPortion.description,servingsCountForDisplay,totalGrams);
@@ -1754,33 +1751,18 @@ export default function FoodDetailsLayout({
       };
 
       if (mode === 'edit' && itemId) {
-        const isSavedMealTableUpdate = (itemTable ?? 'meal_items') === 'saved_meal_items';
-        const updatePayload = isSavedMealTableUpdate
-          ? {
-              servings_count: parseFloat(numberOfServings) || 1,
-              serving_amount: servingAmount,
-              calories: safeMacros.calories,
-              protein: safeMacros.protein,
-              carbs: safeMacros.carbs,
-              fats: safeMacros.fats,
-              fiber: safeMacros.fiber,
-              serving_unit: servingDescription,
-            }
-          : {
-              quantity: parseFloat(numberOfServings) || 1,
-              calories: safeMacros.calories,
-              protein: safeMacros.protein,
-              carbs: safeMacros.carbs,
-              fats: safeMacros.fats,
-              fiber: safeMacros.fiber,
+        const quantity = parseFloat(numberOfServings) || 1;
+        const { error } = itemTable === 'saved_meal_items'
+          ? await supabase.from('saved_meal_items').update(savedMealFoodUpdate({
+              ...safeMacros, quantity, grams: totalGrams, servingDescription,
+            })).eq('id', itemId)
+          : await supabase.from('meal_items').update({
+              quantity,
+              ...safeMacros,
               serving_description: servingDescription,
               grams: totalGrams,
               ...(portionSnapshot || savedOffDataRef.current?._macrogoal_selected_portion_v1 ? {off_data:saveOffData} : {}),
-            };
-        const { error } = await supabase
-          .from(itemTable ?? 'meal_items')
-          .update(updatePayload)
-          .eq('id', itemId);
+            }).eq('id', itemId);
 
         if (error) {
           console.error('Error updating meal item:', error);

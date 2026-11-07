@@ -1,3 +1,4 @@
+import type { Tables } from '@/lib/supabase/types';
 
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, ActivityIndicator } from 'react-native';
@@ -13,19 +14,7 @@ import { toLocalDateString } from '@/utils/dateUtils';
 import { formatFoodRowServing } from '@/utils/servingDisplay';
 import FoodItemRow from '@/components/FoodItemRow';
 
-interface MyFood {
-  id: string;
-  name: string;
-  brand?: string;
-  serving_amount: number;
-  serving_unit: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fats: number;
-  fiber: number;
-  created_at: string;
-}
+type MyFood = Tables<'foods'>;
 
 export default function MyFoodsScreen() {
   const router = useRouter();
@@ -197,7 +186,7 @@ export default function MyFoodsScreen() {
           <View style={{ flex: 1 }}>
             <FoodItemRow
               name={food.name}
-              brand={food.brand}
+              brand={food.brand ?? undefined}
               calories={food.calories}
               protein={food.protein}
               carbs={food.carbs}

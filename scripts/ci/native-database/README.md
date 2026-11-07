@@ -10,6 +10,23 @@ Native SQL and multi-session suite:
 
     python3 scripts/ci/native-database/run.py
 
+Both native lanes first exercise persistent psql framing with semicolonless
+transaction snapshots, repeated result boundaries, already-terminated writes,
+trailing line comments, rollback, and required SQLSTATE failures. A standalone
+semicolon on its own line executes a pending SQL buffer before the acknowledgment;
+an empty buffer is not replayed. Empty or malformed snapshot JSON still fails.
+These checks use only a transaction-local temporary table and are reported under
+`session_protocol`. Existing canonical/private-state and race assertions are unchanged.
+
+Offline control-flow regressions, including the published empty-snapshot failure:
+
+    python3 scripts/ci/native-database/session_protocol_probes.py
+    python3 scripts/ci/native-database/safety_probes.py
+
+The offline probes use a small canned protocol model, not PostgreSQL. Their passing
+results are not native concurrency, RLS or HTTP evidence. The full native lanes
+remain required, and missing PostgreSQL/Docker prerequisites remain failures.
+
 Native suite plus real local PostgREST HTTP/JWT gate:
 
     python3 scripts/ci/native-database/run.py --postgrest

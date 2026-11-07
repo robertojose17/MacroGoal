@@ -28,7 +28,7 @@ const commands = {
   'backend-components': ['python3', ['scripts/ci/run-backend-components.py'], local],
   'backend-contracts': [process.execPath, ['scripts/release-review/check.mjs', '--group', 'contracts'], { ...local, TYPESCRIPT_MODULE: path.join(root, 'node_modules/typescript'), PGLITE_MODULE: path.join(root, 'scripts/ci/test-tooling/node_modules/@electric-sql/pglite/dist/index.js') }],
   'purchase-regressions': [process.execPath, ['--test', '--test-reporter=tap', 'tests/purchase-reliability.test.cjs', 'tests/sync-subscription.test.cjs'], local],
-  'ci-regressions': [process.execPath, ['--test', '--test-reporter=tap', 'tests/ci/deno-lock-generation.test.cjs', 'tests/ci/search-hydration-types.test.cjs', 'tests/ci/validation-scopes.test.cjs', 'tests/icon-and-theme-contracts.test.cjs', 'tests/coach-model-conversation.test.cjs', 'tests/coach-recovery-ui.test.cjs', 'tests/premium-checkpoints.test.cjs'], local],
+  'ci-regressions': [process.execPath, ['--test', '--test-reporter=tap', 'tests/ci/deno-lock-generation.test.cjs', 'tests/ci/search-hydration-types.test.cjs', 'tests/ci/validation-scopes.test.cjs', 'tests/icon-and-theme-contracts.test.cjs', 'tests/food-library-domain-contracts.test.cjs', 'tests/coach-model-conversation.test.cjs', 'tests/coach-recovery-ui.test.cjs', 'tests/premium-checkpoints.test.cjs'], local],
   'install-test-tooling': ['npm', ['ci', '--prefix', 'scripts/ci/test-tooling', '--ignore-scripts', '--no-audit', '--no-fund'], env],
 };
 let command;

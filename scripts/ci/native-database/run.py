@@ -126,7 +126,10 @@ class Session:
 
     def send(self, text):
         self.marker = 'DONE_' + uuid.uuid4().hex
-        self.p.stdin.write(text + '\n\\echo ' + self.marker + '\n')
+        # psql's \echo does not execute an unterminated SQL buffer. End SQL
+        # on its own line so trailing -- comments cannot swallow the boundary.
+        # Unlike \g, an empty ';' does not repeat an already executed command.
+        self.p.stdin.write(text + '\n;\n\\echo ' + self.marker + '\n')
         self.p.stdin.flush()
 
     def result(self, error=None):
@@ -217,6 +220,8 @@ try:
         report['postgres_container']['status'] = 'verified_exact_17_6'
     else:
         assert report['server_version_num'].startswith('16'), report['server_version_num']
+    from session_checks import run as run_session_checks
+    run_session_checks(globals())
     sql((R / 'sql/fixture.sql').read_text())
     guard_checks(globals())
     sql((R / 'sql/01-nutrition.sql').read_text())

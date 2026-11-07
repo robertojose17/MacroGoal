@@ -218,10 +218,15 @@ export async function handleSearch(req: Request): Promise<Response> {
   let requiresLabelConfirmation = false;
   const result = await searchCatalog(query,limit,{
     skipFallback: () => requiresLabelConfirmation,
-    db: async (normalized,signal) => {
+    db: async (normalized,signal,deadlineMs) => {
       const { data,error } = await supabase.rpc('search_food_catalog_v2',{ p_queries: queryVariants(normalized),p_limit: limit }).abortSignal(signal);
       if (error || !Array.isArray(data)) throw new Error('CATALOG_UNAVAILABLE');
-      const hydrated = await hydrateSearchRows(data, supabase, signal, 150);
+      // Optional authority hydration shares the DB stage's existing deadline.
+      // Preserve already-returned ranking rows rather than lose them while waiting
+      // for enrichment. Reserve a small window for projection/ranking; do not
+      // reduce the ranking RPC or any provider's search budget.
+      const hydrationMs = deadlineMs === undefined ? 150 : Math.min(150, Math.max(0, deadlineMs - Date.now() - 25));
+      const hydrated = await hydrateSearchRows(data, supabase, signal, hydrationMs);
       return hydrated.map(({ row, authority }) => {
         const product = mapDbRowToOff(row, normalized, authority === 'confirmed_correction');
         if (product.requires_label_confirmation === true) requiresLabelConfirmation = true;

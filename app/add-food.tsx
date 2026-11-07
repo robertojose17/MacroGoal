@@ -1,3 +1,4 @@
+import { foodLogIds } from '@/utils/foodPersistence';
 import { searchSelectionNeedsConfirmation, searchConfirmationRoute } from '@/utils/searchSelectionSafety';
 import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
 import type { PremiumFlow } from '@/utils/premiumCheckpointContract';
@@ -1133,8 +1134,8 @@ export default function AddFoodScreen() {
         return;
       }
 
-      const mealId = rpcDataFav?.meal_id;
-      console.log('[AddFood] ✅ Favorite added to meal successfully, meal_id:', mealId, 'meal_item_id:', rpcDataFav?.meal_item_id);
+      const mealId = foodLogIds(rpcDataFav).meal_id;
+      console.log('[AddFood] ✅ Favorite added to meal successfully, meal_id:', mealId, 'meal_item_id:', foodLogIds(rpcDataFav).meal_item_id);
       console.log('[AddFood] Triggering success banner');
 
       // ── Log food usage (fire-and-forget) — resolve catalog food_item_id first ──
@@ -1409,7 +1410,6 @@ export default function AddFoodScreen() {
         p_user_id: user.id,
         p_date: date,
         p_meal_type: mealType,
-        p_food_id: null,
         p_food_item_id: item.food_item_id,
         p_quantity: item.quantity_logged,
         p_calories: item.calories_logged,
@@ -1428,7 +1428,7 @@ export default function AddFoodScreen() {
         return;
       }
 
-      const mealId = rpcData?.meal_id;
+      const mealId = foodLogIds(rpcData).meal_id;
       const xpSourceId = `${mealId}_${item.food_item_id}_${date}`;
       trackFirstMealIfNeeded();
       showSuccessBanner();
@@ -1744,7 +1744,7 @@ export default function AddFoodScreen() {
           return;
         }
 
-        console.log('[AddFood] log_food RPC success for', itemName, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
+        console.log('[AddFood] log_food RPC success for', itemName, 'meal_id:', foodLogIds(rpcData).meal_id, 'meal_item_id:', foodLogIds(rpcData).meal_item_id);
 
         // ── Log food usage (fire-and-forget) ──
         const catalogId: string | null = item.food_item_id ?? null;

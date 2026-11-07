@@ -511,6 +511,9 @@
     "historical_unadapted_tests_pass": 928,
     "historical_unadapted_tests_fail": 7,
     "test_overlay_not_repo_relative": true,
-    "actual_deno_and_dependency_lock_review_pending": true
+    "actual_deno_and_dependency_lock_review_pending": true,
+    "dependency_lock_review_completed": true,
+    "fresh_frozen_deno_pending": true,
+    "live_dependency_parity_proven": false
   }
 }

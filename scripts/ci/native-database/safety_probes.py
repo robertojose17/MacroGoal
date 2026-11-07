@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import patch
 from cleanup import cleanup, cleanup_postgrest
 from container_postgres import ContainerPostgres, IMAGE
+from session_protocol_probes import SessionProtocolProbes
 
 
 class TeardownProbes(unittest.TestCase):

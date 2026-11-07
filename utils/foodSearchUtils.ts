@@ -168,7 +168,7 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
 
   // Use the same canonical row adapter as barcode lookup: macros_per may be serving.
   // Existing confirmation columns protect an explicit corrected serving, never grant writes.
-  return { ...buildSyntheticOffData(fi), _db_id: fi.id } as OpenFoodFactsProduct;
+  return { ...buildSyntheticOffData(fi), _db_id: fi.id };
 }
 
 /** Capture provider facts on use, not on every keystroke. No private diary writes. */

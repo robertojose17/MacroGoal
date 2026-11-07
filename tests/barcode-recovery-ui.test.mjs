@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {recoveryDiscoveryOnce,recoveryRefine} from '../utils/recoveryDiscoveryOnce.ts';
 import {registerHooks} from 'node:module';
-registerHooks({resolve(specifier,context,next){return next(specifier==='@/utils/stringUtils'?new URL('../utils/stringUtils.ts',import.meta.url).href:specifier,context);}});
+registerHooks({resolve(specifier,context,next){return next(specifier==='@/utils/stringUtils'?new URL('../utils/stringUtils.ts',import.meta.url).href:specifier==='./catalogSelection'?new URL('../utils/catalogSelection.ts',import.meta.url).href:specifier,context);}});
 const {buildSyntheticOffData}=await import('../utils/servingParser.ts');
 test('remounts share one discovery and uncertain failures are not automatically retried',async()=>{
  let calls=0;const start=async()=>{calls++;return {candidates:[]};};

@@ -3,8 +3,70 @@ const {parseMealConversation,mealConversationInput}=require('../utils/coachMealC
 const handoff=()=>({schema:'meal_conversation_v1',fields:{exclusions:[],allergens:[],dietary_preferences:[],provenance:'user_provided',verification:'unverified',mode:'eat_out',food_query:'meal',public_area:'San Juan',restaurant:null,preference:'high_protein'},status:'ready',question:null,requires_search_consent:true,constraints_review_required:true,options:[]});
 test('model handoff retains area-first fields but never accepts food actions or fabricated sources',()=>{const h=parseMealConversation(handoff());assert.ok(h);assert.deepEqual(mealConversationInput(h,{exclusions:['onion'],allergens:['milk']}),{mode:'eat_out',food_query:'meal',public_area:'San Juan',preference:'high_protein',exclusions:['onion'],allergens:['milk'],dietary_preferences:[]});for(const patch of [{requires_search_consent:false},{options:[{calories:500}]},{source_url:'https://example.com'},{fields:{...h.fields,public_area:null}},{schema:'other'}])assert.equal(parseMealConversation({...h,...patch}),null);const clarify=parseMealConversation({...h,fields:{...h.fields,public_area:null},status:'clarify',question:{key:'public_area'}});assert.ok(clarify);assert.equal(mealConversationInput(clarify,{exclusions:[],allergens:[]}),null);});
 test('venue address requires its own validated source and never gains invented images',()=>{const row={id:'one',name:'Bowl',provenance:{kind:'official',source_url:'https://example.com/menu'},nutrition:{authority:'estimated',basis:{amount:1,unit:'serving',label:'one bowl'},values:{calories:500,protein:30,carbs:50,fats:15,fiber:4},assumptions:[]},ingredients:[],instructions:[],allergy_status:'requires_review',review_required:true,venue:{name:'Restaurant',source_url:'https://example.com',address:'1 Main St'}};assert.equal(mealEvidenceFromOption(row,'eat_out').venue.address,undefined);row.venue.address_source_url='https://example.com/locations';assert.equal(mealEvidenceFromOption(row,'eat_out').venue.address,'1 Main St');row.venue.address_source_url='javascript:bad';assert.equal(mealEvidenceFromOption(row,'eat_out').venue.address,undefined);});
-function harness(premium=true,language='en'){const React=require('react'),original=Module._load,states=[],refs=[],calls=[],effects=[];let cursor=0,ref=0;const fake={...React,useState(init){const i=cursor++;if(!(i in states))states[i]=typeof init==='function'?init():init;return [states[i],v=>states[i]=typeof v==='function'?v(states[i]):v]},useEffect(fn){effects.push(fn)},useRef(init){const i=ref++;return refs[i]??(refs[i]={current:init})}};Module._load=function(n,parent,isMain){if(n==='react')return fake;if(n==='react-native')return new Proxy({StyleSheet:{create:x=>x},Linking:{openURL:x=>calls.push({url:x})}},{get:(o,k)=>o[k]??String(k)});if(n==='expo-router')return {useRouter:()=>({push:r=>calls.push({route:r})})};if(n==='react-i18next')return {useTranslation:()=>({i18n:{language}})};if(n.startsWith('@/'))return original.call(this,path.resolve(__dirname,'..',n.slice(2)),parent,isMain);return original.call(this,n,parent,isMain);};const option={id:'bowl',name:'Chicken bowl',kind:'restaurant',provenance:{kind:'official',label:'Menu',url:'https://example.com/menu'},nutrition:{authority:'estimated',basis:{amount:1,unit:'serving',label:'one bowl'},values:{calories:500,protein:30,carbs:50,fats:15,fiber:4},assumptions:[]},allergyStatus:'requires_review'};const source={kind:'ready',owner:'A',date:'2026-10-22',meal:'lunch',mode:'eat_out',requestId:'owned',options:[option],capabilities:{estimate:false,discovery:false,reason:null}};const service={owner:async()=> 'A',today:()=> '2026-10-22',pending:async()=>null,subscribeInvalidation:()=>()=>{},explore:async(_a,input)=>{calls.push({operation:'explore',input});return source},review:(src,id)=>{calls.push({operation:'review',meal:src.meal,id});return {invalidate(){}}}};const file=require.resolve('../components/CoachConversationActions.tsx');delete require.cache[file];const Component=require(file).default,props={service,handoff:{value:handoff(),owner:'A',date:'2026-10-22'},hasConversation:true,isPremium:premium,premiumLoading:false,gated:false,busy:false};const text=n=>n==null?'':typeof n==='string'||typeof n==='number'?String(n):React.Children.toArray(n.props?.children).map(text).join(' '),nodes=n=>!n||typeof n!=='object'?[]:[n,...React.Children.toArray(n.props?.children).flatMap(nodes)];return {calls,props,states,effects,render(){cursor=ref=0;effects.length=0;return Component(props)},button(tree,label){return nodes(tree).find(n=>n.props?.accessibilityRole==='button'&&text(n)===label)},text,restore(){Module._load=original}};}
-test('actual model action component does not explore on receipt; Add to meal requires explicit meal choice and only opens review',async()=>{const h=harness();try{let tree=h.render();assert.equal(h.calls.length,0);h.button(tree,'Find meal options').props.onPress();await new Promise(r=>setImmediate(r));assert.equal(h.calls.length,1);assert.equal('restaurant' in h.calls[0].input,false);tree=h.render();assert.match(h.text(tree),/Chicken bowl/);h.button(tree,'Add to meal').props.onPress();assert.equal(h.calls.length,1);tree=h.render();h.button(tree,'Dinner').props.onPress();await new Promise(r=>setImmediate(r));assert.deepEqual(h.calls[1],{operation:'review',meal:'dinner',id:'bowl'});assert.equal(h.calls[2].route.pathname,'/recipe-finder-detail');assert.equal(h.calls.some(c=>c.operation==='log'),false);}finally{h.restore()}});
+// Runtime UI contracts changed in 57d2908 (diary handoff) and ed7c59a
+// (retained estimates). Keep native navigation/auth at their boundary; load the
+// actual PremiumCheckpointInline and Coach components, never native packages.
+function harness(premium=true,language='en') {
+ const React=require('react'),original=Module._load,NativeDate=global.Date;
+ const states=[],refs=[],calls=[],effects=[],cleanups=new Set();let cursor=0,ref=0;
+ const fixedTime=new NativeDate(2026,9,22,12,0,0).getTime();
+ global.Date=class extends NativeDate {
+  constructor(...args){super(...(args.length?args:[fixedTime]));}
+  static now(){return fixedTime;}
+ };
+ const fake={...React,
+  useState(init){const i=cursor++;if(!(i in states))states[i]=typeof init==='function'?init():init;return [states[i],v=>states[i]=typeof v==='function'?v(states[i]):v]},
+  useEffect(fn){
+   const effect=()=>{const cleanup=fn();if(typeof cleanup!=='function')return cleanup;let disposed=false;const dispose=()=>{if(disposed)return;disposed=true;cleanups.delete(dispose);cleanup()};cleanups.add(dispose);return dispose};
+   effect.toString=()=>fn.toString();effects.push(effect);
+  },
+  useRef(init){const i=ref++;return refs[i]??(refs[i]={current:init})}
+ };
+ Module._load=function(n,parent,isMain){
+  if(n==='react')return fake;
+  if(n==='react-native')return new Proxy({StyleSheet:{create:x=>x},Linking:{openURL:x=>calls.push({url:x})}},{get:(o,k)=>o[k]??String(k)});
+  if(n==='@react-navigation/native')return {useIsFocused:()=>true};
+  if(n==='@/lib/supabase/client')return {supabase:{auth:{getSession:async()=>{throw Error('unexpected premium fixture auth access')}}}};
+  if(n==='expo-router')return {useRouter:()=>({push:r=>calls.push({route:r})})};
+  if(n==='react-i18next')return {useTranslation:()=>({i18n:{language}})};
+  if(n.startsWith('@/'))return original.call(this,path.resolve(__dirname,'..',n.slice(2)),parent,isMain);
+  return original.call(this,n,parent,isMain);
+ };
+ const option={id:'bowl',name:'Chicken bowl',kind:'restaurant',provenance:{kind:'official',label:'Menu',url:'https://example.com/menu'},nutrition:{authority:'estimated',basis:{amount:1,unit:'serving',label:'one bowl'},values:{calories:500,protein:30,carbs:50,fats:15,fiber:4},assumptions:[]},allergyStatus:'requires_review'};
+ const source={kind:'ready',owner:'A',date:'2026-10-22',meal:'dinner',mode:'eat_out',requestId:'owned',options:[option],capabilities:{estimate:false,discovery:false,reason:null}};
+ const service={owner:async()=> 'A',today:()=> '2026-10-22',pending:async()=>null,subscribeInvalidation:()=>()=>{},explore:async(_a,input,meal)=>{calls.push({operation:'explore',input,meal});return source},review:(src,id)=>{calls.push({operation:'review',meal:src.meal,id});return {invalidate(){}}}};
+ const file=require.resolve('../components/CoachConversationActions.tsx');delete require.cache[file];
+ const Component=require(file).default,props={service,handoff:{value:handoff(),owner:'A',date:'2026-10-22'},hasConversation:true,isPremium:premium,premiumLoading:false,gated:false,busy:false};
+ const text=n=>n==null?'':typeof n==='string'||typeof n==='number'?String(n):React.Children.toArray(n.props?.children).map(text).join(' ');
+ const nodes=n=>!n||typeof n!=='object'?[]:[n,...React.Children.toArray(n.props?.children).flatMap(nodes)];
+ return {calls,props,states,effects,source,
+  render(){cursor=ref=0;effects.length=0;return Component(props)},
+  async mountScope(){this.render();const effect=effects.find(f=>f.toString().includes('service.saved'));assert.ok(effect);const cleanup=effect();await new Promise(r=>setImmediate(r));return cleanup},
+  button(tree,label){return nodes(tree).find(n=>n.props?.accessibilityRole==='button'&&text(n)===label)},text,
+  restore(){try{for(const cleanup of [...cleanups])cleanup()}finally{Module._load=original;global.Date=NativeDate}}
+ };
+}
+
+test('model actions wait for consent; both diary actions open review with the current local meal and never log',async()=>{
+ for(const label of ['View Details','Add to diary']){const h=harness();try{
+  let tree=h.render();assert.equal(h.calls.length,0);
+  h.button(tree,'Find meal options').props.onPress();await new Promise(r=>setImmediate(r));
+  assert.equal(h.calls.length,1);assert.equal('restaurant' in h.calls[0].input,false);assert.equal(h.calls[0].meal,'lunch');
+  tree=h.render();assert.match(h.text(tree),/Chicken bowl/);
+  const open=h.button(tree,label);assert.ok(open);assert.equal(open.props.disabled,false);
+  open.props.onPress();open.props.onPress();await new Promise(r=>setImmediate(r));
+  assert.deepEqual(h.calls[1],{operation:'review',meal:'lunch',id:'bowl'});assert.equal(h.source.meal,'dinner');
+  assert.equal(h.calls.length,3);assert.equal(h.calls[2].route.pathname,'/recipe-finder-detail');
+  assert.ok(require('../utils/coachMealReview').readMealReview(h.calls[2].route.params.coachMealReviewKey));
+  assert.equal(h.calls.some(c=>c.operation==='log'),false);
+ }finally{h.restore()}}
+});
+test('diary meal selection matches the established local-hour boundaries',()=>{
+ const {diaryMealTypeForLocalTime}=require('../utils/diaryMealType');
+ for(const [hour,expected] of [[0,'snack'],[5,'snack'],[6,'breakfast'],[9,'breakfast'],[10,'lunch'],[14,'lunch'],[15,'snack'],[17,'snack'],[18,'dinner'],[21,'dinner'],[22,'snack'],[23,'snack']]){
+  assert.equal(diaryMealTypeForLocalTime(new Date(2026,9,22,hour,59)),expected);
+ }
+});
 test('free and stale owner handoffs cannot trigger personalized exploration',async()=>{const free=harness(false);try{assert.equal(free.button(free.render(),'Find meal options').props.disabled,true);assert.equal(free.calls.length,0);}finally{free.restore()}const h=harness();try{h.props.handoff.owner='other';h.button(h.render(),'Find meal options').props.onPress();await new Promise(r=>setImmediate(r));assert.equal(h.calls.length,0);}finally{h.restore()}});
 
 test('actual chat hook renders committed SSE with installed React Native Response lacking body, preserving text, handoff and owner isolation',async()=>{
@@ -15,10 +77,25 @@ test('actual chat hook renders committed SSE with installed React Native Respons
  }
 });
 
-test('restarted history offers explicit saved options restore, not automatic search or Add',async()=>{const h=harness();try{h.props.handoff=undefined;h.render();h.states[6]=true;h.props.service.restore=async()=>{h.calls.push({operation:'restore'});return {kind:'unavailable',reason:'saved_options_unavailable'}};let tree=h.render();assert.equal(h.calls.length,0);h.button(tree,'Resume meal search').props.onPress();await new Promise(r=>setImmediate(r));assert.deepEqual(h.calls,[{operation:'restore'}]);tree=h.render();assert.ok(h.button(tree,'Resume meal search'));assert.equal(h.button(tree,'Add to meal'),undefined);}finally{h.restore()}});
+test('restarted history offers explicit saved options restore, not automatic search or Add',async()=>{const h=harness();try{h.props.handoff=undefined;h.props.service.saved=async()=>({requestId:'saved'});await h.mountScope();h.props.service.restore=async()=>{h.calls.push({operation:'restore'});return {kind:'unavailable',reason:'saved_options_unavailable'}};let tree=h.render();assert.equal(h.calls.length,0);assert.ok(h.button(tree,'Resume meal search'),'Saved search preparation needs an explicit restore control');h.button(tree,'Resume meal search').props.onPress();await new Promise(r=>setImmediate(r));assert.deepEqual(h.calls,[{operation:'restore'}]);tree=h.render();assert.ok(h.button(tree,'Resume meal search'));assert.equal(h.button(tree,'Add to diary'),undefined);}finally{h.restore()}});
 
-test('draft allergen from negated user wording is removable before explicit confirmation, empty is not no allergies',async()=>{const h=harness();try{h.props.handoff.value.fields.allergens=['peanuts'];let tree=h.render();assert.doesNotMatch(h.text(tree),/preferences in mind|Check what I captured/);assert.equal(h.calls.length,0);h.button(tree,'Change preferences').props.onPress();tree=h.render();h.button(tree,'Remove: peanuts').props.onPress();tree=h.render();assert.doesNotMatch(h.text(tree),/no allergies|allergen.free/i);h.button(tree,'Find meal options').props.onPress();await new Promise(r=>setImmediate(r));assert.deepEqual(h.calls[0].input.allergens,[]);assert.deepEqual(h.calls[0].input.dietary_preferences,[]);}finally{h.restore()}});
-test('older unsized restaurant card must resume before estimate and then owns the shared portion composer',async()=>{const h=harness();try{let composer;h.props.active=false;h.props.onResume=()=>h.props.active=true;h.props.onComposer=v=>composer=v;h.render();h.states[0]={kind:'ready',owner:'A',date:'2026-10-22',requestId:'owned',meal:'lunch',mode:'eat_out',options:[{id:'bowl',name:'Bowl',kind:'restaurant',provenance:{kind:'official',url:'https://example.com'},nutrition:{authority:'unknown',basis:{amount:1,unit:'serving',label:'Bowl'},values:{calories:null,protein:null,carbs:null,fats:null,fiber:null},assumptions:[]},allergyStatus:'requires_review'}],capabilities:{estimate:true,discovery:false,reason:null}};let tree=h.render();assert.equal(h.button(tree,'Estimate nutrition'),undefined);h.button(tree,'Resume these meal options').props.onPress();tree=h.render();h.button(tree,'Estimate nutrition').props.onPress();tree=h.render();h.effects[0]();assert.ok(composer);assert.equal(composer.submit('one regular bowl'),true);tree=h.render();h.props.service.estimate=async(_a,_r,_id,portion)=>{h.calls.push({operation:'estimate',portion});return {kind:'unavailable',reason:'offline'}};h.button(tree,'Confirm estimate').props.onPress();await new Promise(r=>setImmediate(r));assert.deepEqual(h.calls,[{operation:'estimate',portion:'one regular bowl'}]);}finally{h.restore()}});
+test('draft allergen from negated user wording is removable before explicit confirmation, empty is not no allergies',async()=>{const h=harness();try{h.props.handoff.value.fields.allergens=['peanuts'];let tree=h.render();assert.doesNotMatch(h.text(tree),/preferences in mind|Check what I captured/);assert.equal(h.calls.length,0);assert.ok(h.button(tree,'Change preferences'),'Inferred dietary constraints must remain correctable before confirmation');h.button(tree,'Change preferences').props.onPress();tree=h.render();h.button(tree,'Remove: peanuts').props.onPress();tree=h.render();assert.doesNotMatch(h.text(tree),/no allergies|allergen.free/i);h.button(tree,'Find meal options').props.onPress();await new Promise(r=>setImmediate(r));assert.deepEqual(h.calls[0].input.allergens,[]);assert.deepEqual(h.calls[0].input.dietary_preferences,[]);}finally{h.restore()}});
+test('inactive unsized card opens review without estimating; active card still owns explicit portion consent',async()=>{
+ for(const inactive of [true,false]){const h=harness();try{
+  let composer;h.props.active=!inactive;h.props.onComposer=v=>composer=v;h.render();
+  h.states[0]={kind:'ready',owner:'A',date:'2026-10-22',requestId:'owned',meal:'dinner',mode:'eat_out',options:[{id:'bowl',name:'Bowl',kind:'restaurant',provenance:{kind:'official',url:'https://example.com'},nutrition:{authority:'unknown',basis:{amount:1,unit:'serving',label:'Bowl'},values:{calories:null,protein:null,carbs:null,fats:null,fiber:null},assumptions:[]},allergyStatus:'requires_review'}],capabilities:{estimate:true,discovery:false,reason:null}};
+  let tree=h.render();
+  if(inactive){
+   assert.equal(h.button(tree,'Estimate nutrition'),undefined);assert.equal(h.button(tree,'Add to diary').props.disabled,true);
+   h.button(tree,'View Details').props.onPress();await new Promise(r=>setImmediate(r));
+   assert.deepEqual(h.calls[0],{operation:'review',meal:'lunch',id:'bowl'});assert.equal(h.calls[1].route.pathname,'/recipe-finder-detail');assert.equal(h.calls.length,2);continue;
+  }
+  h.button(tree,'Estimate nutrition').props.onPress();tree=h.render();h.effects[0]();assert.ok(composer);assert.equal(composer.submit('one regular bowl'),true);
+  tree=h.render();h.props.service.estimate=async(_a,_r,_id,portion)=>{h.calls.push({operation:'estimate',portion});return {kind:'unavailable',reason:'offline'}};
+  assert.equal(h.calls.length,0);h.button(tree,'Confirm estimate').props.onPress();await new Promise(r=>setImmediate(r));
+  assert.deepEqual(h.calls,[{operation:'estimate',portion:'one regular bowl'}]);
+ }finally{h.restore()}}
+});
 
 test('actual hook reload merges remote and accepted turns once despite timestamp drift',async()=>{
  const original=Module._load,states=[],refs=[],effects=[],calls=[],store=new Map();let cursor=0,ref=0,owner='A';
@@ -169,7 +246,7 @@ test('late pending read cannot update an unmounted or invalidated component or d
  }
 });
 
-test('no-results recovery preserves the requested meal and constraints; editing only prepares a separately consented search',async()=>{
+test('no-results recovery preserves food and constraints, using the current local meal for separately consented revisions',async()=>{
  const h=harness();try{
   const input={mode:'eat_out',food_query:'grilled chicken rice and vegetables',public_area:'Orlando, Florida',preference:'high_protein',exclusions:['onion'],allergens:['milk'],dietary_preferences:[]};
   const source={kind:'ready',owner:'A',date:'2026-10-22',meal:'dinner',mode:'eat_out',requestId:'completed-import',options:[],noResults:{input},capabilities:{discovery:true,estimate:false,reason:null}};
@@ -179,14 +256,14 @@ test('no-results recovery preserves the requested meal and constraints; editing 
   h.button(tree,'Change food').props.onPress();tree=h.render();const dispose=h.effects[0]();const staleComposer=composer;h.button(tree,'Cancel edit').props.onPress();dispose();tree=h.render();h.effects[0]();assert.equal(composer,null);staleComposer.submit('discarded edit');assert.match(h.text(h.render()),/grilled chicken rice and vegetables/);assert.equal(h.calls.length,0);
   h.button(tree,'Change area').props.onPress();tree=h.render();h.effects[0]();composer.submit('Maitland');tree=h.render();assert.match(h.text(tree),/Maitland/);h.button(tree,'Change area').props.onPress();tree=h.render();h.effects[0]();composer.submit('Winter Park, Florida');tree=h.render();assert.equal(h.calls.length,0);
   h.props.service.explore=async(_access,value,meal)=>{h.calls.push({operation:'explore',value,meal});return {...source,noResults:undefined,publicRequest:{food:value.food_query,area:value.public_area,preference:value.preference}}};
-  h.button(tree,'Review updated search').props.onPress();await new Promise(r=>setImmediate(r));tree=h.render();assert.equal(h.calls.length,1);assert.deepEqual(h.calls[0],{operation:'explore',value:{...input,public_area:'Winter Park, Florida'},meal:'dinner'});assert.ok(h.button(tree,'Review web search'));assert.equal(h.button(tree,'Search these details'),undefined);
+  h.button(tree,'Review updated search').props.onPress();await new Promise(r=>setImmediate(r));tree=h.render();assert.equal(h.calls.length,1);assert.deepEqual(h.calls[0],{operation:'explore',value:{...input,public_area:'Winter Park, Florida'},meal:'lunch'});assert.ok(h.button(tree,'Review web search'));assert.equal(h.button(tree,'Search these details'),undefined);
   h.button(tree,'Review web search').props.onPress();tree=h.render();assert.ok(h.button(tree,'Search these details'));assert.equal(h.calls.length,1);assert.match(h.text(tree),/OpenRouter/);
  }finally{h.restore()}
 });
 
 test('restored unpaid preparation requires fresh visible search consent and never auto-dispatches',async()=>{
- const h=harness();try{h.props.handoff=undefined;h.render();h.states[6]=true;h.props.service.restore=async()=>{h.calls.push({operation:'restore'});return {kind:'ready',owner:'A',date:'2026-10-22',meal:'dinner',mode:'eat_out',requestId:'saved',options:[],publicRequest:{food:'grilled chicken rice and vegetables',area:'Orlando'},capabilities:{discovery:true,estimate:false,reason:null}}};
- h.button(h.render(),'Resume meal search').props.onPress();await new Promise(r=>setImmediate(r));let tree=h.render();assert.deepEqual(h.calls,[{operation:'restore'}]);assert.ok(h.button(tree,'Review web search'));assert.equal(h.button(tree,'Search these details'),undefined);h.button(tree,'Review web search').props.onPress();tree=h.render();assert.ok(h.button(tree,'Search these details'));assert.match(h.text(tree),/grilled chicken rice and vegetables/);assert.match(h.text(tree),/Orlando/);assert.equal(h.calls.length,1);
+ const h=harness();try{h.props.handoff=undefined;h.props.service.saved=async()=>({requestId:'saved'});await h.mountScope();h.props.service.restore=async()=>{h.calls.push({operation:'restore'});return {kind:'ready',owner:'A',date:'2026-10-22',meal:'dinner',mode:'eat_out',requestId:'saved',options:[],publicRequest:{food:'grilled chicken rice and vegetables',area:'Orlando'},capabilities:{discovery:true,estimate:false,reason:null}}};
+ assert.ok(h.button(h.render(),'Resume meal search'),'Saved unpaid preparation needs an explicit restore control');h.button(h.render(),'Resume meal search').props.onPress();await new Promise(r=>setImmediate(r));let tree=h.render();assert.deepEqual(h.calls,[{operation:'restore'}]);assert.ok(h.button(tree,'Review web search'));assert.equal(h.button(tree,'Search these details'),undefined);h.button(tree,'Review web search').props.onPress();tree=h.render();assert.ok(h.button(tree,'Search these details'));assert.match(h.text(tree),/grilled chicken rice and vegetables/);assert.match(h.text(tree),/Orlando/);assert.equal(h.calls.length,1);
  }finally{h.restore()}
 });
 
@@ -221,7 +298,7 @@ test('general fallback actual component asks portion in composer, cancels safely
  h.props.service.prepareGeneral=async(_a,s,p)=>{h.calls.push({operation:'prepare',source:s,portion:p});return {...source,noResults:undefined,requestId:'prepared',options:[mealEvidenceFromOption(row,'eat_out')]}};
  h.props.service.estimate=async()=>{h.calls.push({operation:'estimate'});return {kind:'unavailable',reason:'offline'}};
  let tree=h.render();h.button(tree,'Estimate this meal instead').props.onPress();tree=h.render();assert.equal(h.button(tree,'Change food'),undefined);h.effects[0]();assert.ok(composer);composer.submit('one bowl');tree=h.render();h.button(tree,'Cancel').props.onPress();assert.equal(h.calls.length,0);
- tree=h.render();h.button(tree,'Estimate this meal instead').props.onPress();h.render();h.effects[0]();composer.submit('one bowl');tree=h.render();const confirm=h.button(tree,'Confirm this portion');confirm.props.onPress();confirm.props.onPress();await new Promise(r=>setImmediate(r));assert.equal(h.calls.length,1);assert.equal(h.calls[0].operation,'prepare');tree=h.render();assert.match(h.text(tree),/not restaurant-specific/);assert.equal(h.button(tree,'Add to meal').props.disabled,true);
+ tree=h.render();h.button(tree,'Estimate this meal instead').props.onPress();h.render();h.effects[0]();composer.submit('one bowl');tree=h.render();const confirm=h.button(tree,'Confirm this portion');confirm.props.onPress();confirm.props.onPress();await new Promise(r=>setImmediate(r));assert.equal(h.calls.length,1);assert.equal(h.calls[0].operation,'prepare');tree=h.render();assert.match(h.text(tree),/not restaurant-specific/);assert.equal(h.button(tree,'Add to diary').props.disabled,true);
  if(enabled){assert.ok(h.button(tree,'Confirm estimate'));h.button(tree,'Confirm estimate').props.onPress();await new Promise(r=>setImmediate(r));assert.equal(h.calls[1].operation,'estimate');}else{assert.equal(h.button(tree,'Confirm estimate'),undefined);assert.match(h.text(tree),/unavailable right now/);}
  }finally{h.restore()}}
 });
@@ -235,7 +312,7 @@ test('general portion validation stays visible and editable only after an explic
 
 test('related restaurant option stays visible with differences and retains official versus unknown nutrition',()=>{
  for(const authority of ['official','unknown']){const row={id:'related',name:'Chicken salad',identity:{kind:'restaurant',entity:'Source restaurant',portion_label:'one bowl'},provenance:{kind:authority==='official'?'official':'estimate',source_url:'https://example.com/menu'},match:{kind:'similar',requested_food:'chicken rice and vegetables',differences:['Requested rice is not established by this item description.']},nutrition:{authority,basis:{amount:1,unit:'serving',label:'one bowl'},values:authority==='official'?{calories:400,protein:30,carbs:20,fats:20,fiber:4}:{calories:null,protein:null,carbs:null,fats:null,fiber:null},assumptions:[]},ingredients:[],instructions:[],allergy_status:'requires_review',review_required:true};const option=mealEvidenceFromOption(row,'eat_out');assert.ok(option);assert.equal(option.match.kind,'similar');assert.deepEqual(option.match.differences,row.match.differences);assert.equal(option.nutrition.authority,authority);assert.equal(option.nutrition.values.calories,authority==='official'?400:null);
- const h=harness();try{h.render();h.states[0]={kind:'ready',owner:'A',date:'2026-10-22',meal:'dinner',mode:'eat_out',requestId:'owned',options:[option],capabilities:{estimate:false,discovery:false}};const t=h.render();assert.match(h.text(t),/Related option/);assert.match(h.text(t),/Requested rice is not established/);assert.ok(h.button(t,'Add to meal'));assert.equal(h.text(t).includes('Exact match'),false);}finally{h.restore()}
+ const h=harness();try{h.render();h.states[0]={kind:'ready',owner:'A',date:'2026-10-22',meal:'dinner',mode:'eat_out',requestId:'owned',options:[option],capabilities:{estimate:false,discovery:false}};const t=h.render();assert.match(h.text(t),/Related option/);assert.match(h.text(t),/Requested rice is not established/);assert.ok(h.button(t,'Add to diary'));assert.equal(h.text(t).includes('Exact match'),false);}finally{h.restore()}
  assert.equal(mealEvidenceFromOption({...row,match:{...row.match,kind:'exact'}},'eat_out'),null);assert.equal(mealEvidenceFromOption({...row,match:{...row.match,differences:[]}},'eat_out'),null);assert.equal(mealEvidenceFromOption({...row,match:undefined},'eat_out').match,undefined);
  }
 });
@@ -274,9 +351,9 @@ test('historical active card restores only its stable flow with explicit resume'
  h.props.service.saved=async(_a,id)=>{h.calls.push({operation:'saved',id});return {requestId:'cook-estimate'}};
  h.props.service.restore=async(_a,id)=>{h.calls.push({operation:'restore',id});return {kind:'unavailable',reason:'saved_options_unavailable'}};
  h.render();const cleanup=h.effects.find(f=>f.toString().includes('service.saved'))();await new Promise(r=>setImmediate(r));
- let tree=h.render();h.button(tree,'Resume these meal options').props.onPress();tree=h.render();
+ let tree=h.render();assert.ok(h.button(tree,'Resume these meal options'),'Historical unpaid flow needs an explicit reactivation/restore path');h.button(tree,'Resume these meal options').props.onPress();tree=h.render();
  assert.ok(h.button(tree,'Resume meal search'));assert.equal(h.calls.filter(x=>x.operation==='restore').length,0);
- h.button(tree,'Resume meal search').props.onPress();await new Promise(r=>setImmediate(r));
+ assert.ok(h.button(tree,'Resume meal search'),'Saved search preparation needs an explicit restore control');h.button(tree,'Resume meal search').props.onPress();await new Promise(r=>setImmediate(r));
  assert.deepEqual(h.calls.filter(x=>x.operation==='restore'),[{operation:'restore',id:'cook-chat'}]);cleanup();
  const app=fs.readFileSync(path.join(__dirname,'../app/(tabs)/coach.tsx'),'utf8');
  assert.match(app,/flowId=\{message\.mealConversation\.requestId\?\?message\.id\}/);
@@ -311,7 +388,7 @@ test('current and recovered meal cards omit condition summaries in both language
    assert.match(h.text(tree),/Ginger-Scallion Chicken and Rice/);
    assert.doesNotMatch(h.text(tree),/Avoid:|Declared allergies:|Dietary preferences:|Not collected|Evitar:|Alergias indicadas:|Preferencias alimentarias:|No recopiladas/);
    assert.deepEqual(result.options[0].dietaryConstraints,constraints);assert.equal(option.allergyStatus,'requires_review');
-   assert.ok(h.button(tree,language==='es'?'Añadir a comida':'Add to meal'));
+   assert.ok(h.button(tree,language==='es'?'Añadir al diario':'Add to diary'));
   }finally{h.restore();}
  }
  const review=fs.readFileSync(path.resolve(__dirname,'../components/CoachMealReview.tsx'),'utf8');assert.doesNotMatch(review,/constraintLines/);assert.match(review,/source.allergyStatus !== 'unknown'/);assert.match(review,/ingredientAcknowledged/);
@@ -329,7 +406,7 @@ test('selected meal renders immediately; unpaid preparation opens consent withou
   const option={id:'general-meal',name:'Chicken, rice and broccoli',kind:'general',identity:{kind:'general_meal',portion_label:h.props.handoff.value.selected_meal.portion_label},provenance:{kind:'estimate',label:'Estimated'},nutrition:{authority:'unknown',basis:{amount:1,unit:'portion',label:h.props.handoff.value.selected_meal.portion_label},values:{calories:null,protein:null,carbs:null,fats:null,fiber:null},assumptions:[]},allergyStatus:'requires_review'};
   h.props.service.prepareSelected=async(_access,source)=>{h.calls.push({operation:'prepare',source});return {kind:'ready',owner:'A',date:'2026-10-22',requestId:'prepared',meal:'lunch',mode:'quick',options:[option],capabilities:{estimate:true,discovery:false,reason:null}};};
   let tree=h.render();assert.match(h.text(tree),/150 g chicken/);assert.ok(h.button(tree,'Review this meal'));assert.equal(h.button(tree,'Find meal options'),undefined);assert.equal(h.calls.length,0);
-  h.button(tree,'Review this meal').props.onPress();h.button(tree,'Review this meal').props.onPress();await new Promise(r=>setImmediate(r));tree=h.render();assert.equal(h.calls.length,1);assert.equal(h.calls[0].source.requestId,h.props.handoff.requestId);assert.ok(h.button(tree,'Confirm estimate'));assert.equal(h.button(tree,'Add to meal').props.disabled,true);
+  h.button(tree,'Review this meal').props.onPress();h.button(tree,'Review this meal').props.onPress();await new Promise(r=>setImmediate(r));tree=h.render();assert.equal(h.calls.length,1);assert.equal(h.calls[0].source.requestId,h.props.handoff.requestId);assert.ok(h.button(tree,'Confirm estimate'));assert.equal(h.button(tree,'Add to diary').props.disabled,true);
   h.button(tree,'Cancel estimate').props.onPress();tree=h.render();assert.ok(h.button(tree,'Estimate nutrition'));assert.equal(h.calls.length,1);
  }finally{h.restore();}
 });

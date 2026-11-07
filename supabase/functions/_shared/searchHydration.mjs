@@ -27,7 +27,7 @@ function validSnapshot(row) {
 export async function hydrateSearchRows(rows, admin, signal, milliseconds = 150) {
   const projected = rows.slice(0, 100).map(row => ({ row: project(object(row) ? row : {}), authority: 'unknown' }));
   const ids = [...new Set(projected.map(entry => entry.row.id).filter(uuid))];
-  if (!ids.length || signal?.aborted) return projected;
+  if (!ids.length || signal?.aborted || milliseconds <= 0) return projected;
   const controller = new AbortController();
   let timer;
   let cancel;

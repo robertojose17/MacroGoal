@@ -1,0 +1,313 @@
+{
+  "base_commit": "0fb1db21adb10c1ec84088c44f98e027462024de",
+  "base_tree": "d552b15cb8f53b5cb04244ed657bc3ea1ed32669",
+  "approved_input_manifests": [
+    {
+      "label": "reviewed-native-session-boundary",
+      "manifest": "publication-files.json",
+      "manifest_sha256": "ee92e33c85cfd48f48a2694210e185d994a373dfa1a2280ab700488c394b8f82"
+    },
+    {
+      "label": "reviewed-coach-tests-only",
+      "manifest": "manifest.json",
+      "manifest_sha256": "e9eacfc49586d90e18271f5f3570c215d7504f1ef79b617c3ed3e0ad329bb0c0"
+    },
+    {
+      "label": "reviewed-authentic-ci-locks",
+      "manifest": "overlay-manifest.json",
+      "manifest_sha256": "e91814a6f80738b2e29791b4475b77f0d84ea5a67d88b6d5a7201ecbc006cf26"
+    },
+    {
+      "label": "reviewed-search-deadline",
+      "manifest": "integration-pins.json",
+      "manifest_sha256": "5d88990cd04c3364adbcaef57a69ff94b65a668a0e9225f55dc90149e59f8c86",
+      "zip_sha256": "4d855cb1285f73ba794ca19436221134736ca62247926b4d466ae93c6fe31823"
+    },
+    {
+      "label": "reviewed-library-domain-v2",
+      "manifest": "manifest.json",
+      "manifest_sha256": "e61520e881015166e2b5e02ac38ab4fb6a66a23059fcccb876ae061f2bfb8bba",
+      "zip_sha256": "7c51c8e4d95f10ce057179c7db49588122981d02e43da28810924e1a2ad3e931"
+    }
+  ],
+  "source_changes": {
+    "scripts/ci/native-database/README.md": {
+      "layer": "reviewed-native-session-boundary",
+      "previous_sha256": "1386ac36ff64646d64a6e9140fd55122ad57a7f8d5086678ac01308a896e8957",
+      "sha256": "6837e857121a1bc0cf5f8de958835f07dd07ea50062bdfb0c8fbc8ee4cc509fa",
+      "previous_git_blob_sha1": "b6c1537f8dfe3d1dd58f24a2a49572c7c012f112"
+    },
+    "scripts/ci/native-database/run.py": {
+      "layer": "reviewed-native-session-boundary",
+      "previous_sha256": "205994fa48dfa059f2d12f071d09d3d709c00a8a426a7cd39c3afdc39c2bd99d",
+      "sha256": "50e4a05e97ac897f5b55f8205ebdd1cae6c2d187bc4beb8c42b3f0e0bf46c720",
+      "previous_git_blob_sha1": "8aae623f18c0d6e820a32cc3f155b803ba3e8dab"
+    },
+    "scripts/ci/native-database/safety_probes.py": {
+      "layer": "reviewed-native-session-boundary",
+      "previous_sha256": "87949946882952c02634f728d943b8802f63153b129ee995276a796f2b6ad0a2",
+      "sha256": "e8bb770563dbbbca98f8987e12a7f21220bc2527aa54fb1aa5c2948dbf805288",
+      "previous_git_blob_sha1": "1c163f32c5aa2f8d38250bbcc4c2e6bef15f568c"
+    },
+    "scripts/ci/native-database/session_checks.py": {
+      "layer": "reviewed-native-session-boundary",
+      "previous_sha256": null,
+      "sha256": "38d424aa36f7aecf8ab97539486484dcc63d779ea2932fe9ead6bc603949b7d7",
+      "intermediate_assembly_previous_sha256": "38d424aa36f7aecf8ab97539486484dcc63d779ea2932fe9ead6bc603949b7d7",
+      "previous_git_blob_sha1": null
+    },
+    "scripts/ci/native-database/session_protocol_probes.py": {
+      "layer": "reviewed-native-session-boundary",
+      "previous_sha256": null,
+      "sha256": "cd0d93b187a1163de1e22cc418337958635c84423d004149a0217755ceabb978",
+      "intermediate_assembly_previous_sha256": "cd0d93b187a1163de1e22cc418337958635c84423d004149a0217755ceabb978",
+      "previous_git_blob_sha1": null
+    },
+    "tests/coach-model-conversation.test.cjs": {
+      "layer": "reviewed-coach-tests-only",
+      "previous_sha256": "3cc497309ee6c2bf317133257fae3c432f5aad39b200c5339a031a92f26996cc",
+      "sha256": "6f75fb014d31cab06a9254631c0f68939f4b72d8fb144d2165f5c0f36a897e30",
+      "previous_git_blob_sha1": "f3f6ee9929594581220ef5f483aeb328e54580c9"
+    },
+    "tests/coach-recovery-ui.test.cjs": {
+      "layer": "reviewed-coach-tests-only",
+      "previous_sha256": "d5f2e06e06b85f724a6bbad0d3e8342335b3c6360edf402f49949fa419c6f92a",
+      "sha256": "d60c0fd3d6f1bc102e06e97463470b4db57e94d0090323074765972f49b00b53",
+      "previous_git_blob_sha1": "62dd84b3fb668eab1e0569938ab286dd81e45f8f"
+    },
+    "scripts/ci/deno-candidate.lock": {
+      "layer": "reviewed-authentic-ci-locks",
+      "previous_sha256": null,
+      "sha256": "2c9f81cc69af7bb45378536d74c553d3e3d851df88b622119c824bc898f5ac31",
+      "intermediate_assembly_previous_sha256": "2c9f81cc69af7bb45378536d74c553d3e3d851df88b622119c824bc898f5ac31",
+      "previous_git_blob_sha1": null
+    },
+    "scripts/ci/deno-repository-vision.lock": {
+      "layer": "reviewed-authentic-ci-locks",
+      "previous_sha256": null,
+      "sha256": "f62aeaf462103443bd1b2776e633d2c153595c3d42037115a824322dd57af3ca",
+      "intermediate_assembly_previous_sha256": "f62aeaf462103443bd1b2776e633d2c153595c3d42037115a824322dd57af3ca",
+      "previous_git_blob_sha1": null
+    },
+    "tests/food-search.test.cjs": {
+      "layer": "reviewed-search-test-restoration",
+      "previous_sha256": null,
+      "sha256": "dd99213fceca00a152711a8abfac43b5aa674c56e0325b2fc63172657e54691c",
+      "previous_git_blob_sha1": null
+    },
+    "scripts/release-review/check.mjs": {
+      "layer": "explicit-reviewed-search-and-deadline-allowlist",
+      "previous_sha256": "f966b3001a0abc87e7e7fe9078c0071c5bb7664de024594ead59161e324f3e47",
+      "sha256": "a45146cc329732131687904405395fb54a7217d8716f2598eb7d7d21a5fde72f",
+      "intermediate_assembly_previous_sha256": "bfa8aa9474c1df73a846deabcccdf622ad32c30157639e352488ba2a24fac0d9",
+      "previous_git_blob_sha1": "f4003551d8fddf49897fabe057dca4516ae20547"
+    },
+    "supabase/functions/_shared/searchHydration.mjs": {
+      "layer": "reviewed-search-deadline",
+      "previous_sha256": "85502f73b8f97a01beac8abfb653e7ee678f49fab9fc3ec162359a3f1d4bcb9d",
+      "sha256": "76029d8f3a758bb399dcf19aea784759eb511dfa5a8fac5b841c9607740565f6",
+      "previous_git_blob_sha1": "eda6c49460999c6a2684bc5d05c2eb7224f4f267"
+    },
+    "supabase/functions/search-foods/index.ts": {
+      "layer": "reviewed-search-deadline",
+      "previous_sha256": "4881401566a3e657d3cd3965f32b886068c3a522f3f6b71d90dbf322a4887f19",
+      "sha256": "3de12730fcec7f83826555d5c015e13e63a0475e970860c3b346c44998d9816b",
+      "previous_git_blob_sha1": "0baa3f328b972c81a62435a774760a4d1270cb35"
+    },
+    "supabase/functions/search-foods/searchCore.ts": {
+      "layer": "reviewed-search-deadline",
+      "previous_sha256": "546b8f7e31074daa6e6a7768c7b256fae9d8234288fc706ee0e727bd15187033",
+      "sha256": "69153d399564c543dbdcc20056fc2f4c752cac36ae1dd4029027993b769f5285",
+      "previous_git_blob_sha1": "0e61b2a48bd81550a3df57858a73fc42fec30630"
+    },
+    "tests/food-search-deadline.test.cjs": {
+      "layer": "reviewed-search-deadline",
+      "previous_sha256": null,
+      "sha256": "087da9ae8f656ea32f1e5e335508da3bff93f39851d8f428654f26dbc4fdcb7c",
+      "previous_git_blob_sha1": null
+    },
+    "tests/ci/search-hydration-types.test.cjs": {
+      "layer": "explicit-reviewed-deadline-type-pins",
+      "previous_sha256": "ed7c846eea53972b6ed636cb6725bc0ddf312b222e38bd56a99cfa0963c37eaf",
+      "sha256": "dfb08978aebb9b8575fb10cedb98d56958186ab1149deab5dd9a944d90e05715",
+      "previous_git_blob_sha1": "bc4e6a916213b441fbd5789bfe0e5efe90d7789e"
+    },
+    "tests/release-review/fixtures/backend-components/manifest.json": {
+      "layer": "explicit-reviewed-deadline-runtime-pins",
+      "previous_sha256": "31d24fe63f4db77944d01072bdefb33320054a988463c75826d19b45f3a6382f",
+      "sha256": "a6993aee1d63eeff240ba732bcf64bb7acb0f3b465d0e39a967b509d0530d870",
+      "previous_git_blob_sha1": "d763a660b1dd4e0dd32dd28ae718631313a19638"
+    },
+    "components/FoodDetailsLayout.tsx": {
+      "layer": "reviewed-library-domain-v2",
+      "previous_sha256": "95fee6b95ded7568c73d80fbed08ac3ee3cec56ad51243b81c2c699d5aaedc34",
+      "sha256": "c3eeeaf8bb22dbb7353bc29451e46417b6df5e0ca012a84870266e6b1e39786e",
+      "previous_git_blob_sha1": "8654dafbd93f716480bdeab9b5429386063ca945"
+    },
+    "app/add-food.tsx": {
+      "layer": "reviewed-library-domain-v2",
+      "previous_sha256": "d40d4fbc140abae296a03a3ed293bac31e237f1d79d2383f762c231c63f7a44c",
+      "sha256": "d6d68a48c50587f6854c88d4f18d70015c33234adceb2236b92d07f873609fd6",
+      "previous_git_blob_sha1": "7e8bf5f72437239ab6c2b1076498e91acc268e68"
+    },
+    "app/my-foods-create.tsx": {
+      "layer": "reviewed-library-domain-v2",
+      "previous_sha256": "1909cb15ad3b1d0ea330623142f4396e35710986248e4aedca43ee50bfb52478",
+      "sha256": "658a263b417f2bd6eed082b65165a9daa1648ae63218214dece31c678e35c5ff",
+      "previous_git_blob_sha1": "3081f8c603c0b1a1ec80d45a15bcf10bab501f15"
+    },
+    "app/my-foods.tsx": {
+      "layer": "reviewed-library-domain-v2",
+      "previous_sha256": "7fd4da8f17961767de156e25203c472822dd6a0f7406d74b2d88f50f87be5f9e",
+      "sha256": "01b2a7c6c91a267dcdc9305302b78885e4c96686f6089a236d911814f453fed5",
+      "previous_git_blob_sha1": "d5881fd50a6e2ac32539dd8b2ec4cc10f203471c"
+    },
+    "utils/foodPersistence.ts": {
+      "layer": "reviewed-library-domain-v2",
+      "previous_sha256": null,
+      "sha256": "bc80a5e00afc97e873a5a501e7bb4d2117d511f397a9d68da14a453fcf2eb0bb",
+      "previous_git_blob_sha1": null
+    },
+    "utils/foodSearchUtils.ts": {
+      "layer": "reviewed-library-domain-v2",
+      "previous_sha256": "a629271e86078f4f3ad6353f2df6341db3b7269f9019b73b86816c3166e3ea25",
+      "sha256": "956dba1c14e1e5e2b003f5ac78c2301a1adab714802602460211b40ea4d5a974",
+      "previous_git_blob_sha1": "e6f938567cbbc842eb9a61d95a066a968596e375"
+    },
+    "utils/servingParser.ts": {
+      "layer": "reviewed-library-domain-v2",
+      "previous_sha256": "5ff16252208432cd35ef45be9ff92d4e31d5c354e847a60af204b5004a8816c8",
+      "sha256": "86376a57efde9dcc91be750fccb995135d203c9f3b9db917451e7a132f1206ea",
+      "previous_git_blob_sha1": "9220b845f1721fa6b3c075c792f1e303c0ddd427"
+    },
+    "utils/manualRecoverySave.ts": {
+      "layer": "reviewed-library-domain-v2",
+      "previous_sha256": "68ccc6f7aa0c8688605d00cd3d21ced882a75331a72b9b73c8f8e5556f240f30",
+      "sha256": "ee5326ae4a40ff27cbc81e55fdc132632a245f5541fc92767dbf11287ebfec17",
+      "previous_git_blob_sha1": "36e36b7e04dd733a61cda658035d033a48033b7a"
+    },
+    "tests/food-library-domain-contracts.test.cjs": {
+      "layer": "reviewed-library-domain-v2",
+      "previous_sha256": null,
+      "sha256": "7eab1536fd2b78cf22192cc6cf56ec206948165f571734cae75bf431829b9d9b",
+      "previous_git_blob_sha1": null
+    },
+    "tests/type-contracts/food-library.typecheck.ts": {
+      "layer": "reviewed-library-domain-v2",
+      "previous_sha256": null,
+      "sha256": "137756616e684378fdfa8579706e23970d271f1cac5a5ca1a64c7d902a6efe74",
+      "previous_git_blob_sha1": null
+    },
+    "tests/barcode-recovery-ui.test.mjs": {
+      "layer": "reviewed-library-domain-v2",
+      "previous_sha256": "98b8a5a18803c3b0bf02bf94554eb7d6dd3d56682d12fc20a55141dc793c134d",
+      "sha256": "7b4e877ddc0018da3fd6c81b027fca77c350f5f38a830dc1e8cc8f48cdf1b6fe",
+      "previous_git_blob_sha1": "23904b3b027688a6a8fc568fcdd3d5c498baa459"
+    },
+    "tests/release-review/client/independent-final-callbacks.cjs": {
+      "layer": "reviewed-library-domain-v2",
+      "previous_sha256": "edf9e6575036249d71bd4af9abf4fa9679b900dc8ce185148851de62918ba7fc",
+      "sha256": "2f6c2e2cf7fc3d20d4b44a74d518db2efcd3bc3195dea560e4aa60881ece3afc",
+      "previous_git_blob_sha1": "d7c57235ceae37a338712191e6fb962355f7e955"
+    },
+    "scripts/ci/run-stage.cjs": {
+      "layer": "explicit-reviewed-library-test-allowlist",
+      "previous_sha256": "858ae532d66fd2317375967dd06b1e7746b4e0ba1d7a358f04303e091b6551a2",
+      "sha256": "2cf8cf1b6da89103295a8f4a6214ccca09078b8db05c923af7497903e8e34011",
+      "previous_git_blob_sha1": "e29a36497e1950918185b2dd8258254027af6235"
+    }
+  },
+  "explicit_backend_runtime_repin": {
+    "supabase/functions/_shared/searchHydration.mjs": {
+      "previous": "85502f73b8f97a01beac8abfb653e7ee678f49fab9fc3ec162359a3f1d4bcb9d",
+      "current": "76029d8f3a758bb399dcf19aea784759eb511dfa5a8fac5b841c9607740565f6"
+    },
+    "supabase/functions/search-foods/index.ts": {
+      "previous": "4881401566a3e657d3cd3965f32b886068c3a522f3f6b71d90dbf322a4887f19",
+      "current": "3de12730fcec7f83826555d5c015e13e63a0475e970860c3b346c44998d9816b"
+    },
+    "supabase/functions/search-foods/searchCore.ts": {
+      "previous": "546b8f7e31074daa6e6a7768c7b256fae9d8234288fc706ee0e727bd15187033",
+      "current": "69153d399564c543dbdcc20056fc2f4c752cac36ae1dd4029027993b769f5285"
+    }
+  },
+  "library_published_base_verification": {
+    "commit": "0fb1db21adb10c1ec84088c44f98e027462024de",
+    "tree": "d552b15cb8f53b5cb04244ed657bc3ea1ed32669",
+    "remote_tree_truncated": false,
+    "manifest_sha256": "e61520e881015166e2b5e02ac38ab4fb6a66a23059fcccb876ae061f2bfb8bba",
+    "files": [
+      {
+        "path": "components/FoodDetailsLayout.tsx",
+        "git_blob_sha1": "8654dafbd93f716480bdeab9b5429386063ca945",
+        "sha256": "95fee6b95ded7568c73d80fbed08ac3ee3cec56ad51243b81c2c699d5aaedc34"
+      },
+      {
+        "path": "app/add-food.tsx",
+        "git_blob_sha1": "7e8bf5f72437239ab6c2b1076498e91acc268e68",
+        "sha256": "d40d4fbc140abae296a03a3ed293bac31e237f1d79d2383f762c231c63f7a44c"
+      },
+      {
+        "path": "app/my-foods-create.tsx",
+        "git_blob_sha1": "3081f8c603c0b1a1ec80d45a15bcf10bab501f15",
+        "sha256": "1909cb15ad3b1d0ea330623142f4396e35710986248e4aedca43ee50bfb52478"
+      },
+      {
+        "path": "app/my-foods.tsx",
+        "git_blob_sha1": "d5881fd50a6e2ac32539dd8b2ec4cc10f203471c",
+        "sha256": "7fd4da8f17961767de156e25203c472822dd6a0f7406d74b2d88f50f87be5f9e"
+      },
+      {
+        "path": "utils/foodPersistence.ts",
+        "absent_in_published_base": true
+      },
+      {
+        "path": "utils/foodSearchUtils.ts",
+        "git_blob_sha1": "e6f938567cbbc842eb9a61d95a066a968596e375",
+        "sha256": "a629271e86078f4f3ad6353f2df6341db3b7269f9019b73b86816c3166e3ea25"
+      },
+      {
+        "path": "utils/servingParser.ts",
+        "git_blob_sha1": "9220b845f1721fa6b3c075c792f1e303c0ddd427",
+        "sha256": "5ff16252208432cd35ef45be9ff92d4e31d5c354e847a60af204b5004a8816c8"
+      },
+      {
+        "path": "utils/manualRecoverySave.ts",
+        "git_blob_sha1": "36e36b7e04dd733a61cda658035d033a48033b7a",
+        "sha256": "68ccc6f7aa0c8688605d00cd3d21ced882a75331a72b9b73c8f8e5556f240f30"
+      },
+      {
+        "path": "tests/food-library-domain-contracts.test.cjs",
+        "absent_in_published_base": true
+      },
+      {
+        "path": "tests/type-contracts/food-library.typecheck.ts",
+        "absent_in_published_base": true
+      },
+      {
+        "path": "tests/barcode-recovery-ui.test.mjs",
+        "git_blob_sha1": "23904b3b027688a6a8fc568fcdd3d5c498baa459",
+        "sha256": "98b8a5a18803c3b0bf02bf94554eb7d6dd3d56682d12fc20a55141dc793c134d"
+      },
+      {
+        "path": "tests/release-review/client/independent-final-callbacks.cjs",
+        "git_blob_sha1": "d7c57235ceae37a338712191e6fb962355f7e955",
+        "sha256": "edf9e6575036249d71bd4af9abf4fa9679b900dc8ce185148851de62918ba7fc"
+      }
+    ],
+    "all_match": true
+  },
+  "deno_lock_provenance": {
+    "source_commit": "0fb1db21adb10c1ec84088c44f98e027462024de",
+    "artifact_id": 13553677625,
+    "candidate_sha256": "2c9f81cc69af7bb45378536d74c553d3e3d851df88b622119c824bc898f5ac31",
+    "vision_sha256": "f62aeaf462103443bd1b2776e633d2c153595c3d42037115a824322dd57af3ca",
+    "invented": false,
+    "fresh_frozen_ci_required": true,
+    "live_dependency_parity_proven": false
+  },
+  "coach_runtime_changed": false,
+  "health_runtime_changed": false,
+  "sql_changed_or_applied": false,
+  "release_ready": false
+}

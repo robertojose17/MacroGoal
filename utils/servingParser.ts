@@ -1,3 +1,5 @@
+import type { OpenFoodFactsProduct } from './openFoodFacts';
+import { exactFdcId } from './catalogSelection';
 import { applyUsdaPortion } from '../supabase/functions/_shared/foodPortions.mjs';
 
 /**
@@ -65,9 +67,9 @@ export function parseServingString(servingSizeStr: string | undefined): {
  * @param item - A food_items row (or equivalent object from the edge function response)
  */
 export function buildSyntheticOffData(item: {
-  name?: string;
-  brand?: string;
-  barcode?: string;
+  name?: string | null;
+  brand?: string | null;
+  barcode?: string | null;
   serving_size?: number | string | null;
   serving_unit?: string | null;
   serving_description?: string | null;
@@ -107,11 +109,11 @@ export function buildSyntheticOffData(item: {
   selenium_mcg?: number | null;
   image_url?: string | null;
   ingredients_text?: string | null;
-  allergens?: string | null;
+  allergens?: string[] | null;
   source?: string | null;
   data_quality_score?: number | null;
   [key: string]: unknown;
-}, options: { preserveServing?: boolean } = {}) {
+}, options: { preserveServing?: boolean } = {}): OpenFoodFactsProduct {
   // serving_size IS total grams of one standard serving (new architecture)
   const totalGrams = Number(item.serving_size) || 100;
   const servingCount = Number(item.serving_count) || null;
@@ -183,7 +185,7 @@ export function buildSyntheticOffData(item: {
   const product = {
     ...(preserveServing ? { _serving_authority: 'confirmed_correction' as const } : {}),
     _portion_evidence: item._portion_evidence,
-    code: item.barcode || undefined,
+    code: item.barcode || '',
     product_name: item.name || '',
     generic_name: item.name || '',
     brands: item.brand || '',
@@ -192,7 +194,7 @@ export function buildSyntheticOffData(item: {
     nutriments,
     image_url: item.image_url || undefined,
     _source: item.source || undefined,
-    _usda_fdc_id: (item as any).usda_fdc_id || undefined,
+    _usda_fdc_id: exactFdcId(item.usda_fdc_id) || undefined,
     _data_quality_score: item.data_quality_score || undefined,
     ingredients_text: item.ingredients_text || undefined,
     allergens_tags: item.allergens || undefined,
