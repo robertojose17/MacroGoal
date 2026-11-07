@@ -39,6 +39,7 @@ export function createIncomingFollowerTransport({client,getSession,isGlobalScope
  if (!Number.isFinite(timeoutMs)||timeoutMs<1||timeoutMs>60000) throw new TypeError('Invalid follower timeout.');
  function valid(value: VerifiedFollowerSession|null, scope: FollowerScope): value is VerifiedFollowerSession {
   return !!value && value.userId.toLowerCase()===scope.session.userId && value.sessionKey===scope.session.sessionKey && value.isAnonymous===false &&
+   // eslint-disable-next-line no-control-regex -- Reject ASCII control characters in untrusted input.
    typeof value.accessToken==='string' && !!value.accessToken && !/[\s\u0000-\u001f\u007f]/.test(value.accessToken) && Number.isFinite(value.expiresAtSeconds) && value.expiresAtSeconds*1000>now();
  }
  function execute<T>(input: FollowerContext,name:string,args:Record<string,string>,parse:(raw:unknown)=>T|null):Promise<FollowerResult<T>> {

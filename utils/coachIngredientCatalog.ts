@@ -13,6 +13,7 @@ export function catalogIngredient(row:any):MealComponent|null {
 }
 export function createCoachIngredientSearch(db:any,owner:()=>Promise<string|undefined>){
  return async(query:string):Promise<MealComponent[]>=>{
+  // eslint-disable-next-line no-control-regex -- Reject ASCII control characters in untrusted input.
   const q=query.trim();if(q.length<2||q.length>80||/[\x00-\x1f]/.test(q))return [];
   const user=await owner();if(!user)throw Error('scope_changed');
   const {data,error}=await db.from('food_items').select('id,name,calories,protein,carbs,fat,fiber,macros_per,serving_size').ilike('name','%'+q.replace(/[\\%_]/g,'\\$&')+'%').limit(12);

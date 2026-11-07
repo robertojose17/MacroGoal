@@ -1,0 +1,1129 @@
+{
+  "columns": [
+    {
+      "udt": "uuid",
+      "name": "food_id",
+      "type": "uuid",
+      "table": "nutrition_current",
+      "schema": "macrogoal_food_private",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "udt": "int4",
+      "name": "revision",
+      "type": "integer",
+      "table": "nutrition_current",
+      "schema": "macrogoal_food_private",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "udt": "bool",
+      "name": "confirmed",
+      "type": "boolean",
+      "table": "nutrition_current",
+      "schema": "macrogoal_food_private",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "udt": "jsonb",
+      "name": "snapshot",
+      "type": "jsonb",
+      "table": "nutrition_current",
+      "schema": "macrogoal_food_private",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "udt": "uuid",
+      "name": "id",
+      "type": "uuid",
+      "table": "food_items",
+      "schema": "public",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "udt": "text",
+      "name": "barcode",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "name",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "udt": "text",
+      "name": "brand",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "calories",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "protein",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "carbs",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "fat",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "fiber",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "sugar",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "sodium",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "serving_size",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": "100",
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "serving_unit",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "image_url",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "source",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": "'openfoodfacts'::text",
+      "nullable": "NO"
+    },
+    {
+      "udt": "jsonb",
+      "name": "off_data",
+      "type": "jsonb",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "popularity_score",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "udt": "timestamptz",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "table": "food_items",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "udt": "timestamptz",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "table": "food_items",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "udt": "text",
+      "name": "product_name",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": "''::text",
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "generic_name",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "brands",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "serving_quantity",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "jsonb",
+      "name": "nutriments",
+      "type": "jsonb",
+      "table": "food_items",
+      "schema": "public",
+      "default": "'{}'::jsonb",
+      "nullable": "NO"
+    },
+    {
+      "udt": "int4",
+      "name": "search_count",
+      "type": "integer",
+      "table": "food_items",
+      "schema": "public",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "udt": "timestamptz",
+      "name": "last_searched_at",
+      "type": "timestamp with time zone",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "tsvector",
+      "name": "search_vector",
+      "type": "tsvector",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "saturated_fat",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "trans_fat",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "polyunsaturated_fat",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "monounsaturated_fat",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "cholesterol",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "added_sugars",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "sugar_alcohols",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "soluble_fiber",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "insoluble_fiber",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "starch",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_a",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_c",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_d",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_e",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_k",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_b1",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_b2",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_b3",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_b5",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_b6",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_b9",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_b12",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "biotin",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "choline",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "calcium",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "iron",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "potassium",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "phosphorus",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "magnesium",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "zinc",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "selenium",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "copper",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "manganese",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "chromium",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "molybdenum",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "iodine",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "chloride",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "confidence",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": "'high'::text",
+      "nullable": "YES"
+    },
+    {
+      "udt": "bool",
+      "name": "verified",
+      "type": "boolean",
+      "table": "food_items",
+      "schema": "public",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "nutriscore_grade",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "int4",
+      "name": "logs_last_30d",
+      "type": "integer",
+      "table": "food_items",
+      "schema": "public",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "udt": "int4",
+      "name": "logs_last_90d",
+      "type": "integer",
+      "table": "food_items",
+      "schema": "public",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "udt": "int4",
+      "name": "logs_total",
+      "type": "integer",
+      "table": "food_items",
+      "schema": "public",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "udt": "text",
+      "name": "serving_description",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "serving_count",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "source_id",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "macros_per",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": "'serving'::text",
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "saturated_fat_g",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "polyunsaturated_fat_g",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "monounsaturated_fat_g",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "trans_fat_g",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "cholesterol_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "sugar_g",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "added_sugar_g",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "soluble_fiber_g",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "insoluble_fiber_g",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "water_g",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "alcohol_g",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_a_mcg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_c_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_d_mcg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_e_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_k_mcg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_b1_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_b2_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_b3_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_b6_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "vitamin_b12_mcg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "folate_mcg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "biotin_mcg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "pantothenic_acid_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "choline_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "calcium_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "iron_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "magnesium_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "phosphorus_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "potassium_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "sodium_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "zinc_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "copper_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "manganese_mg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "selenium_mcg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "chromium_mcg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "numeric",
+      "name": "iodine_mcg",
+      "type": "numeric",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "usda_fdc_id",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "int4",
+      "name": "data_quality_score",
+      "type": "integer",
+      "table": "food_items",
+      "schema": "public",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "udt": "timestamptz",
+      "name": "last_verified_at",
+      "type": "timestamp with time zone",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "ingredients_text",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "_text",
+      "name": "allergens",
+      "type": "ARRAY",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "int4",
+      "name": "total_logs",
+      "type": "integer",
+      "table": "food_items",
+      "schema": "public",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "udt": "timestamptz",
+      "name": "last_logged_at",
+      "type": "timestamp with time zone",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "bool",
+      "name": "ai_verified",
+      "type": "boolean",
+      "table": "food_items",
+      "schema": "public",
+      "default": "false",
+      "nullable": "YES"
+    },
+    {
+      "udt": "timestamptz",
+      "name": "ai_verified_at",
+      "type": "timestamp with time zone",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "udt": "text",
+      "name": "ai_verified_source",
+      "type": "text",
+      "table": "food_items",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES"
+    }
+  ]
+}

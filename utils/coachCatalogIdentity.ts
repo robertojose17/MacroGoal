@@ -4,6 +4,7 @@ export type CatalogConsent={grams:number;massAuthority:'estimated'|'source_repor
 export type PublicCoachFood={id:string;name:string;serving_amount:100;serving_unit:'g';calories:number;protein:number;carbs:number;fats:number;fiber:number;user_created:true;created_by:string};
 const uuid=(x:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(x);
 export function coachCatalogPreview(entry:PreparedMealEntry,c:CatalogConsent){
+ // eslint-disable-next-line no-control-regex -- Reject ASCII control characters in untrusted input.
  if(!Number.isFinite(c.grams)||c.grams<=0||c.grams>100000||!['estimated','source_reported'].includes(c.massAuthority)||!c.massBasis.trim()||c.massBasis.length>300||!c.name.trim()||c.name.length>160||/[\r\n\x00-\x1f@]|https?:\/\//i.test(c.name)||!uuid(entry.owner)||!NUTRIENTS.every(k=>typeof entry.nutrition[k]==='number'&&Number.isFinite(entry.nutrition[k])&&entry.nutrition[k]!>=0)||!entry.nutrition.calories)throw Error('catalog_review_required');
  if(c.massAuthority==='source_reported'&&(entry.physicalPortion?.authority!=='source_reported'||entry.physicalPortion.total_grams!==c.grams))throw Error('source_mass_mismatch');
  const estimated=c.massAuthority==='estimated'||!['official','publisher_reported'].includes(entry.authority);

@@ -1,0 +1,516 @@
+{
+  "repository": "robertojose17/MacroGoal",
+  "base_commit": "9193c2243d9919323715d7d10338ca589f3e7a2e",
+  "base_tree": "213497d148b951626718ab0bdc2216beeaff8d5a",
+  "captured_live": {
+    "version": 45,
+    "status": "ACTIVE",
+    "verify_jwt": true,
+    "ezbr_sha256": "616cfde419e07a7a27278ff225c23cf74cad95a8539ee3c4517f61f47619ba02"
+  },
+  "entrypoint": "supabase/functions/vision-nutrition-extract/index.ts",
+  "entrypoint_equals_captured_live_bytes": true,
+  "scope": "Source reconciliation only. No deployment/config/auth setting changes. No files removed.",
+  "files": [
+    {
+      "path": "supabase/functions/ai-coach/coach-mcdonalds-api.ts",
+      "operation": "update",
+      "before_git_blob_sha": "5442e97880c334a188899a8e0635ba9e97bad670",
+      "after_git_blob_sha": "ddc37d5396e773ec9258630ca254bf84d00c50f2",
+      "after_sha256": "70e144aa831af6b083c6810cd93ac507a37dfe217609b8b394fb56877036b456",
+      "bytes": 16222,
+      "captured_v45_sha256": "c9907f3961c97111b348f55f0ea78477d1a20aa73b552cef5f2f27312fcae75b",
+      "byte_equal_to_v45": false
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/declared-column-read.mjs",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "40b99addfe9796fc857ca284c7b69fa8b43f61cd",
+      "after_sha256": "59e95e26158428a231ad7faa1a170b8c2321522e38fd39d93ba4637c5ddaa275",
+      "bytes": 8779,
+      "captured_v45_sha256": "59e95e26158428a231ad7faa1a170b8c2321522e38fd39d93ba4637c5ddaa275",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/declared-column-v2.mjs",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "9386c2fa253e2227bc25515a7e06ba232df722b0",
+      "after_sha256": "f79a4385e4d5cbe79f5d5c5f1dc6d30c9e359b88d16867e2e1a81eb8703239b7",
+      "bytes": 7747,
+      "captured_v45_sha256": "f13b3ae6e546e2e84a604a31d6c421ecabbec8051cdb566dbd4462cfe69adaf6",
+      "byte_equal_to_v45": false
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/identity.mjs",
+      "operation": "update",
+      "before_git_blob_sha": "13b0929c5ed46b38b6fbe6d8358c23a3118cb0b8",
+      "after_git_blob_sha": "dad11b10bde14b18f446f337f3c86ec1a15e650b",
+      "after_sha256": "2db37bf4d80d3a25ae6212475e517be32590b7af49444c8917eaa37640b3759b",
+      "bytes": 7187,
+      "captured_v45_sha256": "bc2eeedc01735c234e00b240cb3673291036a4cebefdf3cddded0743465c7fb1",
+      "byte_equal_to_v45": false
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/index.ts",
+      "operation": "update",
+      "before_git_blob_sha": "5603e8d8346266585994e4368b15168e44bc1b3d",
+      "after_git_blob_sha": "a647fa0eff9a2e437f4b2f6669c24568671ac5fa",
+      "after_sha256": "9d36a36b77dc7cc20bfc02e94078fc2fc55fefd5c7c895719a55414e1935a8f8",
+      "bytes": 29636,
+      "captured_v45_sha256": "9d36a36b77dc7cc20bfc02e94078fc2fc55fefd5c7c895719a55414e1935a8f8",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/natures-own-source.mjs",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "c38512a02a9838f8bebbab558d8cb66bc93f791a",
+      "after_sha256": "b3b1d47c114fb84791b059d6c418cc478796386c379dfca09d0e382eb593b704",
+      "bytes": 5571,
+      "captured_v45_sha256": "b3b1d47c114fb84791b059d6c418cc478796386c379dfca09d0e382eb593b704",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/nutritionReadGate.mjs",
+      "operation": "update",
+      "before_git_blob_sha": "bd4c0c10972e072489aee001ccc299129d0e7939",
+      "after_git_blob_sha": "c5dcb3116cf9a4771af558c9be5fc3f1c4a67210",
+      "after_sha256": "6428c03643d43e44fe215330c33e0b0659f9bc42ef0a9491dd0cb9859a933266",
+      "bytes": 29514,
+      "captured_v45_sha256": "c4d414a237ac5ad0f3ce8a8c4c502a9a4b1e725e0b6bde3901159ce826497179",
+      "byte_equal_to_v45": false
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-budget.mjs",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "636f98ff845116e36ff7342e28e86b5da4e517cf",
+      "after_sha256": "d5eeada486b2311c9e163df01df02cf808a021162272645f7b686de281728409",
+      "bytes": 4100,
+      "captured_v45_sha256": "d5eeada486b2311c9e163df01df02cf808a021162272645f7b686de281728409",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-contract.mjs",
+      "operation": "update",
+      "before_git_blob_sha": "ac3f0c8fdbaa853c1281e436c60033df89aec880",
+      "after_git_blob_sha": "bd6caa06b8d9d8d4bb8b5d790035e37dc3673590",
+      "after_sha256": "24ee210bd61dd0a524738a8f2125573eefdb5923f7fd5bad320ebf001dd28636",
+      "bytes": 6302,
+      "captured_v45_sha256": "24ee210bd61dd0a524738a8f2125573eefdb5923f7fd5bad320ebf001dd28636",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-discovery.ts",
+      "operation": "update",
+      "before_git_blob_sha": "43ccb50717b9c523cd9b34a058284a7ff3bf4e87",
+      "after_git_blob_sha": "42ca13d014155b2085f33ad45fbe257b5cf443ed",
+      "after_sha256": "ba4bcf00def9bdd62c80a5faa98bf99476f0351024c5be4381a2c8c75667a56e",
+      "bytes": 32831,
+      "captured_v45_sha256": "178b4b7c6743407e5f6978dc639cda689b08c3b69a5694264813ec16f91a363e",
+      "byte_equal_to_v45": false
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-front.ts",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "5786c7f875d3012913acbcfe5ce0687af343c213",
+      "after_sha256": "329d2314e4b4589b1e839d70b8d8e04f41d9e7d2122cba58dbc49c2321bb5fa6",
+      "bytes": 5163,
+      "captured_v45_sha256": "329d2314e4b4589b1e839d70b8d8e04f41d9e7d2122cba58dbc49c2321bb5fa6",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-general.ts",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "78a6f4f625c9c1e9dc95e599ead8792faf6b69bd",
+      "after_sha256": "0d3361f334e28a4d17b15c21fc15fdd0aba567d1fd50cd5a5931774332ae2b6a",
+      "bytes": 14268,
+      "captured_v45_sha256": "0d3361f334e28a4d17b15c21fc15fdd0aba567d1fd50cd5a5931774332ae2b6a",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-receipts.mjs",
+      "operation": "update",
+      "before_git_blob_sha": "b222049b6a3d085655c565d8131c4ca22e752961",
+      "after_git_blob_sha": "7206f3f0041a103f5c9167c1f4a066948a9e4053",
+      "after_sha256": "ed460b02125658e47694cb5cb1cabaea14eb82520354e70621a57ed241cc21a6",
+      "bytes": 6213,
+      "captured_v45_sha256": "ed460b02125658e47694cb5cb1cabaea14eb82520354e70621a57ed241cc21a6",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-release-policy.mjs",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "969d79e76d60f279b4c8fb443d20df7f04b89549",
+      "after_sha256": "6cf11273cb55dec50a2340b573792378eade23afd5d686c329ca060ff5c33358",
+      "bytes": 521,
+      "captured_v45_sha256": "6cf11273cb55dec50a2340b573792378eade23afd5d686c329ca060ff5c33358",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-search-diagnostics.mjs",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "deef5bbc5a0528ca28a5bc2f12c06782abb6723b",
+      "after_sha256": "cb08797f3caab062cf60b3063176e5664f7b40fb9105db28e740dc74e03bb2aa",
+      "bytes": 2179,
+      "captured_v45_sha256": "cb08797f3caab062cf60b3063176e5664f7b40fb9105db28e740dc74e03bb2aa",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-source-selection.mjs",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "0013e4992fefaa168cb73b9579ed399d36df8493",
+      "after_sha256": "ef5f30f30024cbdd2ed107e78edeeaf0df5ee7374d71366da4fdc3f953351e2c",
+      "bytes": 2327,
+      "captured_v45_sha256": "ef5f30f30024cbdd2ed107e78edeeaf0df5ee7374d71366da4fdc3f953351e2c",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-text-evidence.mjs",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "d7e63d1939d019266290b876444c84c03514f4e4",
+      "after_sha256": "148b5faa2998d059d9fffdfa53dbdc01cd1956cd814643d80c7d1e59848bbee2",
+      "bytes": 24781,
+      "captured_v45_sha256": "148b5faa2998d059d9fffdfa53dbdc01cd1956cd814643d80c7d1e59848bbee2",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-web-evidence.mjs",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "b11bccc25fc1cb5f42ecea29e18f92f64c36f114",
+      "after_sha256": "12579e9ddc475f5b9e7f7148dfdfafc2018bd21cb87e27a6a9aa212510a4f952",
+      "bytes": 14148,
+      "captured_v45_sha256": "12579e9ddc475f5b9e7f7148dfdfafc2018bd21cb87e27a6a9aa212510a4f952",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-web-search.mjs",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "80cfc461929f9ac86ecae35e4d7b611afd4e7700",
+      "after_sha256": "c3dbb7a2436894092372e5e6a93c628954c78264a2b806db68a25d3f925b2351",
+      "bytes": 25602,
+      "captured_v45_sha256": "c3dbb7a2436894092372e5e6a93c628954c78264a2b806db68a25d3f925b2351",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery.ts",
+      "operation": "update",
+      "before_git_blob_sha": "da4d47cbe8140c5d5c78f6a86110cafa4feb4014",
+      "after_git_blob_sha": "0a98f2ef71158b5d075d6c2aa23889c4f8a301b9",
+      "after_sha256": "240a49b0b40f4bcb6a45df59ac365354b84513f22d630b1aee91ce5c413770b6",
+      "bytes": 10366,
+      "captured_v45_sha256": "981ec83134d1f4ce4418d577230fc154b62952ae60fad818e75adf8315b72a6b",
+      "byte_equal_to_v45": false
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/serving-mass.mjs",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "35ed8a1a2549e331ac17ef3bba5e881e0c0cd4f0",
+      "after_sha256": "df80ca685c5654ecc2f7681d88b1a53553c0bc8797961cc73037c9f818ea1c79",
+      "bytes": 767,
+      "captured_v45_sha256": "df80ca685c5654ecc2f7681d88b1a53553c0bc8797961cc73037c9f818ea1c79",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/smartlabel-source.mjs",
+      "operation": "update",
+      "before_git_blob_sha": "b38f81077b1e30df0a37a134b418f44cb60066ec",
+      "after_git_blob_sha": "992d8de6cb58944f132219c077d9ea42337ef26e",
+      "after_sha256": "54843d5702e34417c8146059e4797a3242da272edbcde68eb060484b1216be72",
+      "bytes": 4363,
+      "captured_v45_sha256": "54843d5702e34417c8146059e4797a3242da272edbcde68eb060484b1216be72",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/source-gallery.mjs",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "7a865147e217dd8ece5ec265a3bfbb782868197b",
+      "after_sha256": "d1f68d935a2c2da6b235473dc2b2833d485249a5d928059266b048860af44849",
+      "bytes": 10508,
+      "captured_v45_sha256": "d1f68d935a2c2da6b235473dc2b2833d485249a5d928059266b048860af44849",
+      "byte_equal_to_v45": true
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/target-source.mjs",
+      "operation": "add",
+      "before_git_blob_sha": null,
+      "after_git_blob_sha": "787ba931dde347d32b5c3fac31e1dce633b889ed",
+      "after_sha256": "4d466911a8ad4febccbefa99c534730370d346255d3d5220ce6b5171f5b16c02",
+      "bytes": 9282,
+      "captured_v45_sha256": "4d466911a8ad4febccbefa99c534730370d346255d3d5220ce6b5171f5b16c02",
+      "byte_equal_to_v45": true
+    }
+  ],
+  "counts": {
+    "update": 9,
+    "add": 15
+  },
+  "production_resolved_external_dependency_versions": "Unknown; preserved npm:@supabase/supabase-js@2 and jsr:@supabase/functions-js/edge-runtime.d.ts import strings. This source equivalence is not dependency-lock or live runtime parity proof.",
+  "closure": [
+    {
+      "path": "supabase/functions/ai-coach/coach-dish-json.ts",
+      "baseline_sha256": "d563f05d327377f331327fcd48b42f1d0ccbd28db6ceba8576f90d99319ff0f8",
+      "candidate_sha256": "d563f05d327377f331327fcd48b42f1d0ccbd28db6ceba8576f90d99319ff0f8",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "46b641d702ab96cf3b2b8ba8480b2d4cc97cad886ee61a4b583bbd93558b35c0"
+    },
+    {
+      "path": "supabase/functions/ai-coach/coach-lookup-intent.ts",
+      "baseline_sha256": "f04916fceaf245da183435305ff9b13523fa6411c6a99bd456dd5727b321a697",
+      "candidate_sha256": "084aa1165aaa704db9cc1cbb53a4c5604fd6e41bb0d815c5c52f33d1ae964bca",
+      "byte_equal": false,
+      "emitted_js_equal": true,
+      "emitted_sha256": "f438e6b2da3e6b5e6d81bc5087b996113e6a8ae6474e219a39ec816e021f26fe"
+    },
+    {
+      "path": "supabase/functions/ai-coach/coach-mcdonalds-api.ts",
+      "baseline_sha256": "c9907f3961c97111b348f55f0ea78477d1a20aa73b552cef5f2f27312fcae75b",
+      "candidate_sha256": "70e144aa831af6b083c6810cd93ac507a37dfe217609b8b394fb56877036b456",
+      "byte_equal": false,
+      "emitted_js_equal": true,
+      "emitted_sha256": "0556de98f2943c47c3113aa04b80b22328585a25e758b0935ad6b5d0b91c375e"
+    },
+    {
+      "path": "supabase/functions/ai-coach/coach-official-capabilities.ts",
+      "baseline_sha256": "f5364e042140a4414b7283b18abae583527b41b8b18c7b00b9a9f260790e03a1",
+      "candidate_sha256": "f5364e042140a4414b7283b18abae583527b41b8b18c7b00b9a9f260790e03a1",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "a78e9a8473949d60d4dd2584ddb50e5e5f9a278d24bdc6547a090c6bd80fb4b1"
+    },
+    {
+      "path": "supabase/functions/ai-coach/coach-source-pages.ts",
+      "baseline_sha256": "b0478ec038fde04f47d73ba2fa195714e2e45fc1d4af6b472c2d20883e9e512d",
+      "candidate_sha256": "b0478ec038fde04f47d73ba2fa195714e2e45fc1d4af6b472c2d20883e9e512d",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "8427cf4970b74a61f4270e81670ec37cfcba6ef2e27edcab96e20d4644935876"
+    },
+    {
+      "path": "supabase/functions/ai-coach/coach-sources.ts",
+      "baseline_sha256": "a4835668afd2ec17ed26184267447ee96ba27750e0309e79fab94e9456b2c436",
+      "candidate_sha256": "a4835668afd2ec17ed26184267447ee96ba27750e0309e79fab94e9456b2c436",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "2a4762e2c421f266303cde3b510de44ef1b15fc13a3ea35212f061efc715ce14"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/declared-column-read.mjs",
+      "baseline_sha256": "59e95e26158428a231ad7faa1a170b8c2321522e38fd39d93ba4637c5ddaa275",
+      "candidate_sha256": "59e95e26158428a231ad7faa1a170b8c2321522e38fd39d93ba4637c5ddaa275",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "8bc4379c5b77cde56933efb71956bc799caeb02cf283a2d4ee99b09a5a311a94"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/declared-column-v2.mjs",
+      "baseline_sha256": "f13b3ae6e546e2e84a604a31d6c421ecabbec8051cdb566dbd4462cfe69adaf6",
+      "candidate_sha256": "f79a4385e4d5cbe79f5d5c5f1dc6d30c9e359b88d16867e2e1a81eb8703239b7",
+      "byte_equal": false,
+      "emitted_js_equal": true,
+      "emitted_sha256": "3b714211e1c62dde7d7ce86091de2ef4f43de302ddede411123ae64be03b3b91"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/identity.mjs",
+      "baseline_sha256": "bc2eeedc01735c234e00b240cb3673291036a4cebefdf3cddded0743465c7fb1",
+      "candidate_sha256": "2db37bf4d80d3a25ae6212475e517be32590b7af49444c8917eaa37640b3759b",
+      "byte_equal": false,
+      "emitted_js_equal": true,
+      "emitted_sha256": "f98a4688b4b8c2010fa6cef3113181e064912e4b006a0646774e79c8942b0da8"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/index.ts",
+      "baseline_sha256": "9d36a36b77dc7cc20bfc02e94078fc2fc55fefd5c7c895719a55414e1935a8f8",
+      "candidate_sha256": "9d36a36b77dc7cc20bfc02e94078fc2fc55fefd5c7c895719a55414e1935a8f8",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "79fb40c24b8613ae2cc0055f4cc08728dd762e82c973ad7c0d765ce8aff7b99a"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/natures-own-source.mjs",
+      "baseline_sha256": "b3b1d47c114fb84791b059d6c418cc478796386c379dfca09d0e382eb593b704",
+      "candidate_sha256": "b3b1d47c114fb84791b059d6c418cc478796386c379dfca09d0e382eb593b704",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "3b00a5cce13300645839c02fffde72062c2e27d1368e6f518d901c64c6ae43e9"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/nutritionReadGate.mjs",
+      "baseline_sha256": "c4d414a237ac5ad0f3ce8a8c4c502a9a4b1e725e0b6bde3901159ce826497179",
+      "candidate_sha256": "6428c03643d43e44fe215330c33e0b0659f9bc42ef0a9491dd0cb9859a933266",
+      "byte_equal": false,
+      "emitted_js_equal": true,
+      "emitted_sha256": "361dcedc08829060103a691974de3e2e04eded10e9b3630cafe970aed23a6086"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-budget.mjs",
+      "baseline_sha256": "d5eeada486b2311c9e163df01df02cf808a021162272645f7b686de281728409",
+      "candidate_sha256": "d5eeada486b2311c9e163df01df02cf808a021162272645f7b686de281728409",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "64f226580fb1a2b4e9e249e4f5a5d13e1f600cd1bbe448357937e28979e9bd6c"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-contract.mjs",
+      "baseline_sha256": "24ee210bd61dd0a524738a8f2125573eefdb5923f7fd5bad320ebf001dd28636",
+      "candidate_sha256": "24ee210bd61dd0a524738a8f2125573eefdb5923f7fd5bad320ebf001dd28636",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "b22edcf1d5681cf4f1fe8c000c73e1a05ce7eef0cbd86a38daefb8e26cce7f7f"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-discovery.ts",
+      "baseline_sha256": "178b4b7c6743407e5f6978dc639cda689b08c3b69a5694264813ec16f91a363e",
+      "candidate_sha256": "ba4bcf00def9bdd62c80a5faa98bf99476f0351024c5be4381a2c8c75667a56e",
+      "byte_equal": false,
+      "emitted_js_equal": true,
+      "emitted_sha256": "e2e7ce7ac88b5a8cc16003f8390bf5e9fab35b225e686fe41cdd4e0b3cae861c"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-front.ts",
+      "baseline_sha256": "329d2314e4b4589b1e839d70b8d8e04f41d9e7d2122cba58dbc49c2321bb5fa6",
+      "candidate_sha256": "329d2314e4b4589b1e839d70b8d8e04f41d9e7d2122cba58dbc49c2321bb5fa6",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "80b61d3cc3dd598053df8caa10706bccce19219dbd9ca4a2ae8b3fd3a8dcd62d"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-general.ts",
+      "baseline_sha256": "0d3361f334e28a4d17b15c21fc15fdd0aba567d1fd50cd5a5931774332ae2b6a",
+      "candidate_sha256": "0d3361f334e28a4d17b15c21fc15fdd0aba567d1fd50cd5a5931774332ae2b6a",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "3d5072a4ff4e2574d06a8769e62005a7d0ea60ab68074700d834acb85ba6bc44"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-images.ts",
+      "baseline_sha256": "48729b9f3153f4bdb5d8d4621bbb97c2b33a1152097bd8daa3b856bfcf969a06",
+      "candidate_sha256": "48729b9f3153f4bdb5d8d4621bbb97c2b33a1152097bd8daa3b856bfcf969a06",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "94ab57d0957ffeb9d85eb30497c27df9615dcfa41b45953826bb5f5df785a2ff"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-receipts.mjs",
+      "baseline_sha256": "ed460b02125658e47694cb5cb1cabaea14eb82520354e70621a57ed241cc21a6",
+      "candidate_sha256": "ed460b02125658e47694cb5cb1cabaea14eb82520354e70621a57ed241cc21a6",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "3c5a08c8635db11beef22703fce77dc3608ce9d64d652e94a1123fb4712315dc"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-release-policy.mjs",
+      "baseline_sha256": "6cf11273cb55dec50a2340b573792378eade23afd5d686c329ca060ff5c33358",
+      "candidate_sha256": "6cf11273cb55dec50a2340b573792378eade23afd5d686c329ca060ff5c33358",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "07836df55917958e5401beee833625f2561b3c039e65094290b4d4c786a3f13e"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-search-diagnostics.mjs",
+      "baseline_sha256": "cb08797f3caab062cf60b3063176e5664f7b40fb9105db28e740dc74e03bb2aa",
+      "candidate_sha256": "cb08797f3caab062cf60b3063176e5664f7b40fb9105db28e740dc74e03bb2aa",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "d1f760459d31a388c69024d7c49f49f8974af88728fd8bfaf8a1312730287459"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-source-selection.mjs",
+      "baseline_sha256": "ef5f30f30024cbdd2ed107e78edeeaf0df5ee7374d71366da4fdc3f953351e2c",
+      "candidate_sha256": "ef5f30f30024cbdd2ed107e78edeeaf0df5ee7374d71366da4fdc3f953351e2c",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "7a5f1f313f5d2fe3a9d5dcae9765c73f8b729ea238412a76431b987129f484c5"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-text-evidence.mjs",
+      "baseline_sha256": "148b5faa2998d059d9fffdfa53dbdc01cd1956cd814643d80c7d1e59848bbee2",
+      "candidate_sha256": "148b5faa2998d059d9fffdfa53dbdc01cd1956cd814643d80c7d1e59848bbee2",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "02244a5e3acdd2df0d60a6bd33ae55f658d6fb2531f93e18e679cec9d5d9066a"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-web-evidence.mjs",
+      "baseline_sha256": "12579e9ddc475f5b9e7f7148dfdfafc2018bd21cb87e27a6a9aa212510a4f952",
+      "candidate_sha256": "12579e9ddc475f5b9e7f7148dfdfafc2018bd21cb87e27a6a9aa212510a4f952",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "6d3e93acdb458658145e9bbaa7fb1f99c3b93166e0e9f4fdd172a1b75075848d"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-web-search.mjs",
+      "baseline_sha256": "c3dbb7a2436894092372e5e6a93c628954c78264a2b806db68a25d3f925b2351",
+      "candidate_sha256": "c3dbb7a2436894092372e5e6a93c628954c78264a2b806db68a25d3f925b2351",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "d4b653dac5427774905b5c01f4d4e85c1d71454cb17bad325149f1a64d3de6f8"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery.ts",
+      "baseline_sha256": "981ec83134d1f4ce4418d577230fc154b62952ae60fad818e75adf8315b72a6b",
+      "candidate_sha256": "240a49b0b40f4bcb6a45df59ac365354b84513f22d630b1aee91ce5c413770b6",
+      "byte_equal": false,
+      "emitted_js_equal": true,
+      "emitted_sha256": "84dcebd87e9386bce5cf73d2b01ca84dc615a5a2f403e4467124a4f256eb7ea5"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/serving-mass.mjs",
+      "baseline_sha256": "df80ca685c5654ecc2f7681d88b1a53553c0bc8797961cc73037c9f818ea1c79",
+      "candidate_sha256": "df80ca685c5654ecc2f7681d88b1a53553c0bc8797961cc73037c9f818ea1c79",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "230966beab9184606c82a73e16820fcd21cf919ee2d37494446e2700e92b68cb"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/smartlabel-source.mjs",
+      "baseline_sha256": "54843d5702e34417c8146059e4797a3242da272edbcde68eb060484b1216be72",
+      "candidate_sha256": "54843d5702e34417c8146059e4797a3242da272edbcde68eb060484b1216be72",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "71e3473c6b1da786a9fde0c912b64835335ec413a96646c5116443c50fe7f259"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/source-gallery.mjs",
+      "baseline_sha256": "d1f68d935a2c2da6b235473dc2b2833d485249a5d928059266b048860af44849",
+      "candidate_sha256": "d1f68d935a2c2da6b235473dc2b2833d485249a5d928059266b048860af44849",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "257d55b749702e65558b6a51626b47d3779d6420262db44ad8afac90cc93ba67"
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/target-source.mjs",
+      "baseline_sha256": "4d466911a8ad4febccbefa99c534730370d346255d3d5220ce6b5171f5b16c02",
+      "candidate_sha256": "4d466911a8ad4febccbefa99c534730370d346255d3d5220ce6b5171f5b16c02",
+      "byte_equal": true,
+      "emitted_js_equal": true,
+      "emitted_sha256": "f4b449a48d9ea47cdf694122917a44bedcd81f94c873f53d7d7aef5a43e9d637"
+    }
+  ],
+  "verification": {
+    "local_closure_files": 30,
+    "raw_byte_equal_to_v45": 23,
+    "type_or_jsdoc_only_changes": 6,
+    "repository_newline_preserved": 1,
+    "normalized_emitted_javascript_equal": true,
+    "offline_reviewed_regression_executions": 935,
+    "offline_boot_executions": 2,
+    "historical_unadapted_tests_pass": 928,
+    "historical_unadapted_tests_fail": 7,
+    "test_overlay_not_repo_relative": true,
+    "actual_deno_and_dependency_lock_review_pending": true
+  }
+}

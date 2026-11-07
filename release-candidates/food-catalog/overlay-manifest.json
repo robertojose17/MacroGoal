@@ -1,17 +1,31 @@
 {
   "schema_version": 1,
   "repository": "robertojose17/MacroGoal",
-  "original_main_commit": "5c3c2ac0d6ffd3d8f523307737a0147f7f5703eb",
+  "base_commit": "9193c2243d9919323715d7d10338ca589f3e7a2e",
+  "delta_base_tree_sha": "213497d148b951626718ab0bdc2216beeaff8d5a",
   "original_main_tree_sha": "7256c7c81b78d821955316580a5bd76f9079c1f3",
-  "delta_base_tree_sha": "f447aaf5d4e51681c9d4f21534a73fe768779e3a",
-  "scope": "Complete follow-on review overlay relative to original main; no deletes/deployment; excludes self-referential manifest",
+  "scope": "Round2 complete review overlay relative to original main; no deletes/deployment; excludes self-referential manifest",
   "files": [
+    {
+      "path": ".eslintignore",
+      "mode": "100644",
+      "sha256": "ffe5881786ec64431a915cdb0b0b7e0001654952812ce83d73ab700490d62e99",
+      "git_blob_sha1": "4ef4d0b48b31f21a8eb2ee806ed24fd04151943b",
+      "bytes": 644
+    },
+    {
+      "path": ".eslintrc.js",
+      "mode": "100644",
+      "sha256": "d4a7fefa5aff7ef3d41b1864b840e7fe3c156455030c343284f25e165aa49508",
+      "git_blob_sha1": "6c05447cba606c61446c950d06f62cda0b1a9eba",
+      "bytes": 2521
+    },
     {
       "path": ".github/workflows/library-barcode-validation.yml",
       "mode": "100644",
-      "sha256": "544194a5d1c4dded44c6000398c33e78458b65b540dc6118001556465cd56d0b",
-      "git_blob_sha1": "c634b64b589dc7909cc3df8dc03da2331d8e1ff9",
-      "bytes": 5342
+      "sha256": "9a3c50c3a01ab8d950e38217b125cd78ce23cf9433f028adbbc75717b7fed13e",
+      "git_blob_sha1": "36d4e6e8747a5ef8837d2fb9d98e13afa87725a6",
+      "bytes": 7113
     },
     {
       "path": "app/add-food.tsx",
@@ -70,6 +84,13 @@
       "bytes": 29220
     },
     {
+      "path": "components/CoachConversationActions.tsx",
+      "mode": "100644",
+      "sha256": "dc292a42da4c767f917d38b9b577c84732b2d2b8a2d3e80a55dd3cb498b5f465",
+      "git_blob_sha1": "d5aa3cc0b610e2257812523414a448ce5d1f61a4",
+      "bytes": 32083
+    },
+    {
       "path": "components/FoodDetailsLayout.tsx",
       "mode": "100644",
       "sha256": "95fee6b95ded7568c73d80fbed08ac3ee3cec56ad51243b81c2c699d5aaedc34",
@@ -77,18 +98,53 @@
       "bytes": 109295
     },
     {
+      "path": "components/IconSymbol.tsx",
+      "mode": "100644",
+      "sha256": "5f33878d77980710a568d008dc943f823bf96f67cb04aac037f0ef511d649af0",
+      "git_blob_sha1": "04c088c66a7f0e7f84c14b61d2478880b6fa11db",
+      "bytes": 1148
+    },
+    {
+      "path": "features/blockedAccounts/transport.ts",
+      "mode": "100644",
+      "sha256": "733245d6a5e193afc5cc1668d2a0509f8d82246bf8bf7355b21b69b2db29adc0",
+      "git_blob_sha1": "fbf7b1d012b7a3fa7d018cdd0c707d4f3cb8a5f7",
+      "bytes": 5377
+    },
+    {
+      "path": "features/communityPrivacyV2/incomingFollowerTransport.ts",
+      "mode": "100644",
+      "sha256": "e0f5b64c3ad3d9bf893f86076a83ad152fd654893a631d10d5b5a9b739222412",
+      "git_blob_sha1": "8d490fe13d5bf3e37f520aa558b54aefb495e011",
+      "bytes": 5845
+    },
+    {
+      "path": "hooks/useColorScheme.ts",
+      "mode": "100644",
+      "sha256": "5dbbc9311327b7eeedd54755e6d5817c11af4d9327ade9ce7d79abca54c1afa9",
+      "git_blob_sha1": "b726b635c3c04d3c33986f7bd67ba677c9726ba0",
+      "bytes": 498
+    },
+    {
+      "path": "lib/supabase/types.ts",
+      "mode": "100644",
+      "sha256": "64188cfed9956378ae0a8b961b443e1a8373d71540f8322f602f0d8b44df7797",
+      "git_blob_sha1": "e5742cab0f8c37ec96bd8ab58d46186057ea69bc",
+      "bytes": 197839
+    },
+    {
       "path": "release-candidates/food-catalog/README.md",
       "mode": "100644",
-      "sha256": "8cffdbbdc09cb71bf3a96f78b049fcbffd2e4671d33b9aadfcac50df8040ef65",
-      "git_blob_sha1": "85fc87ca3c27a204e22bc021201688fea73fc485",
-      "bytes": 8339
+      "sha256": "dea14c8cfe249c20d7e4f182bca3743f26110080401be1af1a44620f9c7d6a81",
+      "git_blob_sha1": "6f48574258886e613e2fd3388485ffcad9f8df69",
+      "bytes": 6776
     },
     {
       "path": "release-candidates/food-catalog/auth-observations.json",
       "mode": "100644",
-      "sha256": "af4051ffd479f7488cae9c6008f9c130f6923370d306f26bfe1c15e6151697d8",
-      "git_blob_sha1": "c18c92b19540122629977df133c8ceb28f6915dd",
-      "bytes": 493
+      "sha256": "5a7adbc0ef9d3bcdb89a8091e7d3a920f9aa7a274e525719436baeb3d815e128",
+      "git_blob_sha1": "debf1e65b10c6fe2a84002abea2fae2bba4ac73e",
+      "bytes": 592
     },
     {
       "path": "release-candidates/food-catalog/follow-on-lineage.json",
@@ -98,11 +154,18 @@
       "bytes": 4145
     },
     {
+      "path": "release-candidates/food-catalog/round2-provenance.json",
+      "mode": "100644",
+      "sha256": "48377cbfed3a217148f96468d2e60f9194c56567f18025b6434ea0767333c224",
+      "git_blob_sha1": "6c755984a0ad51771eca44e048f0ff7352fb788a",
+      "bytes": 4366
+    },
+    {
       "path": "release-candidates/food-catalog/source-lineage.json",
       "mode": "100644",
-      "sha256": "a4c1095b15629439f2693411be09c383ab570a7fe31a8b7861ee1e4110803186",
-      "git_blob_sha1": "b7466621c02e684e222c02d141d856ab0f222f2e",
-      "bytes": 12189
+      "sha256": "035d10de524209e4d57e2fbe0dc15e0c08564a89df6c534ec365f2ee21e6ba8e",
+      "git_blob_sha1": "e936d8e294f08625055a4d24c7e3e11c702b025e",
+      "bytes": 24185
     },
     {
       "path": "release-candidates/food-catalog/sql/01-nutrition/enrichment.CANDIDATE.sql",
@@ -128,9 +191,16 @@
     {
       "path": "release-candidates/food-catalog/vision-source-drift.json",
       "mode": "100644",
-      "sha256": "811a9dfaf86f5d84aff608fd469041a2f3754ec9611fed1ac6c0989da2df0381",
-      "git_blob_sha1": "6fd31cb76209f45a6ea85a430d89535e34ee61ac",
-      "bytes": 11891
+      "sha256": "8c70c766ce7950b9165b3d714db545f06a77d83ba57225c05ef3d16df1c5d1a3",
+      "git_blob_sha1": "9ee96af88f3e8e0a1ab26d392c32a1360996fe82",
+      "bytes": 12682
+    },
+    {
+      "path": "release-candidates/food-catalog/vision-source-lineage.json",
+      "mode": "100644",
+      "sha256": "d1759cb348c350e66cf83a4232e061eaab83b03b8f55acdc5ab3c7e471d32847",
+      "git_blob_sha1": "c1794c47ad5bd288d1e7893795a67df00c4cd535",
+      "bytes": 25860
     },
     {
       "path": "scripts/ci/base-checkout-paths.json",
@@ -142,9 +212,9 @@
     {
       "path": "scripts/ci/check-app-types.cjs",
       "mode": "100644",
-      "sha256": "dd5c4ec0e2cd4caed90f54261f335b456dc74972eaf54de2340cd828f43b3d56",
-      "git_blob_sha1": "a43acaee0e73de98777ee34f52ebab971a1fea31",
-      "bytes": 2306
+      "sha256": "1ed6e158eab01567920b2df51a51705f1a23bdd0d64b6ef45ddaacea5e4f9800",
+      "git_blob_sha1": "aa93c0ed96c326ab219d6ae6f0ea90a8b525a00f",
+      "bytes": 2697
     },
     {
       "path": "scripts/ci/check-complete-checkout.cjs",
@@ -163,9 +233,16 @@
     {
       "path": "scripts/ci/native-database/README.md",
       "mode": "100644",
-      "sha256": "476664850cc2db236a18b45048fc67bf6af195a22d67c095d09b4ee3459f4e48",
-      "git_blob_sha1": "841238fe1f51deb3badb562dc6ab7337afcce2c8",
-      "bytes": 8144
+      "sha256": "1386ac36ff64646d64a6e9140fd55122ad57a7f8d5086678ac01308a896e8957",
+      "git_blob_sha1": "b6c1537f8dfe3d1dd58f24a2a49572c7c012f112",
+      "bytes": 12867
+    },
+    {
+      "path": "scripts/ci/native-database/authenticated_checks.py",
+      "mode": "100644",
+      "sha256": "27b0b9a4c972ebc5638f045c95e23f7c80ca06278b47cae8aab02d37c5dcb3e4",
+      "git_blob_sha1": "f6043e56e6ff17130701308fac26aaac76e66b99",
+      "bytes": 17471
     },
     {
       "path": "scripts/ci/native-database/checks.py",
@@ -173,6 +250,20 @@
       "sha256": "cc5a5147bee032617d8a9eec7bbe6af5f7a6bd48c55a2411316c2f00bfef88d7",
       "git_blob_sha1": "b8d9c13a7233c3a8b3422152330fc95d54047d8d",
       "bytes": 20323
+    },
+    {
+      "path": "scripts/ci/native-database/cleanup.py",
+      "mode": "100644",
+      "sha256": "4cdfac89b029b6489ba73087c6b2c94a8397558cfda1160f51b6682969d7ebfb",
+      "git_blob_sha1": "edc056510e22a7c1a3f8a6271316c80295f9a96f",
+      "bytes": 4599
+    },
+    {
+      "path": "scripts/ci/native-database/container_postgres.py",
+      "mode": "100644",
+      "sha256": "d1b21f86564570d08bcb57c1f61ac8a5949184a0ae230ce10229affd222775ea",
+      "git_blob_sha1": "3a0f6e8798b14613456c3e1504a7df908399571e",
+      "bytes": 4845
     },
     {
       "path": "scripts/ci/native-database/frozen-inputs.json",
@@ -184,16 +275,23 @@
     {
       "path": "scripts/ci/native-database/postgrest_checks.py",
       "mode": "100644",
-      "sha256": "96108e387432a0e20247ca4ee5a9c84b5fc7833e34a06b7e958b92de236f7c7f",
-      "git_blob_sha1": "a564c41dfd03e9d522c6ec0ce6fff69e61423165",
-      "bytes": 11593
+      "sha256": "cd78648bc45306eb3eac8e3bceacf1510b403653457d9249f04bb5f8f2bc43e6",
+      "git_blob_sha1": "f5ae109a9ea2ae136e76347e588484e78b9f0c5b",
+      "bytes": 10953
     },
     {
       "path": "scripts/ci/native-database/run.py",
       "mode": "100644",
-      "sha256": "711d08507785f7a9fc547537ae0848490d02f89c8261c55f139e9f77ec460943",
-      "git_blob_sha1": "5ca96b65d3e28d1fb9a54aca002d82accb3066fc",
-      "bytes": 18156
+      "sha256": "205994fa48dfa059f2d12f071d09d3d709c00a8a426a7cd39c3afdc39c2bd99d",
+      "git_blob_sha1": "8aae623f18c0d6e820a32cc3f155b803ba3e8dab",
+      "bytes": 18491
+    },
+    {
+      "path": "scripts/ci/native-database/safety_probes.py",
+      "mode": "100644",
+      "sha256": "87949946882952c02634f728d943b8802f63153b129ee995276a796f2b6ad0a2",
+      "git_blob_sha1": "1c163f32c5aa2f8d38250bbcc4c2e6bef15f568c",
+      "bytes": 6938
     },
     {
       "path": "scripts/ci/native-database/sample.mjs",
@@ -224,6 +322,13 @@
       "bytes": 3952
     },
     {
+      "path": "scripts/ci/native-database/sql/authenticated-policy.sql",
+      "mode": "100644",
+      "sha256": "7fdb7ebf849d5444ed5dada6703365afe9e661e9217bcc60cade9fbd15257151",
+      "git_blob_sha1": "78eae13bf6473a97960b247f899a927200371fb9",
+      "bytes": 848
+    },
+    {
       "path": "scripts/ci/native-database/sql/fixture.sql",
       "mode": "100644",
       "sha256": "682752e88e65f18685f803926de153009ff7342f2d0a1a86c448498b2b39faec",
@@ -252,11 +357,18 @@
       "bytes": 691
     },
     {
+      "path": "scripts/ci/run-backend-components.py",
+      "mode": "100644",
+      "sha256": "403f1e900cfd93bc5e2e6154bc7e6eb05a1e57ffad10a6d45f76e7517581e3e6",
+      "git_blob_sha1": "5e0ad11961972a048114047e9bffa816ced2f47e",
+      "bytes": 6090
+    },
+    {
       "path": "scripts/ci/run-stage.cjs",
       "mode": "100644",
-      "sha256": "fcd6be0637e9f7ed8f35329a83c0a46b523d8690a32b385680fc7d151ab862d8",
-      "git_blob_sha1": "2b43e6336569ba56523fa8453df9627791da49d4",
-      "bytes": 4617
+      "sha256": "858ae532d66fd2317375967dd06b1e7746b4e0ba1d7a358f04303e091b6551a2",
+      "git_blob_sha1": "e29a36497e1950918185b2dd8258254027af6235",
+      "bytes": 6504
     },
     {
       "path": "scripts/ci/test-tooling/package-lock.json",
@@ -282,9 +394,9 @@
     {
       "path": "scripts/release-review/verify.mjs",
       "mode": "100644",
-      "sha256": "042433bddad40737bdf6fe454cc63b36c28d32ca27d84fba18bfaf4590bddd56",
-      "git_blob_sha1": "c2bf1a5edcc4ee26ef4427f4620844182bfc05b2",
-      "bytes": 1266
+      "sha256": "fd7409636204cbdea53c6ef79167274475c6f65d73029fe490045e9c68fdf6d9",
+      "git_blob_sha1": "badf268f168c238b6a2d04ab7da3313f4cd33491",
+      "bytes": 1941
     },
     {
       "path": "supabase/functions/_shared/foodPortions.d.mts",
@@ -336,11 +448,25 @@
       "bytes": 4967
     },
     {
+      "path": "supabase/functions/_shared/searchHydration.d.mts",
+      "mode": "100644",
+      "sha256": "2e4ed170821619091fb83766a3b18f8cbd27c1653cd3d290ac8edc42eb29b1ec",
+      "git_blob_sha1": "923f46c4420592755073a3d7706a4096d5963c35",
+      "bytes": 2278
+    },
+    {
       "path": "supabase/functions/_shared/searchHydration.mjs",
       "mode": "100644",
       "sha256": "85502f73b8f97a01beac8abfb653e7ee678f49fab9fc3ec162359a3f1d4bcb9d",
       "git_blob_sha1": "eda6c49460999c6a2684bc5d05c2eb7224f4f267",
       "bytes": 8413
+    },
+    {
+      "path": "supabase/functions/ai-coach/coach-mcdonalds-api.ts",
+      "mode": "100644",
+      "sha256": "70e144aa831af6b083c6810cd93ac507a37dfe217609b8b394fb56877036b456",
+      "git_blob_sha1": "ddc37d5396e773ec9258630ca254bf84d00c50f2",
+      "bytes": 16222
     },
     {
       "path": "supabase/functions/lookup-barcode/identity.mjs",
@@ -359,9 +485,9 @@
     {
       "path": "supabase/functions/search-foods/index.ts",
       "mode": "100644",
-      "sha256": "80fce41874d79bccbfeb6321dffa080d0306a9b521ead57997a5dfbaa4e9e3a0",
-      "git_blob_sha1": "9dba93712f456e0f225b38fefca64432d62146c5",
-      "bytes": 13646
+      "sha256": "4881401566a3e657d3cd3965f32b886068c3a522f3f6b71d90dbf322a4887f19",
+      "git_blob_sha1": "0baa3f328b972c81a62435a774760a4d1270cb35",
+      "bytes": 13694
     },
     {
       "path": "supabase/functions/search-foods/searchCore.ts",
@@ -369,6 +495,174 @@
       "sha256": "546b8f7e31074daa6e6a7768c7b256fae9d8234288fc706ee0e727bd15187033",
       "git_blob_sha1": "0e61b2a48bd81550a3df57858a73fc42fec30630",
       "bytes": 11163
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/declared-column-read.mjs",
+      "mode": "100644",
+      "sha256": "59e95e26158428a231ad7faa1a170b8c2321522e38fd39d93ba4637c5ddaa275",
+      "git_blob_sha1": "40b99addfe9796fc857ca284c7b69fa8b43f61cd",
+      "bytes": 8779
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/declared-column-v2.mjs",
+      "mode": "100644",
+      "sha256": "f79a4385e4d5cbe79f5d5c5f1dc6d30c9e359b88d16867e2e1a81eb8703239b7",
+      "git_blob_sha1": "9386c2fa253e2227bc25515a7e06ba232df722b0",
+      "bytes": 7747
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/identity.mjs",
+      "mode": "100644",
+      "sha256": "2db37bf4d80d3a25ae6212475e517be32590b7af49444c8917eaa37640b3759b",
+      "git_blob_sha1": "dad11b10bde14b18f446f337f3c86ec1a15e650b",
+      "bytes": 7187
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/index.ts",
+      "mode": "100644",
+      "sha256": "9d36a36b77dc7cc20bfc02e94078fc2fc55fefd5c7c895719a55414e1935a8f8",
+      "git_blob_sha1": "a647fa0eff9a2e437f4b2f6669c24568671ac5fa",
+      "bytes": 29636
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/natures-own-source.mjs",
+      "mode": "100644",
+      "sha256": "b3b1d47c114fb84791b059d6c418cc478796386c379dfca09d0e382eb593b704",
+      "git_blob_sha1": "c38512a02a9838f8bebbab558d8cb66bc93f791a",
+      "bytes": 5571
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/nutritionReadGate.mjs",
+      "mode": "100644",
+      "sha256": "6428c03643d43e44fe215330c33e0b0659f9bc42ef0a9491dd0cb9859a933266",
+      "git_blob_sha1": "c5dcb3116cf9a4771af558c9be5fc3f1c4a67210",
+      "bytes": 29514
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-budget.mjs",
+      "mode": "100644",
+      "sha256": "d5eeada486b2311c9e163df01df02cf808a021162272645f7b686de281728409",
+      "git_blob_sha1": "636f98ff845116e36ff7342e28e86b5da4e517cf",
+      "bytes": 4100
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-contract.mjs",
+      "mode": "100644",
+      "sha256": "24ee210bd61dd0a524738a8f2125573eefdb5923f7fd5bad320ebf001dd28636",
+      "git_blob_sha1": "bd6caa06b8d9d8d4bb8b5d790035e37dc3673590",
+      "bytes": 6302
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-discovery.ts",
+      "mode": "100644",
+      "sha256": "ba4bcf00def9bdd62c80a5faa98bf99476f0351024c5be4381a2c8c75667a56e",
+      "git_blob_sha1": "42ca13d014155b2085f33ad45fbe257b5cf443ed",
+      "bytes": 32831
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-front.ts",
+      "mode": "100644",
+      "sha256": "329d2314e4b4589b1e839d70b8d8e04f41d9e7d2122cba58dbc49c2321bb5fa6",
+      "git_blob_sha1": "5786c7f875d3012913acbcfe5ce0687af343c213",
+      "bytes": 5163
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-general.ts",
+      "mode": "100644",
+      "sha256": "0d3361f334e28a4d17b15c21fc15fdd0aba567d1fd50cd5a5931774332ae2b6a",
+      "git_blob_sha1": "78a6f4f625c9c1e9dc95e599ead8792faf6b69bd",
+      "bytes": 14268
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-receipts.mjs",
+      "mode": "100644",
+      "sha256": "ed460b02125658e47694cb5cb1cabaea14eb82520354e70621a57ed241cc21a6",
+      "git_blob_sha1": "7206f3f0041a103f5c9167c1f4a066948a9e4053",
+      "bytes": 6213
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-release-policy.mjs",
+      "mode": "100644",
+      "sha256": "6cf11273cb55dec50a2340b573792378eade23afd5d686c329ca060ff5c33358",
+      "git_blob_sha1": "969d79e76d60f279b4c8fb443d20df7f04b89549",
+      "bytes": 521
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-search-diagnostics.mjs",
+      "mode": "100644",
+      "sha256": "cb08797f3caab062cf60b3063176e5664f7b40fb9105db28e740dc74e03bb2aa",
+      "git_blob_sha1": "deef5bbc5a0528ca28a5bc2f12c06782abb6723b",
+      "bytes": 2179
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-source-selection.mjs",
+      "mode": "100644",
+      "sha256": "ef5f30f30024cbdd2ed107e78edeeaf0df5ee7374d71366da4fdc3f953351e2c",
+      "git_blob_sha1": "0013e4992fefaa168cb73b9579ed399d36df8493",
+      "bytes": 2327
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-text-evidence.mjs",
+      "mode": "100644",
+      "sha256": "148b5faa2998d059d9fffdfa53dbdc01cd1956cd814643d80c7d1e59848bbee2",
+      "git_blob_sha1": "d7e63d1939d019266290b876444c84c03514f4e4",
+      "bytes": 24781
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-web-evidence.mjs",
+      "mode": "100644",
+      "sha256": "12579e9ddc475f5b9e7f7148dfdfafc2018bd21cb87e27a6a9aa212510a4f952",
+      "git_blob_sha1": "b11bccc25fc1cb5f42ecea29e18f92f64c36f114",
+      "bytes": 14148
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery-web-search.mjs",
+      "mode": "100644",
+      "sha256": "c3dbb7a2436894092372e5e6a93c628954c78264a2b806db68a25d3f925b2351",
+      "git_blob_sha1": "80cfc461929f9ac86ecae35e4d7b611afd4e7700",
+      "bytes": 25602
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/recovery.ts",
+      "mode": "100644",
+      "sha256": "240a49b0b40f4bcb6a45df59ac365354b84513f22d630b1aee91ce5c413770b6",
+      "git_blob_sha1": "0a98f2ef71158b5d075d6c2aa23889c4f8a301b9",
+      "bytes": 10366
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/serving-mass.mjs",
+      "mode": "100644",
+      "sha256": "df80ca685c5654ecc2f7681d88b1a53553c0bc8797961cc73037c9f818ea1c79",
+      "git_blob_sha1": "35ed8a1a2549e331ac17ef3bba5e881e0c0cd4f0",
+      "bytes": 767
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/smartlabel-source.mjs",
+      "mode": "100644",
+      "sha256": "54843d5702e34417c8146059e4797a3242da272edbcde68eb060484b1216be72",
+      "git_blob_sha1": "992d8de6cb58944f132219c077d9ea42337ef26e",
+      "bytes": 4363
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/source-gallery.mjs",
+      "mode": "100644",
+      "sha256": "d1f68d935a2c2da6b235473dc2b2833d485249a5d928059266b048860af44849",
+      "git_blob_sha1": "7a865147e217dd8ece5ec265a3bfbb782868197b",
+      "bytes": 10508
+    },
+    {
+      "path": "supabase/functions/vision-nutrition-extract/target-source.mjs",
+      "mode": "100644",
+      "sha256": "4d466911a8ad4febccbefa99c534730370d346255d3d5220ce6b5171f5b16c02",
+      "git_blob_sha1": "787ba931dde347d32b5c3fac31e1dce633b889ed",
+      "bytes": 9282
+    },
+    {
+      "path": "supabase/premium-checkpoints-rollout/edge/protocol.ts",
+      "mode": "100644",
+      "sha256": "275afb5b74072874f101b6e01a14dcce11b9411a2f2abc4cbfce7b9047655430",
+      "git_blob_sha1": "9013b47b9ae8ecf994a68aba8604b173a1b5b34e",
+      "bytes": 8460
     },
     {
       "path": "tests/barcode-recovery-ui.test.mjs",
@@ -399,11 +693,53 @@
       "bytes": 1883
     },
     {
+      "path": "tests/ci/deno-lock-generation.test.cjs",
+      "mode": "100644",
+      "sha256": "cc8fdb13d4008e9f1ecb579c1626536a3809e4e26c392b81a49b3d77dee25532",
+      "git_blob_sha1": "9a64691257632eff4fc05bd2df58c915c43f1814",
+      "bytes": 4373
+    },
+    {
+      "path": "tests/ci/search-hydration-types.test.cjs",
+      "mode": "100644",
+      "sha256": "ed7c846eea53972b6ed636cb6725bc0ddf312b222e38bd56a99cfa0963c37eaf",
+      "git_blob_sha1": "bc4e6a916213b441fbd5789bfe0e5efe90d7789e",
+      "bytes": 3916
+    },
+    {
+      "path": "tests/ci/validation-scopes.test.cjs",
+      "mode": "100644",
+      "sha256": "ce5e990305628110327c758b780d844d7f97420a75c5484dd1cc00bc29e51945",
+      "git_blob_sha1": "c2f661f2f2ae14ab7483348c6456c773583d0327",
+      "bytes": 4844
+    },
+    {
       "path": "tests/client-readiness.test.cjs",
       "mode": "100644",
       "sha256": "6ac92fbdce59bf8954b81070ff59ad9315bb4af9196e57823c640606f386e5b3",
       "git_blob_sha1": "5a11582ebd9c2d15887aed490df8cd5c35f1c52a",
       "bytes": 9752
+    },
+    {
+      "path": "tests/coach-model-conversation.test.cjs",
+      "mode": "100644",
+      "sha256": "3cc497309ee6c2bf317133257fae3c432f5aad39b200c5339a031a92f26996cc",
+      "git_blob_sha1": "f3f6ee9929594581220ef5f483aeb328e54580c9",
+      "bytes": 63526
+    },
+    {
+      "path": "tests/coach-recovery-ui.test.cjs",
+      "mode": "100644",
+      "sha256": "d5f2e06e06b85f724a6bbad0d3e8342335b3c6360edf402f49949fa419c6f92a",
+      "git_blob_sha1": "62dd84b3fb668eab1e0569938ab286dd81e45f8f",
+      "bytes": 3988
+    },
+    {
+      "path": "tests/icon-and-theme-contracts.test.cjs",
+      "mode": "100644",
+      "sha256": "5965bbfbdd0e5593e4c5653048102d9d2b6fb7b145cfab9b4533dd07d30af88e",
+      "git_blob_sha1": "7d16cf7dc0d8679e4947b091a72675473e94224a",
+      "bytes": 3365
     },
     {
       "path": "tests/library-barcode-integration.test.cjs",
@@ -518,6 +854,328 @@
       "bytes": 17653
     },
     {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/base-review/harness.mjs",
+      "mode": "100644",
+      "sha256": "cf504d1710ee5f8f2341b79a813fcd841cb26f1a399f19a702fc1626eb7912e8",
+      "git_blob_sha1": "6513f5cf2a26ab801de42b1997d401726245c31f",
+      "bytes": 3239
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/nutrition/baseline/definitions.json",
+      "mode": "100644",
+      "sha256": "57afaa9b77b5992e54d0fd4e598d93ba693d709087c9c4ee401f1e60ae10ab89",
+      "git_blob_sha1": "4f4d05306e159d73aa68b8f25dc09ae4d96bfe3a",
+      "bytes": 8850
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/nutrition/baseline/schema.json",
+      "mode": "100644",
+      "sha256": "9276ca115bc24237af4b5ed5e31391d36e286a02f8fc5c22f452f0b24ff2a5d4",
+      "git_blob_sha1": "8db9c511465f1f7ed2a30d6b43e0cbe7d783cee3",
+      "bytes": 44276
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/nutrition/integration/foodPortions.sha256",
+      "mode": "100644",
+      "sha256": "778cb88f7455c1a0eabdf24e81278c52bb7084ef87f2927e5c330f87f8bbca48",
+      "git_blob_sha1": "63f909770d413228803c29a92f5ec6b0c064b205",
+      "bytes": 65
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/nutrition/integration/tests/portion-helper.test.mjs",
+      "mode": "100644",
+      "sha256": "d4cde103853d1448aeb6d84abbf22b77eb4db378e4c51c886279b178fcdbfd00",
+      "git_blob_sha1": "d5b621e40ce33d50acbf472ac0c637af0183c1ab",
+      "bytes": 2292
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/nutrition/integration/tests/selection.test.mjs",
+      "mode": "100644",
+      "sha256": "d5e2f498f4639ec0c0b9fe694ab4ec13bf75024dac2fcaeeb45c88d81db508a2",
+      "git_blob_sha1": "8156c39b736177a994da6e5d8b03d8e6b5fae077",
+      "bytes": 12540
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/nutrition/src/nutrient-map.json",
+      "mode": "100644",
+      "sha256": "94d61c987418dbda2025dfa3390ada0910a3bf12e28fd1bc93ab979a34b03480",
+      "git_blob_sha1": "55704a3def2c06fa8dd33534202ccb1f0abfb0a7",
+      "bytes": 4220
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/nutrition/tests/database.test.mjs",
+      "mode": "100644",
+      "sha256": "26b72f6ef215ac068946a18f21ebf27f490c5c6cda9f548da5d1863f42daad06",
+      "git_blob_sha1": "11f04d70d2e57f8fede4f59a6caedaa63d196852",
+      "bytes": 16078
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/nutrition/tests/fixture.mjs",
+      "mode": "100644",
+      "sha256": "ef6dabdec54309f6e36404279ead088af0d13eb871f509f2be65f5aceb7f92cc",
+      "git_blob_sha1": "5333c2456d25910ac93bf9a0952861447d2fc149",
+      "bytes": 2567
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/nutrition/tests/provider.test.mjs",
+      "mode": "100644",
+      "sha256": "d17c68d6cb4bc466a9e2756c14449b8b433d8b400b6ff668eb4d6bbd21e176ee",
+      "git_blob_sha1": "4ba186453af293f8a5fea3fb46854dddadf017fe",
+      "bytes": 13654
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/nutrition-review/database-adversarial.test.mjs",
+      "mode": "100644",
+      "sha256": "9c5485f4bfa4d90452daa100bd5674e3f4b699f5e4aef529b351d0153cec2d91",
+      "git_blob_sha1": "febecfb34e2bc66f520f3ba45de84f3f4c48fb7c",
+      "bytes": 12033
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/nutrition-review/harness.mjs",
+      "mode": "100644",
+      "sha256": "45076f53a9e46445c7d3a8f682538805189f63633c3546a940c728344170f550",
+      "git_blob_sha1": "470da6d55b6363a07f10381909a26876c0c9ac3a",
+      "bytes": 3465
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/nutrition-review/provider-adversarial.test.mjs",
+      "mode": "100644",
+      "sha256": "c4b6004ed0fa22ff3b2f9ec114ec7bf584821ac9032993e3f5325e6695737624",
+      "git_blob_sha1": "e8063ae1c1d49ae56faa9487fdd875893bcdc716",
+      "bytes": 1450
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-registry/base/baseline/definitions.json",
+      "mode": "100644",
+      "sha256": "57afaa9b77b5992e54d0fd4e598d93ba693d709087c9c4ee401f1e60ae10ab89",
+      "git_blob_sha1": "4f4d05306e159d73aa68b8f25dc09ae4d96bfe3a",
+      "bytes": 8850
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-registry/base/baseline/schema.json",
+      "mode": "100644",
+      "sha256": "9276ca115bc24237af4b5ed5e31391d36e286a02f8fc5c22f452f0b24ff2a5d4",
+      "git_blob_sha1": "8db9c511465f1f7ed2a30d6b43e0cbe7d783cee3",
+      "bytes": 44276
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-registry/base/integration/supabase/functions/lookup-barcode/index.ts",
+      "mode": "100644",
+      "sha256": "12a25da82338628cb8eab8691b9b9644776172bf8d8ac82b18a930d7f73c6b29",
+      "git_blob_sha1": "af497e5dbb6688aeb5ae3d2d3e114fdd834b50a6",
+      "bytes": 16104
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-registry/base/src/provider.mjs",
+      "mode": "100644",
+      "sha256": "ae6b8e83cd421678103f078c3947ebacecb435cf13a9642e73d8bad0d4fb68d0",
+      "git_blob_sha1": "56eaab1f1f54c90c7de38a3379481a67e866b124",
+      "bytes": 14876
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-registry/base/tests/fixture.mjs",
+      "mode": "100644",
+      "sha256": "b7f40abb421fc15a06078dcbe961bb102483c0634abc8ce769489bea4d555681",
+      "git_blob_sha1": "a9aef63dc407d347d3266550995170d91f366515",
+      "bytes": 2327
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-registry/strict-v2/supabase/functions/lookup-barcode/index.ts",
+      "mode": "100644",
+      "sha256": "2436c14afbc6d1b4af6ccf7ddcc0b482b19964512f6b62afb5c5bab7fc6bf7c8",
+      "git_blob_sha1": "207ade35dc2907b6a63d6c16c9bd87ffb0e95339",
+      "bytes": 15229
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-registry/tests/base-regression.test.mjs",
+      "mode": "100644",
+      "sha256": "1ceac088fdbc95e7b29939d35da6040abf820f470e9e8019580313eb4e9ceeae",
+      "git_blob_sha1": "b53062918c0b6c6693d37da24709a99a828308f1",
+      "bytes": 16084
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-registry/tests/fixtures.mjs",
+      "mode": "100644",
+      "sha256": "d893f0638cb12da357d4e8d0ef0863d8c3f0aea46b3dff6dd87e2f1cbbf1bbf9",
+      "git_blob_sha1": "95b997a66ecab3fab0258d4485a195c65dc313b6",
+      "bytes": 1163
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-registry/tests/mass.test.mjs",
+      "mode": "100644",
+      "sha256": "9c5954402c2c22bb6ea8adafafa634aa8bb1e09488a8d103d0c65c7037e939d6",
+      "git_blob_sha1": "830266cd81d43fceeedbb4da542c29ead0e71a80",
+      "bytes": 20005
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-registry/tests/portion-timing.test.mjs",
+      "mode": "100644",
+      "sha256": "333278882ab89f32aaa262db954b871b1b0a6f491063ca1b45ecab3c427ccaae",
+      "git_blob_sha1": "2427acd0ba550c947f94e37b29267a99b7e4d9e5",
+      "bytes": 7572
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-registry/tests/registry.test.mjs",
+      "mode": "100644",
+      "sha256": "d8fafeefb48295c713c8ba2c921463ce2f157b615849012cb294d3c2db7cd269",
+      "git_blob_sha1": "1724117cbe6bb560d14d6d213b28b7b78f44e60a",
+      "bytes": 10962
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-registry/tests/runtime.test.mjs",
+      "mode": "100644",
+      "sha256": "c4bee840ac89667fc65e70101d916fbf11fab39d44ce615c07329ce5b946177e",
+      "git_blob_sha1": "ffb3b1d08ab55b78731785ba7c5e1289dc474fa4",
+      "bytes": 10255
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-review/database-adversarial.test.mjs",
+      "mode": "100644",
+      "sha256": "ae3d43eeb6e28ab7cc698e727b900026f47be497d5cdf7b0993ef34efc5a834f",
+      "git_blob_sha1": "6e09e4d9b4e45945d0499ea0cd1e63a8d5fd300c",
+      "bytes": 9286
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-review/endpoint-harness.mjs",
+      "mode": "100644",
+      "sha256": "fa6af66c4d6d8a9f49dbf900dfc3567a10462a1b6a507a71e907b66f0097524e",
+      "git_blob_sha1": "c9690926d9376c79693a31e50f8f31d90eab4ed3",
+      "bytes": 3240
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-review/harness.mjs",
+      "mode": "100644",
+      "sha256": "46772da204c00f614b6ec8e8d5cb5a51e1ef5d588a20c1836f79a27fc8bc1c2a",
+      "git_blob_sha1": "0f60ce604c1057cd3e08d667409a9f1e04138ba2",
+      "bytes": 1020
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-review/portion-followon/harness.cjs",
+      "mode": "100644",
+      "sha256": "2a6f9975df30b36e36b8b9ef2eb161cf1774618673caa1cf950da9432e77a3e4",
+      "git_blob_sha1": "32c9d58deba2efabc3b91b60442ebc264c24b53e",
+      "bytes": 4577
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-review/portion-followon/scheduler.test.cjs",
+      "mode": "100644",
+      "sha256": "e8740115b3b245f6ba509ca1e57892273ef54d7d494be955f15cab12437561e9",
+      "git_blob_sha1": "c0cb98706ae2c54fd0e15de47eb15eb05bed4e5c",
+      "bytes": 5983
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-review/registry-adversarial.test.mjs",
+      "mode": "100644",
+      "sha256": "59bb8535218a82bc1aa8578f6edff652b2223ff27e13bea49893adba6141e9be",
+      "git_blob_sha1": "6c44ee69bed6c1162dcddc5f6118c85598097a17",
+      "bytes": 8090
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/off-review/runtime-adversarial.test.mjs",
+      "mode": "100644",
+      "sha256": "ede1ed02b159ff0dd3dfa4a2dccd9947e7368cd278f0d3f52e77e6b448d5ad15",
+      "git_blob_sha1": "01207a395d8c9a7cc8e29b3a4c041eb9135ce862",
+      "bytes": 5670
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/search/tests/canonical-unit.test.mjs",
+      "mode": "100644",
+      "sha256": "858d97cbbbb0391b24e4059fd52068b68b81974274d9987ec0d682afb9fa345a",
+      "git_blob_sha1": "b84f36ff502a49cfc6f12b5dba7a7b9b48f124d0",
+      "bytes": 4724
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/search/tests/catalog-schema.json",
+      "mode": "100644",
+      "sha256": "52e504b0d9565f24225cda4094cb6dc6461c311f2317a6512662fda6e973db1e",
+      "git_blob_sha1": "bcc4613461aff35fc2e8cce035ad535508074ac9",
+      "bytes": 24222
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/search/tests/database.test.mjs",
+      "mode": "100644",
+      "sha256": "b141bb3f738ce5367ac0be9215be31137c632f0bff61d49bc9e375ae14d739a8",
+      "git_blob_sha1": "a25d455d5badb4aac6ecf7068765882ff59ba2bd",
+      "bytes": 8813
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/search/tests/endpoint.test.mjs",
+      "mode": "100644",
+      "sha256": "a7c61b12283a0ea065d43495050377878199cff01eba818f0e5f74a526b92524",
+      "git_blob_sha1": "d5c7e9ef3bb0753b6267e65a99b26adbafa909cd",
+      "bytes": 7720
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/search/tests/external-review.test.mjs",
+      "mode": "100644",
+      "sha256": "18f591f35f1ec4b1965364eead9637629cf306eb24b95afda160740cc7f1b623",
+      "git_blob_sha1": "e5ca363cbf512fd067346300d0be3d93b66667f6",
+      "bytes": 4049
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/search/tests/fixtures.mjs",
+      "mode": "100644",
+      "sha256": "1457a9230e30c45aedb9c6860a527f2c2506b3f6960cf528abf9e697d49226c8",
+      "git_blob_sha1": "6e890387d0d0345d69cc7b32de3021cb1ccd2e67",
+      "bytes": 1961
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/search/tests/hydration.test.mjs",
+      "mode": "100644",
+      "sha256": "82843b910447add1dc51df703c7fb4f7fe5eaecfa9837f7715f094cd8a04236a",
+      "git_blob_sha1": "d94a0c1d0c53a052c122df8ad7e2c91e4adaf05e",
+      "bytes": 4987
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/search/tests/numeric-confirmation.test.mjs",
+      "mode": "100644",
+      "sha256": "b11d8cfddb9450432cfc255387c12bcda9b513667e89ab1c1c6c74f6ed2819f4",
+      "git_blob_sha1": "cba478180077a5b23abcb7dc7288cff642866342",
+      "bytes": 7080
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/search/tests/runtime.cjs",
+      "mode": "100644",
+      "sha256": "0a635a7de5481f47a0ec83d0298eccc4be69291df62f79e18e29f0495f5e288c",
+      "git_blob_sha1": "1d7f73dab17289925305467a00f562f1a278928e",
+      "bytes": 1493
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/search-review/adversarial.test.mjs",
+      "mode": "100644",
+      "sha256": "b066a573bb21d9487bded547c3dd4aa9fa055f4908c5f3646a6f1a72457f31f0",
+      "git_blob_sha1": "19964fe08fc95025b1fbc215c386d626436cde44",
+      "bytes": 9204
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/search-review/canonical-units.test.mjs",
+      "mode": "100644",
+      "sha256": "70e95e8f2d951c64e45a7ef986783563eba3a562c0336565d5b489458b7dde35",
+      "git_blob_sha1": "1316886a48e5afe68a26a2e0cd971a76bab98869",
+      "bytes": 2907
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/search-review/external-scope.test.mjs",
+      "mode": "100644",
+      "sha256": "240f49e1da5cbf2a004891a3117bd8e02ac63937dded105a30c785ca2fbd81ef",
+      "git_blob_sha1": "64ee8fca22b8d4896c017612daa9bb8c0ead7370",
+      "bytes": 3447
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/component-tests/search-review/numeric-gates.test.mjs",
+      "mode": "100644",
+      "sha256": "88e41e20110e1233c5b46dece862c9483a666349ee49dc312918d8f5189abf05",
+      "git_blob_sha1": "276d4ec58b5ad44fc9db6c0df7bd721a90a17818",
+      "bytes": 3104
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/manifest.json",
+      "mode": "100644",
+      "sha256": "31d24fe63f4db77944d01072bdefb33320054a988463c75826d19b45f3a6382f",
+      "git_blob_sha1": "d763a660b1dd4e0dd32dd28ae718631313a19638",
+      "bytes": 19808
+    },
+    {
       "path": "tests/release-review/fixtures/legacy609/app/add-food.tsx",
       "mode": "100644",
       "sha256": "501cae1a1a6863d4a78a51f21d63ade2f3e19ed6e8ade9933ccf9d861342d283",
@@ -574,6 +1232,27 @@
       "bytes": 5988
     },
     {
+      "path": "tests/type-contracts/color-scheme.typecheck.ts",
+      "mode": "100644",
+      "sha256": "17779f9436ffb06d47b1fdf2679015af136a1762b1b13aa62418e93ec7a984a3",
+      "git_blob_sha1": "c9e55099f4f2262a495a089ed4fea7a3de4260f9",
+      "bytes": 717
+    },
+    {
+      "path": "tests/type-contracts/material-icon-name.typecheck.ts",
+      "mode": "100644",
+      "sha256": "f67de3bff016e6b72c5a2c106665673ae12c968f2311b01fd1dbc36d3960d677",
+      "git_blob_sha1": "cd32b0ac20c298cc9736ee7c76eaf26e6b9831a9",
+      "bytes": 786
+    },
+    {
+      "path": "tests/type-contracts/supabase-database.typecheck.ts",
+      "mode": "100644",
+      "sha256": "129c6962656f9dc0c5d391130c37b1a08496e28fa34a768df09b7297b51ad755",
+      "git_blob_sha1": "275048cb8391cb14ff5e825cc47b79ad2c40384d",
+      "bytes": 2550
+    },
+    {
       "path": "tests/unknown-barcode-callbacks.cjs",
       "mode": "100644",
       "sha256": "461e01f022c3906d84a69754009b9905f2ec323d84401fc41398dfce4acd85a2",
@@ -600,6 +1279,48 @@
       "sha256": "89fc2ec94c55292a6e4591d37655f10195ed12a91e705352b05e82fe3f6aba65",
       "git_blob_sha1": "804a6da3d99b148d35879ff1c0e94873702a7670",
       "bytes": 2916
+    },
+    {
+      "path": "utils/coachCatalogIdentity.ts",
+      "mode": "100644",
+      "sha256": "831b9c459806dcb2b87ff9087cc91eab65a3c155d1831eb9776ecaba11bc0029",
+      "git_blob_sha1": "2cea502fc4740f30b2947258b4ae739fdae7cdcb",
+      "bytes": 5523
+    },
+    {
+      "path": "utils/coachIngredientCatalog.ts",
+      "mode": "100644",
+      "sha256": "1e0927e56ecd7eb586b7f960cf2fcaf78af7b7417a84c52b880f2676c825c479",
+      "git_blob_sha1": "59cf1983e60f9a4cd2f5dc4653fb2e9828d926f9",
+      "bytes": 1910
+    },
+    {
+      "path": "utils/coachMealComponents.ts",
+      "mode": "100644",
+      "sha256": "04d6a59ecaa29d312fb0ee516775250bfd361def06e9cfb5ee249961dda9a2cb",
+      "git_blob_sha1": "836636042feb374455f7ab8751dcbb8b498b0487",
+      "bytes": 6050
+    },
+    {
+      "path": "utils/coachMealConversation.ts",
+      "mode": "100644",
+      "sha256": "9271388644ddac08f0a5dfb71cf8d731ca707aa676eaee17661ad98e5d74dcc7",
+      "git_blob_sha1": "eeba0842467b0d92db96fbb74f1469abc4e81666",
+      "bytes": 4216
+    },
+    {
+      "path": "utils/coachMealTransport.ts",
+      "mode": "100644",
+      "sha256": "7624ef5de2e0464282cd64d51da6c270ab1bf9934ac3b545aa597c2b7bbaacab",
+      "git_blob_sha1": "6dcba9b829d33491fdeeefd47c4143cea2887236",
+      "bytes": 21798
+    },
+    {
+      "path": "utils/coachPrivateMealDetails.ts",
+      "mode": "100644",
+      "sha256": "74d24b5db54294158b05f5afc98e714e8600a1a0b969df8c54691dddb0ce6c79",
+      "git_blob_sha1": "ef032b4d2b863e93eee4e6dfab453375b7fe3919",
+      "bytes": 12235
     },
     {
       "path": "utils/foodSearchCache.ts",
@@ -637,6 +1358,13 @@
       "bytes": 2417
     },
     {
+      "path": "utils/materialIconName.ts",
+      "mode": "100644",
+      "sha256": "349df46494796160b4df38f03792562f4fdc0cdfb84c3f8fd94968f57b16133a",
+      "git_blob_sha1": "c91b1356eea8ae2398cabe7f29e546f91eb34c57",
+      "bytes": 1285
+    },
+    {
       "path": "utils/openFoodFacts.ts",
       "mode": "100644",
       "sha256": "b0c5d2386c33d2b6846cc3d6f73f4437f6a615a8b4a291e6a8e1dabd94f1a1b3",
@@ -649,6 +1377,13 @@
       "sha256": "750d869fb4533de01e68dcf0090da45313584a9009c724dbac499508e5a95ed8",
       "git_blob_sha1": "08a38b6a2307c86fe7dd78fb138b7a959207c544",
       "bytes": 326
+    },
+    {
+      "path": "utils/premiumCheckpointRuntime.ts",
+      "mode": "100644",
+      "sha256": "0a1b02013b3ed4a486298ddfed2a2874cc7a813372b405229fac4af2f70fdc1b",
+      "git_blob_sha1": "a40d01ebb6e4f278d33c0353c04fe940f43609e1",
+      "bytes": 8792
     },
     {
       "path": "utils/searchSelectionSafety.ts",

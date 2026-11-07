@@ -17,7 +17,7 @@ const issuedReceipts=new WeakSet<object>();
 const issuedBranches=new WeakSet<object>();
 
 /** Remove a provider-supplied field that must only be populated after our own bounded fetch succeeds. */
-export function stripUntrustedMcDonaldsReceipt<T extends Record<string,unknown>>(citation:T):Omit<T,'privateMcDonaldsItemDetails'>{
+export function stripUntrustedMcDonaldsReceipt<T extends Record<string,unknown>>(citation:T):Omit<T,'privateMcDonaldsItemDetails'|'privateMcDonaldsBranch'>{
   const {privateMcDonaldsItemDetails:_untrusted,privateMcDonaldsBranch:_untrustedBranch,...safe}=citation as T&{privateMcDonaldsItemDetails?:unknown;privateMcDonaldsBranch?:unknown};
   return safe;
 }

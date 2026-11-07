@@ -31,6 +31,7 @@ export function createBlockedTransport({ client, getSession, isCurrent, timeoutM
   function valid(value: VerifiedInboxClientSession | null, expected: BlockedSession): value is VerifiedInboxClientSession {
     return !!value && isCurrent(expected) && UUID.test(value.userId) && value.userId === expected.userId && value.sessionKey === expected.sessionKey &&
       value.isAnonymous === false && value.expiresAtSeconds * 1000 > now() && typeof value.accessToken === 'string' &&
+      // eslint-disable-next-line no-control-regex -- Reject ASCII control characters in untrusted input.
       value.accessToken.length > 0 && value.accessToken.length <= 16384 && !/[\s\u0000-\u001f\u007f]/.test(value.accessToken);
   }
   function execute<T>(input: BlockedContext, name: string, args: Record<string, unknown>, parse: (raw: unknown) => T | null): Promise<Result<T>> {

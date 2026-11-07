@@ -9,11 +9,13 @@ const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{
 const isRecord=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const key=(owner:string,id:string)=>`coach_private_meal_details_v1:${JSON.stringify([owner,id])}`;
 export function hasCoachPrivateDetailsReference(value:unknown):value is CoachPrivateDetailsReference{
+ // eslint-disable-next-line no-control-regex -- Reject ASCII control characters in untrusted input.
  if(!isRecord(value))return false;return value.version===1&&uuid(value.review_request_id)&&typeof value.option_id==='string'&&value.option_id.trim().length>0&&value.option_id.length<=200&&!/[\u0000-\u001f\u007f]/.test(value.option_id);
 }
 /** Merge a private receipt pointer into the existing diary JSON without replacing unrelated off_data keys. */
 export async function persistCoachPrivateDetailsReference(input:{owner:string;mealItemId:string;reviewRequestId:string;optionId:string;currentOwner():Promise<string|undefined>;read(id:string):Promise<{value:unknown|null;error?:unknown}>;compareAndSet(id:string,expected:unknown|null,next:Record<string,unknown>):Promise<{updated:boolean;error?:unknown}>;onOutcome?:(value:CoachPrivateDetailsLinkOutcome)=>void}):Promise<boolean>{
  const finish=(value:CoachPrivateDetailsLinkOutcome,success=false)=>{try{input.onOutcome?.(value);}catch{}return success;};
+ // eslint-disable-next-line no-control-regex -- Reject ASCII control characters in untrusted input.
  const {owner,mealItemId,reviewRequestId,optionId}=input;if(!uuid(owner)||!uuid(mealItemId)||!uuid(reviewRequestId)||typeof optionId!=='string'||!optionId.trim()||optionId.length>200||/[\u0000-\u001f\u007f]/.test(optionId))return finish('invalid_reference');
  try{
   for(let attempt=0;attempt<3;attempt++){
@@ -40,6 +42,7 @@ export function coachPrivateDetailsFromResolver(value:unknown,owner:string,mealI
  for(const item of componentsInput){if(!isRecord(item)||typeof item.name!=='string'||!item.name.trim()||item.name.length>160||typeof item.unit!=='string'||item.unit.length>40||typeof item.quantity!=='number'||!Number.isFinite(item.quantity)||item.quantity<=0||!(item.grams===null||typeof item.grams==='number'&&Number.isFinite(item.grams)&&item.grams>0&&item.grams<=20000)||!isRecord(item.nutrition)||!['official','publisher_reported','estimated'].includes(item.authority as string))return null;const nutrition=item.nutrition as Record<string,unknown>;if(!['calories','protein','carbs','fats','fiber'].every(k=>typeof nutrition[k]==='number'&&Number.isFinite(nutrition[k])&&(nutrition[k] as number)>=0))return null;components.push({name:item.name,quantity:item.quantity,unit:item.unit,grams:item.grams as number|null,nutrition:nutrition as Record<string,number>,authority:item.authority as string});}
  const physical=value.physical_portion,confirmedMass=physical===null?null:isRecord(physical)&&typeof physical.total_grams==='number'&&Number.isFinite(physical.total_grams)&&physical.total_grams>0&&physical.total_grams<=100000?physical.total_grams:undefined;if(confirmedMass===undefined)return null;
  const originalSource=value.original_source,source=isRecord(originalSource)&&typeof originalSource.source_url==='string'&&originalSource.source_url.length<=600?originalSource.source_url:null;
+ // eslint-disable-next-line no-control-regex -- Reject ASCII control characters in untrusted input.
  const rawInstructions=value.instructions,instructions=Array.isArray(rawInstructions)?rawInstructions.filter((x):x is string=>typeof x==='string'&&x.trim().length>0&&x.length<=600&&!/[\u0000-\u001f\u007f]/.test(x)).slice(0,30):[];
  const rawPrep=value.estimated_prep_minutes,estimatedPrepMinutes=isRecord(originalSource)&&originalSource.kind==='estimate'&&typeof rawPrep==='number'&&Number.isInteger(rawPrep)&&rawPrep>=5&&rawPrep<=240?rawPrep:null;
  const rawTime=value.total_time,totalTime=source&&isRecord(rawTime)&&rawTime.authority==='source_reported'&&typeof rawTime.minutes==='number'&&Number.isInteger(rawTime.minutes)&&rawTime.minutes>0&&rawTime.minutes<=1440&&rawTime.source_url===source?{minutes:rawTime.minutes,authority:'source_reported' as const,sourceUrl:source}:null;

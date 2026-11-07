@@ -4,7 +4,7 @@ Validation only. This directory is not a migration or deployment package. It nev
 
 ## Run in the exact assembled repository
 
-Prerequisites: unprivileged Linux user, Python 3, Node, and PostgreSQL **16** binaries. GitHub `ubuntu-24.04` supplies `/usr/lib/postgresql/16/bin`; otherwise the runner searches PATH and verifies the major version. Missing prerequisites exit **2**, assertion/runtime/cleanup failures exit **nonzero**. `python -O` is rejected.
+Prerequisites: unprivileged Linux user, Python 3 and Node. The default lane uses PostgreSQL **16** binaries. GitHub `ubuntu-24.04` supplies `/usr/lib/postgresql/16/bin`; otherwise the runner searches PATH and verifies the major version. Missing prerequisites exit **2**, assertion/runtime/cleanup failures exit **nonzero**. `python -O` is rejected.
 
 Native SQL and multi-session suite:
 
@@ -14,9 +14,36 @@ Native suite plus real local PostgREST HTTP/JWT gate:
 
     python3 scripts/ci/native-database/run.py --postgrest
 
-The HTTP gate additionally requires Docker and a successful pull of the official version-pinned `postgrest/postgrest:v13.0.7` image. The exact registry digest and image ID are retained, and the resolved image ID is what runs. No floating `latest` tag is used. Future reproductions should verify the recorded digest; the tag is a version pin, not a baked-in immutable digest. Running the HTTP container uses `--network none`, the same unprivileged UID, read-only root, no capabilities, and a bind mount of **only** the ephemeral socket directory. It communicates with PostgreSQL and the test client over Unix sockets. Synthetic signing material is generated only for this run and is not saved in reports.
+The HTTP gate additionally requires Docker on the local `/var/run/docker.sock` and a successful pull of the official version-pinned `postgrest/postgrest:v13.0.7` image. The exact registry digest and image ID are retained, and the resolved image ID is what runs. No floating `latest` tag is used. Future reproductions should verify the recorded digest; the tag is a version pin, not a baked-in immutable digest. Running the HTTP container uses `--network none`, the same unprivileged UID, read-only root, no capabilities, and a bind mount of **only** the ephemeral socket directory. It communicates with PostgreSQL and the test client over Unix sockets. Synthetic signing material is generated only for this run and is not saved in reports.
 
 No `continue-on-error`, `|| true`, missing-tool success, or skipped-test success is appropriate for CI. Upload `scripts/ci/native-database/results/` with `if: always()`. The plain invocation intentionally reports PostgREST `not_run`; its native success is not an HTTP gate pass. To require both in CI, invoke `--postgrest`.
+
+## Exact production PostgreSQL minor-version lane
+
+    python3 scripts/ci/native-database/run.py --postgrest --postgres17-container
+
+This separate lane needs Docker, Python 3 and Node on the runner; it does not require host PostgreSQL or install packages. It explicitly pulls the official `postgres:17.6-bookworm` image, records its resolved image ID and registry digest, and executes that immutable local image ID. Both binary `postgres --version` and native `SHOW server_version_num` must identify **17.6 / 170006**. There is no fallback to a newer 17.x or to PG16. A missing old tag, incompatible image/platform, version mismatch, Docker failure, timeout or cleanup uncertainty fails the gate. Runtime CI evidence, not this source file or a registry tag name, establishes exact minor parity.
+
+The PostgreSQL container runs as the same unprivileged UID/GID as the CI user, with no capabilities, no-new-privileges, a read-only root, and `--network none`. No ports are published. Only the fresh private test directory is bind-mounted, plus generated passwd/group files mounted read-only so `initdb` can resolve that UID as `postgres`. `getent passwd` is checked before initialization. The unused image data volume is overlaid with a small temporary filesystem. The test's actual cluster lives only in the newly generated directory. Fixed wrappers execute the four PostgreSQL tools through the local Docker socket and forward only the synthetic PGAPPNAME used to observe lock waits. The Docker socket is not mounted inside either container.
+
+PostgREST is a separate network-disabled container and receives only the test socket directory. The PostgreSQL container is reconciled and removed even after an uncertain start. Its exact generated name is never reused for another start attempt. All fixtures, databases, users, JWT signing material and test rows are ephemeral. This is vanilla official PostgreSQL 17.6, not proof of the hosted Supabase PostgreSQL build, extensions, settings or gateway.
+
+## Separate authenticated-writer policy fixture
+
+Both lanes now create an additional `authenticated_writer_fixture` database after the unchanged restricted-fixture tests. The frozen base fixture and all candidate SQL stay byte-identical. A separate `sql/authenticated-policy.sql` models the **observed 2026-11-07** public.food_items shape: RLS enabled but not forced; authenticated INSERT WITH CHECK true; authenticated UPDATE USING/WITH CHECK true; authenticated and PUBLIC SELECT true. Only the necessary anon SELECT and authenticated SELECT/INSERT/UPDATE grants are added to this new database. It intentionally does not recreate or exercise inherited DELETE/TRUNCATE/REFERENCES/TRIGGER/MAINTAIN grants and is not a production ACL replacement.
+
+New assertions cover:
+
+- Legitimate unverified authenticated INSERT and nutrition UPDATE succeed and produce the expected audit revisions.
+- INSERT and UPDATE attempts for each of verified, ai_verified, ai_verified_source, ai_verified_at and last_verified_at fail at `verification_metadata_server_only`, not the table ACL.
+- Changes to nutrition protected by verified, ai_verified, barcode-recovery metadata, or private confirmation alone fail at `confirmed_nutrition_protected`.
+- Equivalent canonical-barcode INSERT and UPDATE fail at `canonical_package_identity_reserved` and preserve all reservations.
+- Forged JWT GUC role/claims cannot grant service RPC access, private write context access, verified metadata or protected nutrition edits.
+- Two real authenticated-versus-service direct-INSERT alias races, with each role winning once, require a server-observed lock wait and loser SQLSTATE 23505. The final complete canonical/private state must equal the winner transaction's state.
+- A third observed alias race runs the real service create RPC against an authenticated direct INSERT, preserving the sole food, binding, evidence and replayable receipt.
+- With `--postgrest`, real locally signed authenticated POST/PATCH succeed for unverified rows and fail at the expected guard/identity error for forbidden writes. Public reads work under the observed SELECT policy. Service-only RPCs and both private contexts remain HTTP-denied.
+
+Denied writes compare every canonical row and all current revisions, audit, evidence, contexts, receipts, bindings and identity reservations, including timestamps. Reports retain a hash of the unchanged complete state. The earlier restricted fixture's HTTP table denial is retained and remains evidence only for that restrictive fixture, **not production table behavior**.
 
 ## Exact source linkage
 
@@ -68,6 +95,6 @@ The optional HTTP gate tests signed service-role success, all five RPC denials f
 
 ## Evidence and limits
 
-`results/native-postgresql.json` is rewritten on each invocation with individual statuses, PG version, observed blocker PIDs, exact security metadata and optional HTTP status/digest. `postgres.log` and optional `postgrest.log` are retained before teardown. A failure is not a pass even if some earlier assertions succeeded.
+`results/native-postgresql.json` is rewritten on each invocation with individual statuses, PG version, observed blocker PIDs, exact security metadata and optional HTTP status/digest. `postgres.log` and optional `postgrest.log` / `postgrest-authenticated.log` are retained before teardown. A failure is not a pass even if some earlier assertions succeeded.
 
-Preparation host status: native PostgreSQL and Docker unavailable. Syntax, fixture generation and source parity can be checked here; genuine SQL and HTTP outcomes must come from the exact CI commit. A version-pinned local HTTP pass does not close current-live-schema drift, hosted transport configuration, Edge/provider timing, rollout or TestFlight/device gates.
+Preparation host status: native PostgreSQL and Docker unavailable. New container and authenticated-writer paths are not claimed executed here. Syntax, fixture generation and source parity can be checked here; genuine SQL and HTTP outcomes must come from the exact CI commit. A version-pinned local HTTP pass does not close current-live-schema drift, hosted transport configuration, Edge/provider timing, rollout or TestFlight/device gates.

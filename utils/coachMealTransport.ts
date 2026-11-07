@@ -129,6 +129,7 @@ export function createMealTransport(deps:{owner():Promise<string|undefined>;toda
     const parse=(line:string)=>{if(!line.startsWith('data:'))return;const text=line.slice(5).trim();if(!text||text==='[DONE]')return;const event=JSON.parse(text);if(event.done===true)output=event;};
     const reader=response.body?.getReader?.();
     const decoder=new TextDecoder();let buffer='',size=0;
+    // eslint-disable-next-line no-constant-condition -- Read until EOF; size limits and errors also exit this stream loop.
     if(reader){try{while(true){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>1024*1024)throw Error('stream_too_large');buffer+=decoder.decode(part.value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()??'';for(const line of lines)parse(line);}buffer+=decoder.decode();if(buffer.trim())parse(buffer);}finally{reader.releaseLock();}}
     else{const text=await response.text();if(text.length>1024*1024)throw Error('stream_too_large');text.split('\n').forEach(parse);}
     if(stopped(output,record))return offerRetry(access,record,recover);

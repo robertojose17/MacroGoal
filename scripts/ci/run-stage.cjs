@@ -25,12 +25,16 @@ const commands = {
   'lint': ['pnpm', ['exec', 'eslint', '.', '--ext', '.js,.jsx,.ts,.tsx,.cjs,.mjs', '--ignore-pattern', 'supabase/functions/**', '--ignore-pattern', 'tests/release-review/fixtures/**'], local],
   'app-types': [process.execPath, ['scripts/ci/check-app-types.cjs'], local],
   'client-regressions': [process.execPath, ['scripts/release-review/check.mjs', '--group', 'client'], { ...local, TYPESCRIPT_MODULE: path.join(root, 'node_modules/typescript'), BARCODE_RECOVERY_NODE_MODULES: path.join(root, 'node_modules') }],
+  'backend-components': ['python3', ['scripts/ci/run-backend-components.py'], local],
   'backend-contracts': [process.execPath, ['scripts/release-review/check.mjs', '--group', 'contracts'], { ...local, TYPESCRIPT_MODULE: path.join(root, 'node_modules/typescript'), PGLITE_MODULE: path.join(root, 'scripts/ci/test-tooling/node_modules/@electric-sql/pglite/dist/index.js') }],
   'purchase-regressions': [process.execPath, ['--test', '--test-reporter=tap', 'tests/purchase-reliability.test.cjs', 'tests/sync-subscription.test.cjs'], local],
+  'ci-regressions': [process.execPath, ['--test', '--test-reporter=tap', 'tests/ci/deno-lock-generation.test.cjs', 'tests/ci/search-hydration-types.test.cjs', 'tests/ci/validation-scopes.test.cjs', 'tests/icon-and-theme-contracts.test.cjs', 'tests/coach-model-conversation.test.cjs', 'tests/coach-recovery-ui.test.cjs', 'tests/premium-checkpoints.test.cjs'], local],
   'install-test-tooling': ['npm', ['ci', '--prefix', 'scripts/ci/test-tooling', '--ignore-scripts', '--no-audit', '--no-fund'], env],
 };
 let command;
 let missingLock = false;
+let lockGenerationCommand;
+let generatedLock;
 if (stage === 'export-ios' || stage === 'export-web') {
   const platform = stage.slice(7);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'macrogoal-js-' + platform + '-'));
@@ -41,6 +45,13 @@ if (stage === 'export-ios' || stage === 'export-web') {
   const entries = name === 'candidate' ? candidates : ['supabase/functions/vision-nutrition-extract/index.ts'];
   missingLock = !fs.existsSync(lock);
   const outputLock = missingLock ? path.join(results, 'deno-' + name + '.generated.lock') : lock;
+  if (missingLock) {
+    // Cache resolves dependencies without running endpoint code. A failing check
+    // may not write its lock, so capture the graph before type checking it.
+    generatedLock = outputLock;
+    fs.rmSync(generatedLock, { force: true });
+    lockGenerationCommand = ['deno', ['cache', '--no-config', '--lock=' + outputLock, ...entries], env];
+  }
   command = ['deno', ['check', '--no-config', '--lock=' + outputLock, ...(missingLock ? [] : ['--frozen']), ...entries], env];
 } else {
   command = commands[stage];
@@ -49,12 +60,24 @@ if (!command) throw new Error('Unknown stage. Arbitrary commands are not accepte
 const [executable, args, childEnv] = command;
 console.log(JSON.stringify({ stage, executable, args, productionCredentials: false }));
 const started = new Date().toISOString();
+let lockGeneration = null;
+if (lockGenerationCommand) {
+  const [cacheExecutable, cacheArgs, cacheEnv] = lockGenerationCommand;
+  console.log(JSON.stringify({ stage: stage + '-lock-generation', executable: cacheExecutable, args: cacheArgs, productionCredentials: false }));
+  const cached = spawnSync(cacheExecutable, cacheArgs, { cwd: root, env: cacheEnv, encoding: 'utf8', shell: false, maxBuffer: 64 * 1024 * 1024, timeout: 20 * 60 * 1000 });
+  let cacheLog = (cached.stdout || '') + (cached.stderr || '');
+  if (cached.error) cacheLog += '\nProcess error: ' + cached.error.message + '\n';
+  lockGeneration = { command: [cacheExecutable, ...cacheArgs], processExitCode: cached.status, signal: cached.signal, generatedLockPresent: fs.existsSync(generatedLock) };
+  fs.writeFileSync(path.join(results, stage + '-lock-generation.log'), cacheLog);
+  fs.writeFileSync(path.join(results, stage + '-lock-generation.json'), JSON.stringify(lockGeneration, null, 2) + '\n');
+  process.stdout.write(cacheLog);
+}
 const run = spawnSync(executable, args, { cwd: root, env: childEnv, encoding: 'utf8', shell: false, maxBuffer: 64 * 1024 * 1024, timeout: 20 * 60 * 1000 });
 let log = (run.stdout || '') + (run.stderr || '');
 if (run.error) log += '\nProcess error: ' + run.error.message + '\n';
 if (missingLock) log += '\nBLOCKER: No committed Deno dependency lock. The generated lock is evidence only. Review and commit it before this gate can pass.\n';
 const status = run.status === 0 && !run.error && !missingLock ? 0 : 1;
-const record = { stage, started, finished: new Date().toISOString(), command: [executable, ...args], processExitCode: run.status, signal: run.signal, stageExitCode: status, missingCommittedDenoLock: missingLock };
+const record = { stage, started, finished: new Date().toISOString(), command: [executable, ...args], processExitCode: run.status, signal: run.signal, stageExitCode: status, missingCommittedDenoLock: missingLock, lockGeneration };
 fs.writeFileSync(path.join(results, stage + '.log'), log);
 fs.writeFileSync(path.join(results, stage + '.json'), JSON.stringify(record, null, 2) + '\n');
 process.stdout.write(log);

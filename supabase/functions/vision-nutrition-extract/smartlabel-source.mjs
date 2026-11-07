@@ -31,11 +31,11 @@ export function smartLabelNutrition(fragment,product) {
     if(!/^1 (?:Package|Bag|Pouch|Container)$/i.test(servingText)||countMentions.length!==1||!/<p\b[^>]*>\s*1(?:\.0)? Servings? Per Container\s*<\/p>/i.test(fragment))return null;
     // Packaging evidence anywhere in the product identity/header overrides this inference.
     const packaging=[product.row?.name,product.row?.brand,product.net,product.headerText].map(clean).join(' ');
-    if(/multi[ -]?pack|variety[ -]?pack|\bpack of\b|\b(?:twin|double)\s*pack\b|\d\s*[x×]/i.test(packaging))return null;
+    if(/multi[ -]?pack|variety[ -]?pack|\bpack of\b|\b(?:twin|double)\s*pack\b|\d\s*[x\u00d7]/i.test(packaging))return null;
     const packageCounts=[...packaging.matchAll(/\b(\d+(?:\.\d+)?)\s*[- ]?\s*(?:bags?|pouches?|packages?|packs?|containers?|count|ct)\b/gi)];
     if(packageCounts.some(m=>Number(m[1])>1))return null;
     const mass=[...product.net.matchAll(/(\d+(?:\.\d+)?)\s*g\b/gi)];
-    if(mass.length!==1||!/^Net Wt\b/i.test(product.net)||/multipack|\bpack of\b|\d\s*[x×]/i.test(product.net))return null;
+    if(mass.length!==1||!/^Net Wt\b/i.test(product.net)||/multipack|\bpack of\b|\d\s*[x\u00d7]/i.test(product.net))return null;
     servingText+=' ('+mass[0][1]+' g)';
   }
   const rows=[...fragment.matchAll(/<li\b[^>]*class="nfp__row[^"]*"[^>]*>([\s\S]*?)(?=<li\b|<\/ul>)/gi)].map(m=>clean(m[1]));

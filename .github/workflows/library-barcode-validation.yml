@@ -41,6 +41,9 @@ jobs:
       - name: Absolute application TypeScript diagnostics
         if: always() && steps.dependencies.outcome == 'success'
         run: node scripts/ci/run-stage.cjs app-types
+      - name: CI scope lock evidence and source contract regressions
+        if: always() && steps.dependencies.outcome == 'success'
+        run: node scripts/ci/run-stage.cjs ci-regressions
       - name: Client integration regressions against actual checkout
         if: always() && steps.dependencies.outcome == 'success'
         run: node scripts/ci/run-stage.cjs client-regressions
@@ -51,6 +54,9 @@ jobs:
         id: sql_tooling
         if: always() && steps.dependencies.outcome == 'success'
         run: node scripts/ci/run-stage.cjs install-test-tooling
+      - name: Full frozen nutrition registry and search component regressions
+        if: always() && steps.dependencies.outcome == 'success' && steps.sql_tooling.outcome == 'success'
+        run: node scripts/ci/run-stage.cjs backend-components
       - name: Actual endpoint and synthetic SQL contract regressions
         if: always() && steps.dependencies.outcome == 'success' && steps.sql_tooling.outcome == 'success'
         run: node scripts/ci/run-stage.cjs backend-contracts
@@ -86,7 +92,7 @@ jobs:
           deno-version: v2.5.6
       - name: Actual Deno check of candidate endpoints with dependency lock gate
         run: node scripts/ci/run-stage.cjs deno-candidate
-      - name: Actual Deno check of unchanged repository vision, not live v45
+      - name: Actual Deno check of the reviewed vision source closure
         if: always()
         run: node scripts/ci/run-stage.cjs deno-repository-vision
       - name: Preserve Deno errors and generated dependency locks
@@ -123,6 +129,36 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: library-barcode-native-postgresql-${{ github.sha }}
+          path: scripts/ci/native-database/results/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  native-postgresql-17-6:
+    if: github.ref == 'refs/heads/codex/library-barcode-ready-20261106'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      - name: Verify native fixture isolation and cleanup safety probes
+        run: python3 scripts/ci/native-database/safety_probes.py
+      # Both official images are version-pinned, resolved IDs/digests retained.
+      # Runtime containers have no network and only fresh synthetic fixture mounts.
+      # SHOW server_version_num must equal 170006; no newer-minor fallback.
+      - name: Exact PostgreSQL 17.6 synthetic permission concurrency and local HTTP gate
+        run: python3 scripts/ci/native-database/run.py --postgrest --postgres17-container
+      - name: Preserve exact-version native and local HTTP evidence on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-barcode-native-postgresql-17-6-${{ github.sha }}
           path: scripts/ci/native-database/results/
           include-hidden-files: true
           if-no-files-found: error

@@ -1,5 +1,5 @@
 {
-  "source": "verified read-only live metadata; not deployment configuration",
+  "source": "Captured live authentication observations, not deployment configuration. Source inclusion does not authorize deployment.",
   "functions": [
     {
       "slug": "search-foods",
@@ -17,7 +17,8 @@
       "slug": "vision-nutrition-extract",
       "version": 45,
       "verify_jwt": true,
-      "included": false
+      "included": true,
+      "source_only_reconciliation": true
     }
   ],
   "no_deployment_performed": true

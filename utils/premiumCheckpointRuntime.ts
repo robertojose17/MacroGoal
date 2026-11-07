@@ -14,6 +14,7 @@ export function validDisplayedOffer(v: unknown): boolean {
   if (!object(v) || !exact(v, offerKeys)) return false;
   return catalogId(v.offeringId) && catalogId(v.packageId) && catalogId(v.productId) &&
     typeof v.priceString === 'string' && v.priceString.length > 0 && v.priceString.length <= 80 &&
+    // eslint-disable-next-line no-control-regex -- Reject ASCII control characters in untrusted input.
     !/[\u0000-\u001f\u007f]/.test(v.priceString) &&
     typeof v.currencyCode === 'string' && /^[A-Z]{3}$/.test(v.currencyCode) &&
     (v.subscriptionPeriod === null || (typeof v.subscriptionPeriod === 'string' && /^P[0-9]{1,3}[DWMY]$/.test(v.subscriptionPeriod)));

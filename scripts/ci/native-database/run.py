@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """LOCAL ONLY: create a fresh Unix-socket-only PostgreSQL cluster, never use a DSN.
-Run: python3 scripts/ci/native-database/run.py [--postgrest] as an unprivileged user.
+Run: python3 scripts/ci/native-database/run.py [--postgrest] [--postgres17-container] as an unprivileged user.
 No PG installs, external DB connections, inherited PG settings, or production fixtures.
 --postgrest pulls the fixed official Docker image; runtime container has no network.
 PGlite cannot substitute for these multi-session isolation/locking checks.
@@ -55,10 +55,14 @@ def blocked(reason):
     raise SystemExit(2)
 
 save()  # Never leave a previous run's passing report after a new invocation.
-POSTGREST = sys.argv[1:] == ['--postgrest']
-if len(sys.argv) != 1 and not POSTGREST:
-    raise SystemExit('Only --postgrest is accepted; no DSNs. This runner only creates its own cluster.')
-if not all(B.values()):
+flags = sys.argv[1:]
+if len(flags) != len(set(flags)) or set(flags) - {'--postgrest', '--postgres17-container'}:
+    raise SystemExit('Only --postgrest and --postgres17-container are accepted; no DSNs.')
+POSTGREST = '--postgrest' in flags
+PG17_CONTAINER = '--postgres17-container' in flags
+if PG17_CONTAINER and not shutil.which('docker'):
+    blocked('Docker absent; exact PostgreSQL 17.6 gate cannot run. No installation attempted.')
+if not PG17_CONTAINER and not all(B.values()):
     blocked('Native PostgreSQL binaries absent; PGlite is single-session and cannot prove concurrency. No installation attempted.')
 if not shutil.which('node'):
     blocked('Node is required to generate synthetic evidence using the candidate source.')
@@ -79,7 +83,7 @@ except Exception as exc:
 
 report['status'] = 'running'
 save()
-root = Path(tempfile.mkdtemp(prefix='macrogoal-pg16-'))
+root = Path(tempfile.mkdtemp(prefix='macrogoal-native-'))
 os.chmod(root, 0o700)
 data = root / 'data'
 socket_dir = root / 'sockets'
@@ -88,26 +92,27 @@ REG = 'macrogoal_food_private.food_identity_reservations_mass_v1'
 CANON = 'macrogoal_food_private.canonical_gtin_mass_v1'
 sessions = []
 started = False
+container_engine = None
 
 def command(args, **kwargs):
     return subprocess.run(args, env=ENV, text=True, capture_output=True,
                           check=True, timeout=40, **kwargs)
 
-def args():
+def args(database="postgres"):
     return [B['psql'], '-X', '-h', str(socket_dir), '-p', '5432', '-U', 'postgres',
-            '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose', '-Atq']
+            '-d', database, '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose', '-Atq']
 
 def lit(value):
     return "'" + str(value).replace("'", "''") + "'"
 
-def sql(text):
-    return command(args(), input="SET statement_timeout='12s'; SET lock_timeout='10s';\n" + text).stdout.strip()
+def sql(text, database="postgres"):
+    return command(args(database), input="SET statement_timeout='12s'; SET lock_timeout='10s';\n" + text).stdout.strip()
 
 class Session:
     """Persistent psql, explicit acknowledgments and server-observed lock barriers."""
-    def __init__(self):
+    def __init__(self, database="postgres"):
         self.tag = 'registry_test_' + uuid.uuid4().hex
-        self.p = subprocess.Popen(args(), env={**ENV, 'PGAPPNAME': self.tag}, text=True,
+        self.p = subprocess.Popen(args(database), env={**ENV, 'PGAPPNAME': self.tag}, text=True,
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.PIPE, bufsize=1)
         self.q = queue.Queue()
@@ -147,7 +152,7 @@ class Session:
     def lock_wait(self):
         deadline = time.monotonic() + 6
         while time.monotonic() < deadline:
-            observation = sql(f"SELECT json_build_object('pid',pid,'wait_event',wait_event,'blockers',pg_blocking_pids(pid)) FROM pg_stat_activity WHERE application_name={lit(self.tag)} AND wait_event_type='Lock' AND cardinality(pg_blocking_pids(pid))>0")
+            observation = sql(f"SELECT json_build_object('pid',pid,'database',datname,'wait_event',wait_event,'blockers',pg_blocking_pids(pid)) FROM pg_stat_activity WHERE application_name={lit(self.tag)} AND wait_event_type='Lock' AND cardinality(pg_blocking_pids(pid))>0")
             if observation:
                 report.setdefault('observed_lock_barriers', []).append(json.loads(observation))
                 return
@@ -193,12 +198,25 @@ def pass_test(index):
     save()
 
 try:
+    if PG17_CONTAINER:
+        from container_postgres import ContainerPostgres
+        report['postgres_container'] = {}
+        container_engine = ContainerPostgres(root, ENV, report['postgres_container'], save)
+        B = container_engine.start()
+        report['binaries'] = B
     report['postgres_version'] = command([B['postgres'], '--version']).stdout.strip()
-    assert re.search(r'PostgreSQL\) 16\.', report['postgres_version']), report['postgres_version']
+    expected_version = r'PostgreSQL\) 17\.6(?:\s|$)' if PG17_CONTAINER else r'PostgreSQL\) 16\.'
+    assert re.search(expected_version, report['postgres_version']), report['postgres_version']
     command([B['initdb'], '-D', str(data), '-U', 'postgres', '--no-locale', '--auth-local=trust'])
     started = True  # Reconcile startup even if pg_ctl times out or reports failure.
     command([B['pg_ctl'], '-D', str(data), '-l', str(root / 'postgres.log'), '-o',
              f"-c listen_addresses='' -c unix_socket_directories='{socket_dir}' -c unix_socket_permissions=0700", '-w', 'start'])
+    report['server_version_num'] = sql('SHOW server_version_num')
+    if PG17_CONTAINER:
+        assert report['server_version_num'] == '170006', report['server_version_num']
+        report['postgres_container']['status'] = 'verified_exact_17_6'
+    else:
+        assert report['server_version_num'].startswith('16'), report['server_version_num']
     sql((R / 'sql/fixture.sql').read_text())
     guard_checks(globals())
     sql((R / 'sql/01-nutrition.sql').read_text())
@@ -319,6 +337,8 @@ try:
     if POSTGREST:
         from postgrest_checks import run as run_postgrest
         run_postgrest(globals())
+    from authenticated_checks import run as run_authenticated
+    run_authenticated(globals(), http=POSTGREST)
     report['status'] = 'passed'
 except Exception as exc:
     report.update(status='failed', error=str(exc))
@@ -330,28 +350,10 @@ except Exception as exc:
             test['status'] = 'blocked_after_failure'
     raise
 finally:
-    for session in sessions:
-        session.close()
-    if started:
-        try:
-            state = subprocess.run([B['pg_ctl'], '-D', str(data), 'status'], env=ENV,
-                                   text=True, capture_output=True, timeout=10)
-            if state.returncode == 0:
-                command([B['pg_ctl'], '-D', str(data), '-m', 'immediate', '-w', 'stop'])
-                report['postgres_cleanup'] = 'stopped'
-            elif state.returncode == 3:
-                report['postgres_cleanup'] = 'confirmed_not_running'
-            else:
-                raise RuntimeError('Uncertain local PostgreSQL state: ' + state.stderr)
-        except Exception as exc:
-            report.update(status='failed', cleanup_error=str(exc), isolated_cluster_path=str(root))
-    if (root / 'postgres.log').exists():
-        shutil.copy2(root / 'postgres.log', R / 'results/postgres.log')
-    save()
+    from cleanup import cleanup
+    cleanup(globals())
     if report.get('status') != 'passed':
         print(json.dumps(report), file=sys.stderr)
-    if 'cleanup_error' not in report:
-        shutil.rmtree(root)
 
 if report.get('status') != 'passed':
     raise SystemExit(1)

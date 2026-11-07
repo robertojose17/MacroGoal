@@ -13,3 +13,12 @@ node_modules/
 
 # Ignore Supabase Edge Functions (Deno runtime with special imports)
 supabase/functions/
+
+# Archived server entrypoints use Deno imports, not the application's Node tooling.
+# Keep pure shared protocol/reconciliation modules in lint scope.
+supabase/localization-rollout/functions/
+supabase/premium-checkpoints-rollout/edge/index.ts
+supabase/premium-checkpoints-rollout/track-onboarding/
+
+# Exact server-module copies for isolated native fixtures are hash-checked there.
+scripts/ci/native-database/src/

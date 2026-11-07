@@ -10,6 +10,7 @@ export function parseMealConversation(value:unknown):MealConversation|null {
  const recommendations=v.options.length>0;
  if(recommendations&&(selected!==undefined||v.status!=='ready'||v.question!==null||!['cook','quick','eat_out'].includes(v.fields.mode)||v.requires_search_consent!==false||v.next_action!=='prepare_general_estimate'||v.requires_estimate_consent!==false||v.options.some((o:any)=>!mealEvidenceFromOption(o,v.fields.mode))||new Set(v.options.map((o:any)=>o.id)).size!==v.options.length))return null;
  if(selected!==undefined){
+  // eslint-disable-next-line no-control-regex -- Reject ASCII control characters in untrusted input.
   if(!selected||typeof selected!=='object'||Array.isArray(selected)||Object.keys(selected).some(k=>!['name','portion_label'].includes(k))||['name','portion_label'].some(k=>typeof selected[k]!=='string'||!selected[k].trim()||selected[k].length>160||/[\r\n\x00-\x1f]/.test(selected[k]))||v.next_action!=='prepare_general_estimate'||v.requires_estimate_consent!==true||v.requires_search_consent!==false||v.status!=='ready'||v.fields.mode!=='quick'||v.fields.restaurant!==null||v.fields.public_area!==null)return null;
  }else if(!recommendations&&(v.requires_search_consent!==true||v.next_action!==undefined||v.requires_estimate_consent!==undefined))return null;
  if(!parseConstraints(v.fields))return null;

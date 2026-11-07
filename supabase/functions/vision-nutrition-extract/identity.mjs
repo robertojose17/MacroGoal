@@ -46,7 +46,7 @@ export async function resolveCorrectionIdentity(input, repo) {
 export async function persistVerifiedCorrection(identity, values, repo) {
   const payload = { ...values, barcode: identity.barcode, source: 'user', ai_verified: true, verified: true, confidence: 'high' };
   if (identity.row) {
-    const saved = await repo.update(identity.row.id, payload);
+    const saved = await repo.update(identity.row.id, payload, identity.row);
     if (!saved) throw new Error('verified correction update returned no persisted row');
     return saved;
   }
@@ -56,22 +56,17 @@ export async function persistVerifiedCorrection(identity, values, repo) {
     return saved;
   } catch (error) {
     if (error?.code !== '23505') throw error;
-    const raced = await repo.findByBarcodes(barcodeCandidates(identity.barcode));
-    const unique = [...new Map(raced.map(row => [row.id, row])).values()];
-    if (unique.length === 1) {
-      const winner = unique[0];
-      const saved = await repo.update(winner.id, {
-        ...values,
-        barcode: winner.barcode || identity.barcode,
-        source: 'user', ai_verified: true, verified: true, confidence: 'high',
-      });
-      if (!saved) throw new Error('concurrent verified correction update returned no persisted row');
-      return saved;
-    }
-    throw new Error('concurrent food item insert could not be resolved');
+    // This proposal was confirmed against absence, not the newly created winner.
+    // Require a fresh read and explicit confirmation rather than upgrading its authority.
+    throw Object.assign(new Error('catalog_changed: confirm the current item again'), { code: '40001' });
   }
 }
 
+/**
+ * The success shape is returned only after the existing runtime validation below.
+ * @param {unknown} result
+ * @returns {{ok: false, status: 'error', message: string} | {ok: true, productName: string, brand: string | null, servingSize: number, servingQuantity: string, nutrition: {calories: number, protein: number, carbs: number, fat: number, fiber: number | null}}}
+ */
 export function validateVerifiedLabel(result) {
   const fail = message => ({ ok: false, status: 'error', message });
   if (!result || typeof result !== 'object' || Array.isArray(result)) return fail('Analysis returned an invalid result. Please try again.');

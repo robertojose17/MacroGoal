@@ -1,0 +1,303 @@
+[
+  {
+    "key": "calcium_mg",
+    "legacy": "calcium",
+    "unit": "mg",
+    "usda": [
+      "1087"
+    ],
+    "off": [
+      "calcium"
+    ],
+    "aliases": [
+      "calcium",
+      "calcium"
+    ]
+  },
+  {
+    "key": "iron_mg",
+    "legacy": "iron",
+    "unit": "mg",
+    "usda": [
+      "1089"
+    ],
+    "off": [
+      "iron"
+    ],
+    "aliases": [
+      "iron",
+      "iron"
+    ]
+  },
+  {
+    "key": "magnesium_mg",
+    "legacy": "magnesium",
+    "unit": "mg",
+    "usda": [
+      "1090"
+    ],
+    "off": [
+      "magnesium"
+    ],
+    "aliases": [
+      "magnesium",
+      "magnesium"
+    ]
+  },
+  {
+    "key": "phosphorus_mg",
+    "legacy": "phosphorus",
+    "unit": "mg",
+    "usda": [
+      "1091"
+    ],
+    "off": [
+      "phosphorus"
+    ],
+    "aliases": [
+      "phosphorus",
+      "phosphorus"
+    ]
+  },
+  {
+    "key": "potassium_mg",
+    "legacy": "potassium",
+    "unit": "mg",
+    "usda": [
+      "1092"
+    ],
+    "off": [
+      "potassium"
+    ],
+    "aliases": [
+      "potassium",
+      "potassium"
+    ]
+  },
+  {
+    "key": "sodium_mg",
+    "legacy": "sodium",
+    "unit": "mg",
+    "usda": [
+      "1093"
+    ],
+    "off": [
+      "sodium"
+    ],
+    "aliases": [
+      "sodium",
+      "sodium"
+    ]
+  },
+  {
+    "key": "zinc_mg",
+    "legacy": "zinc",
+    "unit": "mg",
+    "usda": [
+      "1095"
+    ],
+    "off": [
+      "zinc"
+    ],
+    "aliases": [
+      "zinc",
+      "zinc"
+    ]
+  },
+  {
+    "key": "copper_mg",
+    "legacy": "copper",
+    "unit": "mg",
+    "usda": [
+      "1098"
+    ],
+    "off": [
+      "copper"
+    ],
+    "aliases": [
+      "copper",
+      "copper"
+    ]
+  },
+  {
+    "key": "manganese_mg",
+    "legacy": "manganese",
+    "unit": "mg",
+    "usda": [
+      "1101"
+    ],
+    "off": [
+      "manganese"
+    ],
+    "aliases": [
+      "manganese",
+      "manganese"
+    ]
+  },
+  {
+    "key": "selenium_mcg",
+    "legacy": "selenium",
+    "unit": "mcg",
+    "usda": [
+      "1103"
+    ],
+    "off": [
+      "selenium"
+    ],
+    "aliases": [
+      "selenium",
+      "selenium"
+    ]
+  },
+  {
+    "key": "vitamin_c_mg",
+    "legacy": "vitamin_c",
+    "unit": "mg",
+    "usda": [
+      "1162"
+    ],
+    "off": [
+      "vitamin-c"
+    ],
+    "aliases": [
+      "vitamin_c",
+      "vitamin_c"
+    ]
+  },
+  {
+    "key": "vitamin_b1_mg",
+    "legacy": "vitamin_b1",
+    "unit": "mg",
+    "usda": [
+      "1165"
+    ],
+    "off": [
+      "vitamin-b1"
+    ],
+    "aliases": [
+      "thiamin",
+      "vitamin_b1"
+    ]
+  },
+  {
+    "key": "vitamin_b2_mg",
+    "legacy": "vitamin_b2",
+    "unit": "mg",
+    "usda": [
+      "1166"
+    ],
+    "off": [
+      "vitamin-b2"
+    ],
+    "aliases": [
+      "riboflavin",
+      "vitamin_b2"
+    ]
+  },
+  {
+    "key": "vitamin_b3_mg",
+    "legacy": "vitamin_b3",
+    "unit": "mg",
+    "usda": [
+      "1167"
+    ],
+    "off": [
+      "vitamin-pp"
+    ],
+    "aliases": [
+      "niacin",
+      "vitamin_b3"
+    ]
+  },
+  {
+    "key": "vitamin_b6_mg",
+    "legacy": "vitamin_b6",
+    "unit": "mg",
+    "usda": [
+      "1175"
+    ],
+    "off": [
+      "vitamin-b6"
+    ],
+    "aliases": [
+      "vitamin_b6",
+      "vitamin_b6"
+    ]
+  },
+  {
+    "key": "folate_mcg",
+    "legacy": "vitamin_b9",
+    "unit": "mcg",
+    "usda": [
+      "1177"
+    ],
+    "off": [
+      "vitamin-b9"
+    ],
+    "aliases": [
+      "folate",
+      "vitamin_b9",
+      "folates"
+    ]
+  },
+  {
+    "key": "vitamin_b12_mcg",
+    "legacy": "vitamin_b12",
+    "unit": "mcg",
+    "usda": [
+      "1178"
+    ],
+    "off": [
+      "vitamin-b12"
+    ],
+    "aliases": [
+      "vitamin_b12",
+      "vitamin_b12"
+    ]
+  },
+  {
+    "key": "vitamin_e_mg",
+    "legacy": "vitamin_e",
+    "unit": "mg",
+    "usda": [
+      "1109"
+    ],
+    "off": [
+      "vitamin-e"
+    ],
+    "aliases": [
+      "vitamin_e",
+      "vitamin_e"
+    ]
+  },
+  {
+    "key": "vitamin_d_mcg",
+    "legacy": "vitamin_d",
+    "unit": "mcg",
+    "usda": [
+      "1114"
+    ],
+    "off": [
+      "vitamin-d"
+    ],
+    "aliases": [
+      "vitamin_d",
+      "vitamin_d"
+    ]
+  },
+  {
+    "key": "vitamin_k_mcg",
+    "legacy": "vitamin_k",
+    "unit": "mcg",
+    "usda": [
+      "1185"
+    ],
+    "off": [
+      "vitamin-k"
+    ],
+    "aliases": [
+      "vitamin_k",
+      "vitamin_k"
+    ]
+  }
+]

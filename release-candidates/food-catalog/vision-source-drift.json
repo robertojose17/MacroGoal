@@ -1,252 +1,257 @@
 {
-  "base_commit": "5c3c2ac0d6ffd3d8f523307737a0147f7f5703eb",
-  "capture_version": 45,
-  "comparison": "Exact Git blob identity against frozen captured v45 sources; no deployment and no fresh live-source assertion.",
-  "counts": {
-    "equal": 6,
-    "different": 9,
-    "absent": 15
+  "historical_only": true,
+  "description": "This captures the earlier repository drift, not an exclusion from round2. Current reviewed source reconciliation is in vision-source-lineage.json. Production remains unchanged.",
+  "historical_base_comparison": {
+    "base_commit": "5c3c2ac0d6ffd3d8f523307737a0147f7f5703eb",
+    "capture_version": 45,
+    "comparison": "Exact Git blob identity against frozen captured v45 sources; no deployment and no fresh live-source assertion.",
+    "counts": {
+      "equal": 6,
+      "different": 9,
+      "absent": 15
+    },
+    "files": [
+      {
+        "path": "supabase/functions/ai-coach/coach-dish-json.ts",
+        "captured_v45_sha256": "d563f05d327377f331327fcd48b42f1d0ccbd28db6ceba8576f90d99319ff0f8",
+        "captured_v45_git_blob_sha1": "1ad1aad0aeeac211951f3ef5eabc4978312c0355",
+        "repository_blob_sha1": "1ad1aad0aeeac211951f3ef5eabc4978312c0355",
+        "status": "equal",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/ai-coach/coach-lookup-intent.ts",
+        "captured_v45_sha256": "f04916fceaf245da183435305ff9b13523fa6411c6a99bd456dd5727b321a697",
+        "captured_v45_git_blob_sha1": "31adf3117fe9c7af2648c49a259e77438e75c89a",
+        "repository_blob_sha1": "a1eb521e98d9f08dab45ec170ed4400d48b3c41a",
+        "status": "different",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/ai-coach/coach-mcdonalds-api.ts",
+        "captured_v45_sha256": "c9907f3961c97111b348f55f0ea78477d1a20aa73b552cef5f2f27312fcae75b",
+        "captured_v45_git_blob_sha1": "5442e97880c334a188899a8e0635ba9e97bad670",
+        "repository_blob_sha1": "5442e97880c334a188899a8e0635ba9e97bad670",
+        "status": "equal",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/ai-coach/coach-official-capabilities.ts",
+        "captured_v45_sha256": "f5364e042140a4414b7283b18abae583527b41b8b18c7b00b9a9f260790e03a1",
+        "captured_v45_git_blob_sha1": "6fcc718300cba5f28f21b064ba730c7375c05de7",
+        "repository_blob_sha1": "6fcc718300cba5f28f21b064ba730c7375c05de7",
+        "status": "equal",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/ai-coach/coach-source-pages.ts",
+        "captured_v45_sha256": "b0478ec038fde04f47d73ba2fa195714e2e45fc1d4af6b472c2d20883e9e512d",
+        "captured_v45_git_blob_sha1": "f79faee285c738d9ebd390a19eb4678a00245237",
+        "repository_blob_sha1": "f79faee285c738d9ebd390a19eb4678a00245237",
+        "status": "equal",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/ai-coach/coach-sources.ts",
+        "captured_v45_sha256": "a4835668afd2ec17ed26184267447ee96ba27750e0309e79fab94e9456b2c436",
+        "captured_v45_git_blob_sha1": "77e4e9c6e2f2bbfd4b3697efd529468942b8dc6c",
+        "repository_blob_sha1": "77e4e9c6e2f2bbfd4b3697efd529468942b8dc6c",
+        "status": "equal",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/declared-column-read.mjs",
+        "captured_v45_sha256": "59e95e26158428a231ad7faa1a170b8c2321522e38fd39d93ba4637c5ddaa275",
+        "captured_v45_git_blob_sha1": "40b99addfe9796fc857ca284c7b69fa8b43f61cd",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/declared-column-v2.mjs",
+        "captured_v45_sha256": "f13b3ae6e546e2e84a604a31d6c421ecabbec8051cdb566dbd4462cfe69adaf6",
+        "captured_v45_git_blob_sha1": "24420b3ea0ab319aad573530d96312d0e6428823",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/identity.mjs",
+        "captured_v45_sha256": "bc2eeedc01735c234e00b240cb3673291036a4cebefdf3cddded0743465c7fb1",
+        "captured_v45_git_blob_sha1": "45b4526f13d75d71ac3e54e99fa6178952def43d",
+        "repository_blob_sha1": "13b0929c5ed46b38b6fbe6d8358c23a3118cb0b8",
+        "status": "different",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/index.ts",
+        "captured_v45_sha256": "9d36a36b77dc7cc20bfc02e94078fc2fc55fefd5c7c895719a55414e1935a8f8",
+        "captured_v45_git_blob_sha1": "a647fa0eff9a2e437f4b2f6669c24568671ac5fa",
+        "repository_blob_sha1": "5603e8d8346266585994e4368b15168e44bc1b3d",
+        "status": "different",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/natures-own-source.mjs",
+        "captured_v45_sha256": "b3b1d47c114fb84791b059d6c418cc478796386c379dfca09d0e382eb593b704",
+        "captured_v45_git_blob_sha1": "c38512a02a9838f8bebbab558d8cb66bc93f791a",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/nutritionReadGate.mjs",
+        "captured_v45_sha256": "c4d414a237ac5ad0f3ce8a8c4c502a9a4b1e725e0b6bde3901159ce826497179",
+        "captured_v45_git_blob_sha1": "77bad7da65e9fb13443d45b56cb6f12876d43e88",
+        "repository_blob_sha1": "bd4c0c10972e072489aee001ccc299129d0e7939",
+        "status": "different",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery-budget.mjs",
+        "captured_v45_sha256": "d5eeada486b2311c9e163df01df02cf808a021162272645f7b686de281728409",
+        "captured_v45_git_blob_sha1": "636f98ff845116e36ff7342e28e86b5da4e517cf",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery-contract.mjs",
+        "captured_v45_sha256": "24ee210bd61dd0a524738a8f2125573eefdb5923f7fd5bad320ebf001dd28636",
+        "captured_v45_git_blob_sha1": "bd6caa06b8d9d8d4bb8b5d790035e37dc3673590",
+        "repository_blob_sha1": "ac3f0c8fdbaa853c1281e436c60033df89aec880",
+        "status": "different",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery-discovery.ts",
+        "captured_v45_sha256": "178b4b7c6743407e5f6978dc639cda689b08c3b69a5694264813ec16f91a363e",
+        "captured_v45_git_blob_sha1": "994f691c957da234330ac07e13d0385d20112b0f",
+        "repository_blob_sha1": "43ccb50717b9c523cd9b34a058284a7ff3bf4e87",
+        "status": "different",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery-front.ts",
+        "captured_v45_sha256": "329d2314e4b4589b1e839d70b8d8e04f41d9e7d2122cba58dbc49c2321bb5fa6",
+        "captured_v45_git_blob_sha1": "5786c7f875d3012913acbcfe5ce0687af343c213",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery-general.ts",
+        "captured_v45_sha256": "0d3361f334e28a4d17b15c21fc15fdd0aba567d1fd50cd5a5931774332ae2b6a",
+        "captured_v45_git_blob_sha1": "78a6f4f625c9c1e9dc95e599ead8792faf6b69bd",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery-images.ts",
+        "captured_v45_sha256": "48729b9f3153f4bdb5d8d4621bbb97c2b33a1152097bd8daa3b856bfcf969a06",
+        "captured_v45_git_blob_sha1": "1b1b0478b952f9cf234145b72330b1e80da899a8",
+        "repository_blob_sha1": "1b1b0478b952f9cf234145b72330b1e80da899a8",
+        "status": "equal",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery-receipts.mjs",
+        "captured_v45_sha256": "ed460b02125658e47694cb5cb1cabaea14eb82520354e70621a57ed241cc21a6",
+        "captured_v45_git_blob_sha1": "7206f3f0041a103f5c9167c1f4a066948a9e4053",
+        "repository_blob_sha1": "b222049b6a3d085655c565d8131c4ca22e752961",
+        "status": "different",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery-release-policy.mjs",
+        "captured_v45_sha256": "6cf11273cb55dec50a2340b573792378eade23afd5d686c329ca060ff5c33358",
+        "captured_v45_git_blob_sha1": "969d79e76d60f279b4c8fb443d20df7f04b89549",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery-search-diagnostics.mjs",
+        "captured_v45_sha256": "cb08797f3caab062cf60b3063176e5664f7b40fb9105db28e740dc74e03bb2aa",
+        "captured_v45_git_blob_sha1": "deef5bbc5a0528ca28a5bc2f12c06782abb6723b",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery-source-selection.mjs",
+        "captured_v45_sha256": "ef5f30f30024cbdd2ed107e78edeeaf0df5ee7374d71366da4fdc3f953351e2c",
+        "captured_v45_git_blob_sha1": "0013e4992fefaa168cb73b9579ed399d36df8493",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery-text-evidence.mjs",
+        "captured_v45_sha256": "148b5faa2998d059d9fffdfa53dbdc01cd1956cd814643d80c7d1e59848bbee2",
+        "captured_v45_git_blob_sha1": "d7e63d1939d019266290b876444c84c03514f4e4",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery-web-evidence.mjs",
+        "captured_v45_sha256": "12579e9ddc475f5b9e7f7148dfdfafc2018bd21cb87e27a6a9aa212510a4f952",
+        "captured_v45_git_blob_sha1": "b11bccc25fc1cb5f42ecea29e18f92f64c36f114",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery-web-search.mjs",
+        "captured_v45_sha256": "c3dbb7a2436894092372e5e6a93c628954c78264a2b806db68a25d3f925b2351",
+        "captured_v45_git_blob_sha1": "80cfc461929f9ac86ecae35e4d7b611afd4e7700",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/recovery.ts",
+        "captured_v45_sha256": "981ec83134d1f4ce4418d577230fc154b62952ae60fad818e75adf8315b72a6b",
+        "captured_v45_git_blob_sha1": "476892db5323a9b40e5a17f6aad58d94f2b3b4b2",
+        "repository_blob_sha1": "da4d47cbe8140c5d5c78f6a86110cafa4feb4014",
+        "status": "different",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/serving-mass.mjs",
+        "captured_v45_sha256": "df80ca685c5654ecc2f7681d88b1a53553c0bc8797961cc73037c9f818ea1c79",
+        "captured_v45_git_blob_sha1": "35ed8a1a2549e331ac17ef3bba5e881e0c0cd4f0",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/smartlabel-source.mjs",
+        "captured_v45_sha256": "54843d5702e34417c8146059e4797a3242da272edbcde68eb060484b1216be72",
+        "captured_v45_git_blob_sha1": "992d8de6cb58944f132219c077d9ea42337ef26e",
+        "repository_blob_sha1": "b38f81077b1e30df0a37a134b418f44cb60066ec",
+        "status": "different",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/source-gallery.mjs",
+        "captured_v45_sha256": "d1f68d935a2c2da6b235473dc2b2833d485249a5d928059266b048860af44849",
+        "captured_v45_git_blob_sha1": "7a865147e217dd8ece5ec265a3bfbb782868197b",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      },
+      {
+        "path": "supabase/functions/vision-nutrition-extract/target-source.mjs",
+        "captured_v45_sha256": "4d466911a8ad4febccbefa99c534730370d346255d3d5220ce6b5171f5b16c02",
+        "captured_v45_git_blob_sha1": "787ba931dde347d32b5c3fac31e1dce633b889ed",
+        "repository_blob_sha1": null,
+        "status": "absent",
+        "included_in_overlay": false
+      }
+    ]
   },
-  "files": [
-    {
-      "path": "supabase/functions/ai-coach/coach-dish-json.ts",
-      "captured_v45_sha256": "d563f05d327377f331327fcd48b42f1d0ccbd28db6ceba8576f90d99319ff0f8",
-      "captured_v45_git_blob_sha1": "1ad1aad0aeeac211951f3ef5eabc4978312c0355",
-      "repository_blob_sha1": "1ad1aad0aeeac211951f3ef5eabc4978312c0355",
-      "status": "equal",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/ai-coach/coach-lookup-intent.ts",
-      "captured_v45_sha256": "f04916fceaf245da183435305ff9b13523fa6411c6a99bd456dd5727b321a697",
-      "captured_v45_git_blob_sha1": "31adf3117fe9c7af2648c49a259e77438e75c89a",
-      "repository_blob_sha1": "a1eb521e98d9f08dab45ec170ed4400d48b3c41a",
-      "status": "different",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/ai-coach/coach-mcdonalds-api.ts",
-      "captured_v45_sha256": "c9907f3961c97111b348f55f0ea78477d1a20aa73b552cef5f2f27312fcae75b",
-      "captured_v45_git_blob_sha1": "5442e97880c334a188899a8e0635ba9e97bad670",
-      "repository_blob_sha1": "5442e97880c334a188899a8e0635ba9e97bad670",
-      "status": "equal",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/ai-coach/coach-official-capabilities.ts",
-      "captured_v45_sha256": "f5364e042140a4414b7283b18abae583527b41b8b18c7b00b9a9f260790e03a1",
-      "captured_v45_git_blob_sha1": "6fcc718300cba5f28f21b064ba730c7375c05de7",
-      "repository_blob_sha1": "6fcc718300cba5f28f21b064ba730c7375c05de7",
-      "status": "equal",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/ai-coach/coach-source-pages.ts",
-      "captured_v45_sha256": "b0478ec038fde04f47d73ba2fa195714e2e45fc1d4af6b472c2d20883e9e512d",
-      "captured_v45_git_blob_sha1": "f79faee285c738d9ebd390a19eb4678a00245237",
-      "repository_blob_sha1": "f79faee285c738d9ebd390a19eb4678a00245237",
-      "status": "equal",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/ai-coach/coach-sources.ts",
-      "captured_v45_sha256": "a4835668afd2ec17ed26184267447ee96ba27750e0309e79fab94e9456b2c436",
-      "captured_v45_git_blob_sha1": "77e4e9c6e2f2bbfd4b3697efd529468942b8dc6c",
-      "repository_blob_sha1": "77e4e9c6e2f2bbfd4b3697efd529468942b8dc6c",
-      "status": "equal",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/declared-column-read.mjs",
-      "captured_v45_sha256": "59e95e26158428a231ad7faa1a170b8c2321522e38fd39d93ba4637c5ddaa275",
-      "captured_v45_git_blob_sha1": "40b99addfe9796fc857ca284c7b69fa8b43f61cd",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/declared-column-v2.mjs",
-      "captured_v45_sha256": "f13b3ae6e546e2e84a604a31d6c421ecabbec8051cdb566dbd4462cfe69adaf6",
-      "captured_v45_git_blob_sha1": "24420b3ea0ab319aad573530d96312d0e6428823",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/identity.mjs",
-      "captured_v45_sha256": "bc2eeedc01735c234e00b240cb3673291036a4cebefdf3cddded0743465c7fb1",
-      "captured_v45_git_blob_sha1": "45b4526f13d75d71ac3e54e99fa6178952def43d",
-      "repository_blob_sha1": "13b0929c5ed46b38b6fbe6d8358c23a3118cb0b8",
-      "status": "different",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/index.ts",
-      "captured_v45_sha256": "9d36a36b77dc7cc20bfc02e94078fc2fc55fefd5c7c895719a55414e1935a8f8",
-      "captured_v45_git_blob_sha1": "a647fa0eff9a2e437f4b2f6669c24568671ac5fa",
-      "repository_blob_sha1": "5603e8d8346266585994e4368b15168e44bc1b3d",
-      "status": "different",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/natures-own-source.mjs",
-      "captured_v45_sha256": "b3b1d47c114fb84791b059d6c418cc478796386c379dfca09d0e382eb593b704",
-      "captured_v45_git_blob_sha1": "c38512a02a9838f8bebbab558d8cb66bc93f791a",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/nutritionReadGate.mjs",
-      "captured_v45_sha256": "c4d414a237ac5ad0f3ce8a8c4c502a9a4b1e725e0b6bde3901159ce826497179",
-      "captured_v45_git_blob_sha1": "77bad7da65e9fb13443d45b56cb6f12876d43e88",
-      "repository_blob_sha1": "bd4c0c10972e072489aee001ccc299129d0e7939",
-      "status": "different",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery-budget.mjs",
-      "captured_v45_sha256": "d5eeada486b2311c9e163df01df02cf808a021162272645f7b686de281728409",
-      "captured_v45_git_blob_sha1": "636f98ff845116e36ff7342e28e86b5da4e517cf",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery-contract.mjs",
-      "captured_v45_sha256": "24ee210bd61dd0a524738a8f2125573eefdb5923f7fd5bad320ebf001dd28636",
-      "captured_v45_git_blob_sha1": "bd6caa06b8d9d8d4bb8b5d790035e37dc3673590",
-      "repository_blob_sha1": "ac3f0c8fdbaa853c1281e436c60033df89aec880",
-      "status": "different",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery-discovery.ts",
-      "captured_v45_sha256": "178b4b7c6743407e5f6978dc639cda689b08c3b69a5694264813ec16f91a363e",
-      "captured_v45_git_blob_sha1": "994f691c957da234330ac07e13d0385d20112b0f",
-      "repository_blob_sha1": "43ccb50717b9c523cd9b34a058284a7ff3bf4e87",
-      "status": "different",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery-front.ts",
-      "captured_v45_sha256": "329d2314e4b4589b1e839d70b8d8e04f41d9e7d2122cba58dbc49c2321bb5fa6",
-      "captured_v45_git_blob_sha1": "5786c7f875d3012913acbcfe5ce0687af343c213",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery-general.ts",
-      "captured_v45_sha256": "0d3361f334e28a4d17b15c21fc15fdd0aba567d1fd50cd5a5931774332ae2b6a",
-      "captured_v45_git_blob_sha1": "78a6f4f625c9c1e9dc95e599ead8792faf6b69bd",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery-images.ts",
-      "captured_v45_sha256": "48729b9f3153f4bdb5d8d4621bbb97c2b33a1152097bd8daa3b856bfcf969a06",
-      "captured_v45_git_blob_sha1": "1b1b0478b952f9cf234145b72330b1e80da899a8",
-      "repository_blob_sha1": "1b1b0478b952f9cf234145b72330b1e80da899a8",
-      "status": "equal",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery-receipts.mjs",
-      "captured_v45_sha256": "ed460b02125658e47694cb5cb1cabaea14eb82520354e70621a57ed241cc21a6",
-      "captured_v45_git_blob_sha1": "7206f3f0041a103f5c9167c1f4a066948a9e4053",
-      "repository_blob_sha1": "b222049b6a3d085655c565d8131c4ca22e752961",
-      "status": "different",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery-release-policy.mjs",
-      "captured_v45_sha256": "6cf11273cb55dec50a2340b573792378eade23afd5d686c329ca060ff5c33358",
-      "captured_v45_git_blob_sha1": "969d79e76d60f279b4c8fb443d20df7f04b89549",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery-search-diagnostics.mjs",
-      "captured_v45_sha256": "cb08797f3caab062cf60b3063176e5664f7b40fb9105db28e740dc74e03bb2aa",
-      "captured_v45_git_blob_sha1": "deef5bbc5a0528ca28a5bc2f12c06782abb6723b",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery-source-selection.mjs",
-      "captured_v45_sha256": "ef5f30f30024cbdd2ed107e78edeeaf0df5ee7374d71366da4fdc3f953351e2c",
-      "captured_v45_git_blob_sha1": "0013e4992fefaa168cb73b9579ed399d36df8493",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery-text-evidence.mjs",
-      "captured_v45_sha256": "148b5faa2998d059d9fffdfa53dbdc01cd1956cd814643d80c7d1e59848bbee2",
-      "captured_v45_git_blob_sha1": "d7e63d1939d019266290b876444c84c03514f4e4",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery-web-evidence.mjs",
-      "captured_v45_sha256": "12579e9ddc475f5b9e7f7148dfdfafc2018bd21cb87e27a6a9aa212510a4f952",
-      "captured_v45_git_blob_sha1": "b11bccc25fc1cb5f42ecea29e18f92f64c36f114",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery-web-search.mjs",
-      "captured_v45_sha256": "c3dbb7a2436894092372e5e6a93c628954c78264a2b806db68a25d3f925b2351",
-      "captured_v45_git_blob_sha1": "80cfc461929f9ac86ecae35e4d7b611afd4e7700",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/recovery.ts",
-      "captured_v45_sha256": "981ec83134d1f4ce4418d577230fc154b62952ae60fad818e75adf8315b72a6b",
-      "captured_v45_git_blob_sha1": "476892db5323a9b40e5a17f6aad58d94f2b3b4b2",
-      "repository_blob_sha1": "da4d47cbe8140c5d5c78f6a86110cafa4feb4014",
-      "status": "different",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/serving-mass.mjs",
-      "captured_v45_sha256": "df80ca685c5654ecc2f7681d88b1a53553c0bc8797961cc73037c9f818ea1c79",
-      "captured_v45_git_blob_sha1": "35ed8a1a2549e331ac17ef3bba5e881e0c0cd4f0",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/smartlabel-source.mjs",
-      "captured_v45_sha256": "54843d5702e34417c8146059e4797a3242da272edbcde68eb060484b1216be72",
-      "captured_v45_git_blob_sha1": "992d8de6cb58944f132219c077d9ea42337ef26e",
-      "repository_blob_sha1": "b38f81077b1e30df0a37a134b418f44cb60066ec",
-      "status": "different",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/source-gallery.mjs",
-      "captured_v45_sha256": "d1f68d935a2c2da6b235473dc2b2833d485249a5d928059266b048860af44849",
-      "captured_v45_git_blob_sha1": "7a865147e217dd8ece5ec265a3bfbb782868197b",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    },
-    {
-      "path": "supabase/functions/vision-nutrition-extract/target-source.mjs",
-      "captured_v45_sha256": "4d466911a8ad4febccbefa99c534730370d346255d3d5220ce6b5171f5b16c02",
-      "captured_v45_git_blob_sha1": "787ba931dde347d32b5c3fac31e1dce633b889ed",
-      "repository_blob_sha1": null,
-      "status": "absent",
-      "included_in_overlay": false
-    }
-  ]
+  "round2_reconciled": true
 }

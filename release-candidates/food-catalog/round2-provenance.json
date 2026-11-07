@@ -1,0 +1,98 @@
+{
+  "base_commit": "9193c2243d9919323715d7d10338ca589f3e7a2e",
+  "base_tree": "213497d148b951626718ab0bdc2216beeaff8d5a",
+  "approved_input_manifests": [
+    {
+      "layer": "backend-552",
+      "manifest_sha256": "ade9f15974583c8ad6bee58001d66474eaad69b424c6a25866d425067728acc7"
+    },
+    {
+      "layer": "deno-source-contract",
+      "manifest_sha256": "ef1c53a3cb50d4bda516a09aad0fe9d304ff185777ca28e9e85023eda3f31dd3"
+    },
+    {
+      "layer": "vision-v45-source-only",
+      "manifest_sha256": "72f501aa8f73a374df06acdb6951394a23812d59e4d0ec5330a582aadc96a2ca"
+    },
+    {
+      "layer": "native-pg17-auth-parity",
+      "manifest_sha256": "e9b2f57da9518a4aaad89e9fd0b53996add5dc0ab62b5f6e1a2fb5c4f9716ae1"
+    },
+    {
+      "layer": "corrective-ci-and-lint",
+      "manifest_sha256": "f8020ac059df65fbd65107933dfde97f19a7461043a487f476072894293825d4"
+    },
+    {
+      "layer": "central-app-type-contracts",
+      "manifest_sha256": "2a4481370cfd4cfe4cdee0dda43023b11bebab007f93ca681433d54db46412c2"
+    }
+  ],
+  "explicit_merge_resolutions": [
+    {
+      "path": ".github/workflows/library-barcode-validation.yml",
+      "previous": {
+        "layer": "published-9193c224",
+        "sha256": "544194a5d1c4dded44c6000398c33e78458b65b540dc6118001556465cd56d0b"
+      },
+      "replacement_layer": "corrective-ci-and-lint",
+      "replacement_sha256": "9a3c50c3a01ab8d950e38217b125cd78ce23cf9433f028adbbc75717b7fed13e",
+      "resolution": "Independently approved combined corrective layer preserves earlier required changes."
+    },
+    {
+      "path": "scripts/ci/run-stage.cjs",
+      "previous": {
+        "layer": "published-9193c224",
+        "sha256": "fcd6be0637e9f7ed8f35329a83c0a46b523d8690a32b385680fc7d151ab862d8"
+      },
+      "replacement_layer": "corrective-ci-and-lint",
+      "replacement_sha256": "858ae532d66fd2317375967dd06b1e7746b4e0ba1d7a358f04303e091b6551a2",
+      "resolution": "Independently approved combined corrective layer preserves earlier required changes."
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/manifest.json",
+      "previous": {
+        "layer": "backend-552",
+        "sha256": "a83ac19f0b0687de9c8e93b82938952c02e27bf84da45514952279e11cf53f90"
+      },
+      "replacement_layer": "corrective-ci-and-lint",
+      "replacement_sha256": "31d24fe63f4db77944d01072bdefb33320054a988463c75826d19b45f3a6382f",
+      "resolution": "Independently approved combined corrective layer preserves earlier required changes."
+    },
+    {
+      "path": ".github/workflows/library-barcode-validation.yml",
+      "previous": {
+        "layer": "corrective-ci-and-lint",
+        "sha256": "9a3c50c3a01ab8d950e38217b125cd78ce23cf9433f028adbbc75717b7fed13e"
+      },
+      "replacement_layer": "corrective-ci-and-lint",
+      "replacement_sha256": "9a3c50c3a01ab8d950e38217b125cd78ce23cf9433f028adbbc75717b7fed13e",
+      "resolution": "Independently approved combined corrective layer preserves earlier required changes."
+    },
+    {
+      "path": "scripts/ci/run-stage.cjs",
+      "previous": {
+        "layer": "corrective-ci-and-lint",
+        "sha256": "858ae532d66fd2317375967dd06b1e7746b4e0ba1d7a358f04303e091b6551a2"
+      },
+      "replacement_layer": "corrective-ci-and-lint",
+      "replacement_sha256": "858ae532d66fd2317375967dd06b1e7746b4e0ba1d7a358f04303e091b6551a2",
+      "resolution": "Independently approved combined corrective layer preserves earlier required changes."
+    },
+    {
+      "path": "tests/release-review/fixtures/backend-components/manifest.json",
+      "previous": {
+        "layer": "corrective-ci-and-lint",
+        "sha256": "31d24fe63f4db77944d01072bdefb33320054a988463c75826d19b45f3a6382f"
+      },
+      "replacement_layer": "corrective-ci-and-lint",
+      "replacement_sha256": "31d24fe63f4db77944d01072bdefb33320054a988463c75826d19b45f3a6382f",
+      "resolution": "Independently approved combined corrective layer preserves earlier required changes."
+    }
+  ],
+  "search_runtime_sha256": "4881401566a3e657d3cd3965f32b886068c3a522f3f6b71d90dbf322a4887f19",
+  "vision_source_only": true,
+  "native_production_parity_scope": "Fresh local synthetic PG17.6 cluster and authenticated-writer fixture; original PG16 lane retained. No hosted SQL.",
+  "generated_deno_locks_invented": false,
+  "root_package_or_lock_changes": false,
+  "release_ready": false
+}

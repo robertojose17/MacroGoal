@@ -30,8 +30,9 @@ class UnixConnection(http.client.HTTPConnection):
         self.sock.connect(self.path)
 
 
-def run(c):
-    report=c['report']['postgrest']
+def run(c, authenticated=False):
+    key = 'postgrest_authenticated' if authenticated else 'postgrest'
+    report=c['report'].setdefault(key, {})
     report.update(status='running',image=IMAGE,tests=[],scope='official local PostgREST, synthetic JWTs, Unix sockets, no Supabase gateway')
     c['save']()
     docker=shutil.which('docker')
@@ -58,21 +59,21 @@ def run(c):
         data=enc({'alg':'HS256','typ':'JWT'})+b'.'+enc({'role':role,'sub':'00000000-0000-4000-8000-000000000001','exp':int(time.time())+600})
         signature=base64.urlsafe_b64encode(hmac.new(signing_secret.encode(),data,hashlib.sha256).digest()).rstrip(b'=')
         return (data+b'.'+signature).decode()
-    def request_http(path,body=None,role=None,headers=None,bad=False):
+    def request_http(path,body=None,role=None,headers=None,bad=False,method=None):
         conn=UnixConnection(sock)
         hdr={'Content-Type':'application/json',**(headers or {})}
         if role:
             hdr['Authorization']='Bearer '+token(role,'invalid-local-fixture-key'*2 if bad else secret)
         try:
-            conn.request('POST' if body is not None else 'GET',path,json.dumps(body) if body is not None else None,hdr)
+            conn.request(method or ('POST' if body is not None else 'GET'),path,json.dumps(body) if body is not None else None,hdr)
             response=conn.getresponse();raw=response.read()
             try: payload=json.loads(raw)
             except json.JSONDecodeError: payload={'unparsed':raw.decode(errors='replace')[:500]}
             return response.status,payload
         finally:
             conn.close()
-    def passed(name):
-        report['tests'].append({'name':name,'status':'passed'});c['save']()
+    def passed(name, **detail):
+        report['tests'].append({'name':name,'status':'passed',**detail});c['save']()
     attempted=False
     try:
         dock(['pull',IMAGE])
@@ -81,12 +82,13 @@ def run(c):
         report['image_id']=image['Id'];report['repo_digests']=image['RepoDigests']
         # Execute the resolved immutable local ID, never re-resolve a mutable tag.
         image_id=image['Id']
-        sql('CREATE ROLE authenticator LOGIN NOINHERIT; GRANT anon,authenticated,service_role TO authenticator;')
+        if sql("SELECT count(*) FROM pg_roles WHERE rolname='authenticator'") == '0':
+            sql('CREATE ROLE authenticator LOGIN NOINHERIT; GRANT anon,authenticated,service_role TO authenticator;')
         args=['run','--detach','--name',container,'--network','none',
               '--user',f'{os.getuid()}:{os.getgid()}','--read-only',
               '--cap-drop','ALL','--security-opt','no-new-privileges',
               '--mount',f'type=bind,src={c["socket_dir"]},dst=/fixture',
-              '--env','PGRST_DB_URI=postgresql://authenticator@/postgres?host=/fixture',
+              '--env','PGRST_DB_URI=postgresql://authenticator@/'+c.get('database','postgres')+'?host=/fixture',
               '--env','PGRST_DB_SCHEMAS=public','--env','PGRST_DB_ANON_ROLE=anon',
               '--env','PGRST_DB_EXTRA_SEARCH_PATH=public','--env','PGRST_DB_CONFIG=false',
               '--env','PGRST_SERVER_UNIX_SOCKET=/fixture/postgrest.sock',
@@ -106,6 +108,11 @@ def run(c):
         else:
             raise RuntimeError('PostgREST did not reach a successful service-role RPC in 30s: '+dock(['logs',container],check=False).stdout[-2000:])
         passed('genuine HTTP request with locally signed service_role JWT reaches search RPC')
+        if authenticated:
+            from authenticated_checks import http_checks
+            http_checks(c, request_http, passed)
+            report['status'] = 'passed'
+            return
         fixture=c['sample'](990001); req=c['uid']()
         nutrition_food,nutrition_req=c['uid'](),c['uid']()
         sql(f"INSERT INTO public.food_items(id,name,source,usda_fdc_id,macros_per,calories,protein,carbs,fat,verified) VALUES({lit(nutrition_food)},'Banana, raw','usda','123','100g',89,1,23,0.3,true)")
@@ -164,21 +171,5 @@ def run(c):
         report.update(status='failed' if report.get('status')!='blocked' else 'blocked',error=str(exc))
         raise
     finally:
-        if attempted:
-            # An uncertain run may have created the container. Never repeat run.
-            # Reconcile only this fresh, exact generated name on the local daemon.
-            state=dock(['container','inspect','--format','{{.Id}}',container],check=False)
-            if state.returncode == 0:
-                logs=dock(['logs',container],check=False)
-                (c['R']/'results/postgrest.log').write_text(logs.stdout+logs.stderr)
-                stop=dock(['rm','--force',container],check=False)
-                if stop.returncode:
-                    report.update(status='failed',cleanup_error=stop.stderr,container_name=container)
-                    raise RuntimeError('Could not remove ephemeral PostgREST container: '+stop.stderr)
-                report['container_cleanup']='removed'
-            elif 'No such container' in state.stderr or 'No such object' in state.stderr:
-                report['container_cleanup']='confirmed_absent'
-            else:
-                report.update(status='failed',cleanup_error=state.stderr,container_name=container)
-                raise RuntimeError('Could not reconcile ephemeral PostgREST container: '+state.stderr)
-        c['save']()
+        from cleanup import cleanup_postgrest
+        cleanup_postgrest(c, dock, container, report, attempted, authenticated)

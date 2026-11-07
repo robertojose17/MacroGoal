@@ -10,6 +10,7 @@ export type MealComponent = {
 export type ComponentEdit = {component_id:string;quantity:number};
 export type ComponentAddition = {food_item_id:string;grams:number};
 const positive=(v:unknown):v is number=>typeof v==='number'&&Number.isFinite(v)&&v>0&&v<=99999;
+// eslint-disable-next-line no-control-regex -- Reject ASCII control characters in untrusted input.
 const text=(v:unknown,max:number):v is string=>typeof v==='string'&&v.trim().length>0&&v.length<=max&&!/[\x00-\x1f]/.test(v);
 export function parseMealComponents(value:unknown):MealComponent[]|null {
   if(!Array.isArray(value)||!value.length||value.length>24)return null;

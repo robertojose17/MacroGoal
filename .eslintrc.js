@@ -65,6 +65,16 @@ module.exports = {
   },
   overrides: [
     {
+      // Tooling and node:test suites run in Node, not the app/browser runtime.
+      files: ['scripts/**/*.{js,cjs,mjs}', 'tests/**/*.{js,cjs,mjs}'],
+      env: { node: true }
+    },
+    {
+      // CommonJS globals are not implicit in Node ES modules.
+      files: ['scripts/**/*.mjs', 'tests/**/*.mjs'],
+      globals: { __dirname: 'off', __filename: 'off', require: 'off', module: 'off', exports: 'off' }
+    },
+    {
       // Disable TypeScript parser for JavaScript config files
       files: ['*.js'],
       parser: 'espree',

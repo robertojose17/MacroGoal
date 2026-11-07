@@ -1,63 +1,54 @@
-# Food catalog integration candidate
+# Food catalog validation, round 2
 
-This follow-on source overlay combines frozen client V5, seven independently reviewed client readiness fixes, the final lookup/search backend composition and native PostgreSQL/PostgREST validation tooling. It is a review candidate, not approval to migrate, deploy, build, submit or release. Base: `robertojose17/MacroGoal` commit `5c3c2ac0d6ffd3d8f523307737a0147f7f5703eb`, tree `7256c7c81b78d821955316580a5bd76f9079c1f3`.
+**Validation candidate only. Not release-ready.** Base commit `9193c2243d9919323715d7d10338ca589f3e7a2e`, tree `213497d148b951626718ab0bdc2216beeaff8d5a`. No native app build, TestFlight submission, deployment or hosted SQL application is part of this snapshot. Previous frozen snapshots remain unchanged.
 
-## Included and excluded
+## Source changes and provenance
 
-- 32 V5 client/helper/test files with seven explicitly recorded readiness source fixes, plus one new regression file and 11 exact composed backend files. One shared `foodPortions.mjs` gives 43 unique final source/test paths. `source-lineage.json` and `follow-on-lineage.json` distinguish frozen originals from final bytes.
-- Three proposed additive SQL files stored only under this directory's `sql/`. These are inactive review candidates, not Supabase migration files. Nothing automatically applies them.
-- Portable offline callback, SQL and endpoint tests. Existing build 609 source is included only as six pinned test fixtures to demonstrate the known cached-search compatibility problem. It is not runtime code or a proposed rollback.
-- No package/dependency, version, build, EAS project or deployment configuration changes. The reviewed, branch-scoped validation-only CI is included in this follow-on validation snapshot. No obsolete source package, archive, production row, credential or private work note is included.
-- No `vision-nutrition-extract` or `ai-coach` runtime file is replaced. No live service or provider is contacted by the portable tests.
+This combines the previously reviewed client/backend candidate with the approved full backend test pack, Deno type-contract fixes, current vision v45 source reconciliation, isolated PG17.6/authenticated-writer validation, exact lint/checker corrections and central schema/theme/icon type contracts. `source-lineage.json` records final source hashes. `round2-provenance.json` identifies the frozen input manifests and explicit workflow/stage/hash resolutions. Application package and lockfile bytes are unchanged.
 
-## Reproduction
+The workflow preserves backend components, the two explicit Deno regressions, failed-lock evidence, full application diagnostics, client/purchase/contracts, JavaScript-only exports and the original PG16 lane. It adds a separate exact PG17.6 container lane with safety probes. Missing reviewed Deno locks remain a red gate even if graph resolution or typechecking succeeds; no lock or package checksum is invented.
 
-Apply this overlay to a checkout of the exact base commit; preserve every unlisted repository file. Tests require Node 24.22.1, TypeScript 5.9.3 and PGlite 0.5.8. Use an existing installation or the separately prepared pinned CI tooling. The runner does not install anything or discover arbitrary tests.
+## Vision source reconciliation, not deployment
+
+`vision-source-lineage.json` pins the full 30-file local closure. Twenty-four repository files are added/updated. The entrypoint is byte-identical to captured live v45; 23 closure files are raw-byte equal, six have reviewed type/JSDoc-only changes, and one retains the repository newline convention. Normalized emitted JavaScript is identical for all 30. The earlier 6 equal / 9 different / 15 absent comparison is retained only as historical evidence in `vision-source-drift.json`.
+
+Production v45 and its `verify_jwt=true` setting remain unchanged. Source equality does not prove the same externally resolved dependency graph or hosted runtime. The inherited JSR/NPM dependencies still need authentic generated locks, review and actual Deno CI. No bulk deployment is authorized.
+
+The separate vision offline package passed 935 regression executions plus two entrypoint/auth boot checks against the exact assembled source bytes. Its original unadapted tests remain preserved at 928 passes and seven obsolete raw-source pin failures. The reviewed expectation overlay preserves all runtime assertions and exact original/new pins. That nine-file test overlay uses a legacy offline layout and is deliberately **not** copied into the repository. These counts are separate offline evidence, not CI or device results.
+
+## Reproduce source validation
+
+Use a complete checkout with its locked dependencies, Node24.22.1, TypeScript5.9.3 and isolated PGlite0.5.8 tooling. Tests use explicit allowlists, not repository-wide discovery.
 
 ```sh
 node scripts/release-review/verify.mjs
 node scripts/release-review/check.mjs --group syntax
-node scripts/release-review/check.mjs --group client
-node scripts/release-review/check.mjs --group contracts
+node scripts/ci/run-stage.cjs client-regressions
+node scripts/ci/run-stage.cjs ci-regressions
+node scripts/ci/run-stage.cjs purchase-regressions
+node scripts/ci/run-stage.cjs backend-components
+node scripts/ci/run-stage.cjs backend-contracts
+node scripts/ci/run-stage.cjs app-types
+node scripts/ci/run-stage.cjs lint
+python3 scripts/ci/native-database/safety_probes.py
+python3 scripts/ci/native-database/run.py --postgrest
+python3 scripts/ci/native-database/run.py --postgrest --postgres17-container
 ```
 
-TypeScript resolves from the checkout by default. `TYPESCRIPT_MODULE` may point at an existing TypeScript module directory. `PGLITE_MODULE` may point at an existing PGlite `dist/index.js`. `BARCODE_RECOVERY_NODE_MODULES` is derived automatically unless explicitly supplied. Paths are portable; no original packaging workspace is required.
+Backend coverage is 129 nutrition + 250 registry + 173 search component executions, plus four separate cross-component executions. This is 556 executions with intentional overlap, not 556 unique scenarios. Actual checkout runtime/SQL hashes and start/end stability checks prevent archived current-runtime copies from making stale code pass. Two frozen predecessor-only source exclusivity assertions remain excluded exactly as documented in the fixture manifest; no new runtime assertions are removed. Client coverage retains 224 passes and one explicit historical backend-only skip.
 
-Fresh execution after follow-on overlay/harness integration: client 225 tests, 224 passed, one explicit historical backend-only SQL assertion skipped, zero failed; contracts 4/4 passed; 42 source syntax checks passed. These are synthetic offline executions against the actual overlaid files, not native rendering, real PostgreSQL concurrency, full app semantic validation, live auth or deployment proof. The predecessor's 556 backend component executions are prior evidence in its frozen package, not silently counted as rerun by this portable four-test contract suite.
+Prior commit9193c224 CI run42318773712 passed PG16/local PostgREST, client/purchase/contracts and iOS/web JavaScript exports. Those are prior-revision results, not automatic passes for round2. New PG17.6/authenticated-writer checks require genuine exact-commit CI execution. This preparation host lacks native PostgreSQL/Docker; five mocked isolation/cleanup probes are not concurrency or HTTP proof.
 
-## SQL sequence and authorization gates
+Current local absolute application checker reports **297 diagnostics**. Local source-complete lint has zero errors and 53 warnings. The explicit CI regression stage currently has 38 passes and 26 failures across 64 tests, caused by historical Coach UI harness/native-module incompatibilities; those cases are not passing evidence, and no cases are removed or suppressed here. No baseline subtraction or suppressed errors establish a pass. Full exact-commit CI results, source completion, actual Deno locks, native parity, live drift/transport/scheduler/latency and device tests remain release gates.
 
-Do not place these files in `supabase/migrations` or apply them before explicit authorization and all preflights pass:
+## SQL candidates and rollout gates
 
-1. `sql/01-nutrition/enrichment.CANDIDATE.sql` extends the captured nutrition authority. Confirm live definitions, owners, grants, RLS/forced-RLS and exact guard predecessor before any write.
-2. `sql/02-off-registry/off-mass.CANDIDATE.sql` adds the registry alternative. It does not repair or merge historical collisions. Installation includes a reservation trigger/bootstrap and remains blocked until actual multi-session PostgreSQL locking, abort, duplicate/correction/importer races and isolation tests pass. An OFF capture flag does not disable that trigger.
-3. `sql/03-search/search-snapshots.CANDIDATE.sql` adds service-only atomic snapshot reads; verify grants before enabling its Edge consumer. It does not replace ranked search or give clients private table access.
+All three additive SQL proposals remain inactive under `release-candidates/food-catalog/sql`, outside `supabase/migrations`. Only an explicitly authorized later migration may use this order:
 
-Preserve existing authority, canonical IDs, nutrition history, diary, favorites and meals. No row conversion, identity merge, mass deletion or historical relabeling is part of this candidate. Synthetic fixtures never establish service-role behavior over real PostgREST.
+1. `01-nutrition/enrichment.CANDIDATE.sql`, after exact authority-definition, owner, grant and RLS preflight.
+2. `02-off-registry/off-mass.CANDIDATE.sql`, after registry/bootstrap/locking and current-schema checks. Installation itself adds reservation behavior; disabling capture does not disable its trigger.
+3. `03-search/search-snapshots.CANDIDATE.sql`, with service-only grants checked before enabling dependent callers.
 
-Keep `NUTRIENT_REFRESH_ENABLED=false`, `NUTRIENT_REFRESH_NETWORK_ENABLED=false` and `OFF_MASS_CAPTURE_ENABLED=false` until separately approved gates pass. Authentication observations are documentation only: search v40 and lookup v39 use `verify_jwt=false`; vision v45 uses `verify_jwt=true`. Do not rely on CLI defaults or treat this observation file as deployment configuration.
+Native fixture copies under `scripts/ci/native-database/sql` are linked by strict hash/byte equality to these actual candidate files. They run only in fresh local synthetic clusters. Keep `NUTRIENT_REFRESH_ENABLED=false`, `NUTRIENT_REFRESH_NETWORK_ENABLED=false` and `OFF_MASS_CAPTURE_ENABLED=false` until separately approved gates pass. Do not merge historical collisions, invent density, rewrite nutrition/history or delete canonical rows.
 
-## Vision drift and safe publication strategy
-
-`vision-source-drift.json` compares every captured v45 file to the pinned repository tree by exact Git blob identity. Six match, nine differ and fifteen are absent. Therefore repository-main vision is not the deployed v45 source closure. This overlay intentionally leaves all vision and shared ai-coach files untouched.
-
-Publishing this source overlay must not trigger a bulk function deployment. Before a later authorized vision deployment, review a separate exact v45 synchronization, including its ai-coach dependency closure, against fresh deployed metadata/source and preserve `verify_jwt=true`. Do not copy the old repository vision over v45. Current deployment remains unchanged.
-
-## Remaining release gates
-
-- Real complete checkout/dependencies, absolute full-app lint/typecheck, JS exports and required CI on the exact integrated commit. No relative-to-baseline diagnostic waiver establishes success.
-- Actual Deno/Edge typechecking and byte-pinned dependency resolution. Inherited `jsr:@supabase/supabase-js@2` remains a floating major dependency and is not vendored here.
-- Actual multi-session PostgreSQL, live schema/ownership/grant/trigger preflight, PostgREST auth/client denials, uncertain-write handling and request scheduler behavior.
-- Whole selected-USDA endpoint latency within the client 1800 ms deadline. Optional enrichment scheduling alone is not a whole-request guarantee.
-- Real-device camera, cancellation/repeated actions, review/save/reopen, diary/favorites/recipes/meals/history and exact installed build. Old build 609 can retain unsafe prior search cache after HTTP 409; server capability rejection cannot clear that installed cache. A verified minimum-client rollout is required.
-- Volume-only completion remains unsupported without real gram evidence. Catalog conflicts/reservations deliberately lead to Back-only guidance. No density is invented.
-
-Prefer disabling and draining new capture/refresh callers while retaining final fail-closed safety if rollout is stopped. Do not restore the legacy lookup insertion path merely because an old source is archived. Any destructive rollback or authority change requires separate review and authorization.
-
-## Follow-on validation publication
-
-The initial 81-file validation snapshot remains immutable. This follow-on applies the reviewed seven client source fixes and the new 14-case actual-source regression suite. The explicit client allowlist now runs both the retained V5 safety cases and those new cases. No baseline subtraction or suppressed diagnostic establishes application readiness.
-
-The placeholder native gate is replaced with `python3 scripts/ci/native-database/run.py --postgrest` on the exact CI commit. Thirteen reviewed harness files enforce parity with the final checked-out SQL/provider sources and use only a fresh isolated local PostgreSQL cluster and local PostgREST container. This is validation, not production migration. Native source parity (six hashes, five final-source comparisons) and Python syntax pass locally; the actual native invocation exits 2 because this preparation host lacks PostgreSQL binaries. Genuine native/HTTP results must come from CI and are not claimed here.
-
-The workflow changes only the existing validation branch workflow, not main or EAS workflows. Deno checks still fail without reviewed committed dependency locks. Complete app diagnostics, exports, current live drift, gateway/auth/scheduler behavior, latency and real-device/minimum-client rollout gates remain open. No native application build, submission, deployment or live SQL execution is part of this snapshot.
+Volume-only completion and catalog conflicts remain honest unsupported/Back-only flows. Old build609 can retain prior unsafe search cache after HTTP409; server rejection cannot clear that installed cache. Verify the minimum-client rollout and installed build. Validate camera, cancellation, repeated actions, review/save/reopen, corrected portions, diary/favorites/recipes/meals and whole-request latency on the real authorized path before any release. Prefer disabling new callers while retaining final fail-closed safety if rollout is stopped; never restore unsafe legacy insertion as a rollback shortcut.

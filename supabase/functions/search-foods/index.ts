@@ -1,3 +1,4 @@
+// @ts-types="../_shared/searchHydration.d.mts"
 import { hydrateSearchRows, hasCanonicalGramServing, normalizeSearchNutrition, searchNutritionIssue, serializeSearchProduct } from '../_shared/searchHydration.mjs';
 import {usdaSearchNutriments} from '../_shared/nutritionProvider.mjs';
 import { decorateCachedProducts } from '../_shared/portionCache.mjs';

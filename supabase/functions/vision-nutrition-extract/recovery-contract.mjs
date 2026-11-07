@@ -43,12 +43,19 @@ export function conflictsWithPhoto(candidate, photo) {
   if (candidate.serving_g !== photo.serving_g || (photo.serving && norm(candidate.serving) !== norm(photo.serving))) fields.unshift('serving');
   return fields;
 }
-export function confirmationPayload(candidate, binding, confirmations) {
+// This capability stays disabled until SQL rollout is separately authorized and verified.
+export const imagePreservationBlocked = (candidate, binding, imageAction) => !!binding?.id && !candidate?.image_url && imageAction !== 'preserve_existing';
+export const preservationAction = (candidate, binding, enabled = false) => enabled === true && !!binding?.id && !candidate?.image_url ? 'preserve_existing' : undefined;
+export function confirmationPayload(candidate, binding, confirmations, imageAction) {
   if (!candidateEligible(candidate, binding.barcode)) throw Error('identity_or_nutrition_unverified');
+  if (imagePreservationBlocked(candidate, binding, imageAction)) throw Error('image_preservation_unverified');
   if (!confirmations || confirmations.identity !== true || confirmations.serving !== true || confirmations.nutrition !== true || confirmations.shared !== true) throw Error('confirmation_required');
+  if (binding.id && (!Number.isSafeInteger(binding.nutrition_revision) || binding.nutrition_revision < 0)) throw Error('proposal_requires_refresh');
+  if (imageAction !== undefined && (imageAction !== 'preserve_existing' || !binding.id || candidate.image_url)) throw Error('invalid_image_action');
   const userBound=barcodeEvidence(candidate,binding.barcode)==='absent';
   return {
-    barcode: canonicalBarcode(binding.barcode), expected_id: binding.id || null, expected_updated_at: binding.updated_at || null,
+    ...(imageAction === 'preserve_existing' ? {image_action: imageAction} : {}),
+    barcode: canonicalBarcode(binding.barcode), expected_id: binding.id || null, expected_revision: binding.id ? binding.nutrition_revision : null,
     name: candidate.name, brand: candidate.brand, variant: candidate.variant,
     serving_size: candidate.serving_g, serving_quantity: candidate.serving,
     ...candidate.nutrition, fiber:candidate.nutrition.fiber ?? null, image_url:candidate.image_url || null, provenance: {...candidate.provenance,...(userBound?{identity:'user_confirmed_barcode',source_barcode:null,exact_barcode:false}:{}),label_image_url:candidate.nutrition_image_url || null},
