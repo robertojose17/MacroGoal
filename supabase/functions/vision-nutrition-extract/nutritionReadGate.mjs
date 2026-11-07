@@ -45,6 +45,10 @@ function hasExactPrintedAmount(evidence, expected, nutrient) {
   if (/\d+(?:[.,]\d+)?\s*(?:g|grams?|gm|gms)?\s*(?:-|[\u2010-\u2015]|\bto\b|\ba\b)\s*\d+(?:[.,]\d+)?\s*(?:g|grams?|gm|gms)?/i.test(source)) return false;
   if (!labelMatches(nutrient, source)) return false;
   if (nutrient === 'calories') {
+    // A literal bilingual row repeats the same nutrient label, not a second amount.
+    // Keep the slash and require the entire bilingual evidence to contain one exact value.
+    const bilingual = source.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().match(/^(?:calories?\s*\/\s*calorias?|calorias?\s*\/\s*calories?)\s+(\d+(?:\.\d+)?)\s*(?:kcal)?$/i);
+    if (bilingual) return Math.abs(Number(bilingual[1]) - expected) < 1e-9;
     const match = normalizedSource.match(/^(?:calories?|calorias?|kcal)\s+(\d+(?:\.\d+)?)\b/);
     return !!match && Math.abs(Number(match[1]) - expected) < 1e-9;
   }
@@ -180,8 +184,36 @@ function resolvedServingMass(result) {
   return result?.serving_size_g ?? declaredServingMassFallback(result);
 }
 
+// Exact bilingual count/mass grammar observed on a physical label. Never infer mass
+// from the bag, serving count, ounces or a translated/nonmatching unit.
+function bilingualUnitServing(value, declaration = false) {
+  let raw = text(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (declaration) {
+    const prefix = /^serving\s+size\s*\/\s*tamano\s+servicio\s+/.exec(raw);
+    if (!prefix) return null;
+    raw = raw.slice(prefix[0].length);
+  }
+  const match = /^(\d+(?:\.\d+)?)\s+unit\s*\/\s*unidad\s*\(\s*(\d+(?:\.\d+)?)\s*g\s*\)$/.exec(raw);
+  if (!match) return null;
+  const count = Number(match[1]), grams = Number(match[2]);
+  return Number.isFinite(count) && count > 0 && Number.isFinite(grams) && grams > 0 ? {count, grams} : null;
+}
 function columnMatchesServing(header, servingSize, servingQuantity, servingEvidence) {
   const value = normalizeText(header);
+  if (/\bunit\s*\/\s*unidad\b/i.test(servingQuantity + ' ' + servingEvidence)) {
+    const quantity = bilingualUnitServing(servingQuantity);
+    const declaration = bilingualUnitServing(servingEvidence, true);
+    if (!quantity || !declaration || quantity.count !== declaration.count
+      || quantity.grams !== declaration.grams || quantity.grams !== servingSize) return false;
+  }
+  if (/\bunit\s*\/\s*unidad\b/i.test(header)) {
+    const column = bilingualUnitServing(text(header).replace(/^per\s+/i, ''));
+    const quantity = bilingualUnitServing(servingQuantity);
+    const declaration = bilingualUnitServing(servingEvidence, true);
+    return !!column && !!quantity && !!declaration && column.count === quantity.count
+      && column.count === declaration.count && column.grams === quantity.grams
+      && column.grams === declaration.grams && column.grams === servingSize;
+  }
   if (/\b(?:per|por)\s*100\s*(?:g|grams?)\b|\bper\s*100g\b/.test(value)) return false;
   // A counted alternate column must match the declared count and unit, not just its noun.
   const countedHeader=printedServingCount(header,true)||printedServingCount(header);
@@ -235,6 +267,9 @@ export function labelBasisDiagnostics(result) {
     column_count:Array.isArray(result?.detected_columns)?Math.min(result.detected_columns.length,10):0,
     has_mass:typeof result?.serving_size_g==='number'&&result.serving_size_g>0,
     mass_from_declared_line:declaredServingMassFallback(result)!==null,
+    selected_header_present:!!text(result?.selected_column_header),
+    serving_header_association:result?.selected_basis==='per_serving' && !!text(result?.selected_column_header)
+      ? columnMatchesServing(result.selected_column_header,resolvedServingMass(result),result.serving_quantity,servingCountEvidence(result)) : null,
     mass_value_type:result?.serving_size_g===null?'null':['number','string'].includes(typeof result?.serving_size_g)?typeof result.serving_size_g:'missing_or_other',
     package_proof_valid:!!packageServingEvidence(result)};
 }

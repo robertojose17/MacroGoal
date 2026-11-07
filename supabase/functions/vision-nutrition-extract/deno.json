@@ -1,0 +1,10 @@
+{
+  "imports": {
+    "npm:@supabase/supabase-js@2": "npm:@supabase/supabase-js@2.119.0",
+    "jsr:@supabase/functions-js/edge-runtime.d.ts": "jsr:@supabase/functions-js@2.119.0/edge-runtime.d.ts"
+  },
+  "lock": {
+    "path": "./deno.lock",
+    "frozen": true
+  }
+}

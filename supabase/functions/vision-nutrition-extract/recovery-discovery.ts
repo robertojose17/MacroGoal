@@ -182,6 +182,8 @@ export function sourceLabelDiagnostics(reading:any) {
       mass_basis:b.mass_basis==='single_package_net_weight'?'single_package_net_weight':'label_grams',
       column_count:Number.isSafeInteger(b.column_count)?Math.max(0,Math.min(b.column_count,10)):0,
       has_mass:b.has_mass===true,mass_from_declared_line:b.mass_from_declared_line===true,mass_value_type:['null','number','string'].includes(b.mass_value_type)?b.mass_value_type:'missing_or_other',
+      selected_header_present:typeof b.selected_header_present==='boolean'?b.selected_header_present:null,
+      serving_header_association:typeof b.serving_header_association==='boolean'?b.serving_header_association:null,
       package_proof_valid:b.package_proof_valid===true};
   }
   return {issues,basis_diagnostics:basis};
