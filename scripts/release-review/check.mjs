@@ -16,6 +16,7 @@ const modules=process.env.BARCODE_RECOVERY_NODE_MODULES||path.dirname(path.dirna
 const env={...process.env,TYPESCRIPT_MODULE:typescript,BARCODE_RECOVERY_NODE_MODULES:modules,MACROGOAL_CLIENT_ROOT:root,SEARCH_AUTHORITY_FUNCTIONS_ROOT:path.join(root,'supabase/functions')};
 const client=[
  'tests/client-readiness.test.cjs',
+ 'tests/usda-selection-identity.test.cjs',
  'tests/food-search.test.cjs',
  'tests/food-search-deadline.test.cjs',
  'tests/barcode-recovery-ui.test.mjs',

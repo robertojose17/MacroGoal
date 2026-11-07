@@ -10,7 +10,6 @@
  */
 
 import { searchSelectionNeedsConfirmation } from './searchSelectionSafety';
-import { exactFdcId } from './catalogSelection';
 import { buildSyntheticOffData } from './servingParser';
 import { OpenFoodFactsProduct, extractServingSize, extractNutritionPerServing, normalizeUsdaProduct } from '@/utils/openFoodFacts';
 import { formatFoodRowServing } from '@/utils/servingDisplay';
@@ -171,18 +170,4 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
   return { ...buildSyntheticOffData(fi), _db_id: fi.id };
 }
 
-/** Capture provider facts on use, not on every keystroke. No private diary writes. */
-export async function persistUsdaSelection(product:OpenFoodFactsProduct):Promise<string|null>{
- const fdcId=exactFdcId(product._usda_fdc_id);
- if(!fdcId||product._serving_authority==='confirmed_correction')return null;
- let timer:ReturnType<typeof setTimeout>|undefined;
- try{
-  const response:any=await Promise.race([
-   supabase.functions.invoke('lookup-barcode',{body:{operation:'usda_portions_v1',fdc_id:fdcId}}),
-   new Promise(resolve=>{timer=setTimeout(()=>resolve(null),1800);})
-  ]);
-  if(response?.error||response?.data?.fdc_id!==fdcId)return null;
-  const id=response.data.food_item_id;
-  return typeof id==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)?id:null;
- }catch{return null;}finally{if(timer)clearTimeout(timer);}
-}
+export { persistUsdaSelection } from './usdaSelectionPersistence';

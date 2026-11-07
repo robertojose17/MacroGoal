@@ -1,56 +1,40 @@
-# Food catalog validation, round 3
+# Food catalog validation, round 4
 
-**Validation candidate only. Not release-ready.** Based on published commit `0fb1db21adb10c1ec84088c44f98e027462024de`, tree `d552b15cb8f53b5cb04244ed657bc3ea1ed32669`. Earlier snapshots are immutable. No build, TestFlight submission, deployment, hosted SQL application or remote write is performed by this preparation.
+**Validation candidate only. Not release-ready.** Based on published commit `1fa113058b989421181f6e5adf3b82e823f126ae`, tree `6f1e5f33bc1ea6783e37f920ca5c83f0fffa1752`. This is a client-only persistence follow-on. No build, TestFlight submission, deployment, hosted SQL or remote write is part of this source preparation. All earlier snapshots remain unchanged.
 
-## Reviewed changes
+## Narrow changes and limits
 
-- The native psql session harness now terminates a semicolonless SQL buffer before its response marker. Both PG16 and PG17.6 lanes retain their original assertions and gain real session regressions. Fifteen mocked protocol/isolation/cleanup checks are not native database or HTTP proof.
-- Search uses a shared catalog deadline and only the remaining optional snapshot budget; provider fallback budgets and fail-closed authority remain intact. The runtime hashes and strict hydration type pins are updated explicitly to the approved sources.
-- Pure food-search coverage and deadline coverage are explicitly selected, never discovered by a bulk test glob. Strict declaration and annotation/emitted-JavaScript comparisons remain required.
-- Two authentic CI-generated dependency locks are committed byte-for-byte after independent review. Their recorded graph is not proof of parity with live v45. Fresh exact-commit Deno `--frozen` checks remain required.
-- Coach test-only reconciliation isolates native module boundaries and follows verified current diary labels/meal selection. Four unresolved restore/dietary-correction behavior assertions remain red; no Coach runtime change or case suppression is included.
+The reviewed client coordinator retains an uncertain USDA persistence operation within the originating authenticated session and exact FDC identity. An 1800 ms UI deadline covers auth admission and optional capture. Timeout or ambiguous transport/readback does not prove rollback and does not authorize a duplicate retry. Exact verified late identity may update only the matching still-active draft entry; nutrients, portion facts, user edits, cleared/consumed entries, auth changes and retired navigation remain protected. Valid nutrition logging is not blocked by optional catalog failure.
 
-The reviewed library v2 package is included. Its saved-only numeric mass/count round-trip and numeric-string compatibility fixes preserve the legacy diary parser; blocked v1 was never included.
+Unresolved reservations are bounded to 128 per active session and are never evicted to permit uncertain replay. Only original acknowledged success releases the reservation; verified operation history has an LRU capacity of 64. A later explicit selection can refresh after the original acknowledgement. The guarantee is single-process/session scoped, not durable global exactly-once persistence. Whole-array draft consumers and their preexisting stale-array limitation remain unchanged; no saved-meal identity is guessed after consumption, navigation retirement or restart.
 
-`source-lineage.json` pins the current source files. `round3-provenance.json` records exact approved inputs, predecessor hashes, explicit pin changes and lock provenance. Historical round2 evidence remains clearly historical. Root application packages, package lock, EAS configuration, active migrations, Health and Coach runtime behavior are unchanged by round3.
+`source-lineage.json` and `round4-provenance.json` pin exact reviewed source and predecessor hashes against the published Git tree. Only the eleven approved package files plus an explicit client allowlist entry and derived release documentation/manifests change. Server source, all SQL candidates, Deno locks, native harness, workflow, three My Meals consumers, Coach/Health runtime and package dependencies remain unchanged.
 
-## Current combined local checks
+## Actual combined checks
 
-- Explicit client suite: 317 passed, 1 historical backend-only skipped, 0 failed.
-- Component suites: 552 passing executions (129 nutrition + 250 registry + 173 search), plus 4 separate cross-component executions. Counts overlap; they are not unique scenarios. Actual checkout runtime/SQL hashes and stability are enforced. Two documented predecessor-only source exclusivity checks remain excluded as in the frozen original package.
-- Purchases/subscriptions: 38 passed, 0 failed.
-- Explicit CI regression suite: 78 passed, 4 failed, 0 skipped. The remaining four failures are explicit restore after restart, pre-search dietary correction, unpaid preparation restore with fresh consent and historical same-flow unfinished resume. They are not fixed by this validation candidate.
-- Absolute application types: 252 diagnostics across 361 roots. No baseline subtraction or error suppression establishes a pass.
-- Native mocked safety/protocol tests: 15 passed. Actual local PostgreSQL and Docker remain unavailable. Fresh PG16 and PG17.6 CI must finish native sessions, mixed-role races, authenticated HTTP and cleanup; prior run failures are not passes for this revision.
+- Client suite: **377 passed, 1 historical backend-only skipped, 0 failed**, including all 60 newly wired identity cases and every existing selected suite.
+- Existing CI/domain suite: **78 passed, 4 failed, 0 skipped**. The library domain cases remain included. Four unrelated Coach restore/dietary-correction behavior assertions remain red; no assertion is suppressed to obtain a green result.
+- Actual cross-component contracts: **4 passed, 0 failed**.
+- Absolute application types: **252 diagnostics across 363 roots**, still red. No baseline subtraction or diagnostic suppression is used.
+- Full local source lint: **0 errors, 53 warnings**. Staging is source-complete for these checks, not an asset/build-complete checkout.
 
-Local staging contains pinned compilation/test sources, not a build-complete asset checkout. Full exact-commit CI, native concurrency/HTTP, frozen Deno, live transport/scheduler/latency and device tests remain gates. A local source lint pass or JavaScript syntax check is not release readiness.
-
-## Vision status
-
-The complete 30-file vision closure is unchanged from reviewed round2 source reconciliation. Twenty-three files match captured v45 bytes, six contain reviewed type/JSDoc-only changes and one retains the repository newline convention; normalized emitted JavaScript matches all 30. The prior separate offline run passed 935 regression executions plus two boot/auth checks against these same closure hashes. That evidence is retained, not relabeled as a new round3 CI run. Its legacy test-layout overlay is not copied into the repository.
-
-Production v45 and `verify_jwt=true` remain unchanged. The committed vision dependency lock reflects the observed CI graph only. Fresh frozen Deno and live dependency/runtime checks remain required; no bulk deployment is authorized.
+The unchanged backend component source and fixtures retain prior round3 evidence of 552 passing component executions, and purchases retain prior 38-pass evidence. Those suites were not rerun for this client-only change and are not counted as fresh round4 passes. Native, Deno, hosted transport/concurrency, live auth/provider behavior and device gates require their own exact-revision evidence. The unchanged 30-file vision closure retains prior reviewed source equivalence and separate offline 935+2 evidence; no fresh vision execution or production change is claimed here.
 
 ## Reproduction
 
-Use a complete checkout with Node24.22.1, locked pnpm10.21.0 application dependencies, TypeScript5.9.3, isolated PGlite0.5.8 and Deno2.5.6. SQL fixtures are synthetic and local only.
+Use the complete checkout, locked Node24.22.1/pnpm10.21.0 dependencies, TypeScript5.9.3 and isolated PGlite0.5.8 tooling. The explicit client and CI stage commands retain outbound denial guards and all prior selected cases.
 
 ```sh
 node scripts/release-review/verify.mjs
 node scripts/release-review/check.mjs --group syntax
 node scripts/ci/run-stage.cjs client-regressions
 node scripts/ci/run-stage.cjs ci-regressions
-node scripts/ci/run-stage.cjs purchase-regressions
-node scripts/ci/run-stage.cjs backend-components
 node scripts/ci/run-stage.cjs backend-contracts
 node scripts/ci/run-stage.cjs app-types
 node scripts/ci/run-stage.cjs lint
-node scripts/ci/run-stage.cjs deno-candidate
-node scripts/ci/run-stage.cjs deno-repository-vision
-python3 scripts/ci/native-database/safety_probes.py
-python3 scripts/ci/native-database/run.py --postgrest
-python3 scripts/ci/native-database/run.py --postgrest --postgres17-container
 ```
+
+The unchanged validation workflow also retains backend components, purchases, native PG16/PG17.6, authentic frozen Deno locks and JavaScript export stages. This source package does not establish release readiness or authorize a build.
 
 ## SQL candidates and rollout gates
 

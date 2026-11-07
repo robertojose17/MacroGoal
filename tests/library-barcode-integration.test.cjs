@@ -71,9 +71,10 @@ test('search deadline covers stalled response body',async()=>{const f=client(asy
 test('complete empty server response replaces cache and can cache empty result',async()=>{const f=client(async()=>({ok:true,json:async()=>({products:[],status:'complete',ranking_version:'food-v2'})}),[food()]);let local,server;await f.api.hybridSearch('rice',{onLocalCacheHit:p=>local=p,onSupabaseHit:p=>server=p});assert.equal(local.length,1);assert.deepEqual(plain(server),[]);assert.deepEqual(plain(f.writes),[['rice',[]]]);});
 test('partial results are reported but never cached',async()=>{const f=client(async()=>({ok:true,json:async()=>({products:[food()],status:'partial',ranking_version:'food-v2'})}));let issue;await f.api.hybridSearch('rice',{onError:(_stage,e)=>issue=e.message});assert.equal(issue,'SEARCH_PARTIAL');assert.equal(f.writes.length,0);});
 test('selected USDA capture requests canonical ID and uses returned exact UUID',async()=>{
- const requests=[],api=load('utils/foodSearchUtils.ts',{'@/lib/supabase/client':{supabase:{functions:{invoke:async(_name,p)=>{requests.push(p.body);return {data:{fdc_id:'123',food_item_id:'11111111-1111-4111-8111-111111111111'}};}}}}});
- assert.equal(await api.persistUsdaSelection(food({_usda_fdc_id:123})),'11111111-1111-4111-8111-111111111111');assert.deepEqual(plain(requests),[{operation:'usda_portions_v1',fdc_id:'123'}]);
- await api.persistUsdaSelection(food({_serving_authority:'confirmed_correction'}));assert.equal(requests.length,1);
+ const fixtureSession={user:{id:'owner'},access_token:'header.'+Buffer.from(JSON.stringify({session_id:'22222222-2222-4222-8222-222222222222'})).toString('base64url')+'.signature'};
+ const requests=[],api=load('utils/foodSearchUtils.ts',{'@/lib/supabase/client':{supabase:{auth:{getSession:async()=>({data:{session:fixtureSession},error:null}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},functions:{invoke:async(_name,p)=>{requests.push(p.body);return {data:{fdc_id:'123',food_item_id:'11111111-1111-4111-8111-111111111111'}};}}}}});
+ const outcome=await api.persistUsdaSelection(food({_usda_fdc_id:123}));assert.equal(outcome.status,'persisted');assert.equal(outcome.foodItemId,'11111111-1111-4111-8111-111111111111');assert.deepEqual(plain(requests),[{operation:'usda_portions_v1',fdc_id:'123'}]);
+ assert.equal((await api.persistUsdaSelection(food({_serving_authority:'confirmed_correction'}))).status,'not_applicable');assert.equal(requests.length,1);
 });
 test('cache namespace is versioned; expired/future/corrupt entries fail closed',async()=>{
  for(const entry of [{products:[food()],timestamp:0},{products:[food()],timestamp:Date.now()+1e9},{products:{},timestamp:Date.now()}]){
@@ -85,7 +86,7 @@ test('actual source wires guards into save/favorite, exact custom row and recipe
  assert.match(detail,/const foodBarcode = catalogPackageBarcode\(product\)/);assert.match(detail,/const barcode = catalogPackageBarcode\(prod\)/);assert.match(detail,/legacyFavorite \? 'barcode' : foodSource/);
  assert.match(detail,/eq\('id',product\._manual_food_id\)\.eq\('created_by',user.id\)/);assert.match(detail,/manualFoodId \? \{data:\{id:manualFoodId\}/);assert.match(detail,/off_data: saveOffData/);
  assert.match(detail,/mode!=='edit'&&!itemId&&product\?\._usda_fdc_id/);assert.match(detail,/setNumberOfServings\(String\(rawQuantity\)\)/);assert.match(detail,/grams: totalGrams,/);
- assert.match(add,/const capturedFoodItemId = await persistUsdaSelection\(product\)/);assert.match(add,/product\._db_id \|\| capturedFoodItemId/);assert.match(add,/barcode: packageBarcode/);
+ assert.match(add,/const selection = await persistUsdaSelection\(product\)/);assert.match(add,/selection.status === 'persisted' \? selection.foodItemId : undefined/);assert.match(add,/product\._db_id \|\| capturedFoodItemId/);assert.match(add,/barcode: packageBarcode/);
 });
 test('ordinary detail use cannot overwrite existing canonical catalog nutrition',()=>{
  const source=read('components/FoodDetailsLayout.tsx'),part=source.slice(source.indexOf('  const upsertFoodItem ='),source.indexOf('  const handleSave ='));

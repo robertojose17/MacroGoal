@@ -6,16 +6,16 @@
   "client_source_count": 32,
   "backend_source_count": 11,
   "overlap_count": 1,
-  "final_source_count": 99,
+  "final_source_count": 104,
   "shared_foodPortions_sha256": "4e35b3395b0f0ea5c1fe75f3736c276feeecbac250e3cb8f0bdfba36258d46af",
   "files": [
     {
       "path": "app/add-food.tsx",
-      "origin": "reviewed-library-domain-v2",
-      "sha256": "d6d68a48c50587f6854c88d4f18d70015c33234adceb2236b92d07f873609fd6",
+      "origin": "reviewed-uncertain-food-identity",
+      "sha256": "ca2b4b7920955b9de959fcce22f1b8389595f64c7664a0df842e6e4fcc06c1a9",
       "base_blob_sha1": "9c9c3d786796e255b0b692a045cd392f6d593cce",
       "frozen_client_v5_sha256": "fcdd43aa2e3a78e7984db796a54052dd2e0abc96300230040c7d205b511399de",
-      "previous_validation_sha256": "d40d4fbc140abae296a03a3ed293bac31e237f1d79d2383f762c231c63f7a44c"
+      "previous_validation_sha256": "d6d68a48c50587f6854c88d4f18d70015c33234adceb2236b92d07f873609fd6"
     },
     {
       "path": "app/barcode-lookup.tsx",
@@ -78,11 +78,11 @@
     },
     {
       "path": "components/FoodDetailsLayout.tsx",
-      "origin": "reviewed-library-domain-v2",
-      "sha256": "c3eeeaf8bb22dbb7353bc29451e46417b6df5e0ca012a84870266e6b1e39786e",
+      "origin": "reviewed-uncertain-food-identity",
+      "sha256": "0cde4ef4eb2e8bdd5fb8e8d112f40216e55824869fbb409518d6dfc67ef30b18",
       "base_blob_sha1": "2cf3f47673e8cd14fe0c9ba84aa3cc13260e1c10",
       "frozen_client_v5_sha256": "f44baeeade2bd0806e18d7d47b2184c73fa39efce8d718a9b7801f8daec1d3c4",
-      "previous_validation_sha256": "95fee6b95ded7568c73d80fbed08ac3ee3cec56ad51243b81c2c699d5aaedc34"
+      "previous_validation_sha256": "c3eeeaf8bb22dbb7353bc29451e46417b6df5e0ca012a84870266e6b1e39786e"
     },
     {
       "path": "components/IconSymbol.tsx",
@@ -409,9 +409,10 @@
     },
     {
       "path": "tests/client-readiness.test.cjs",
-      "origin": "published-9193c224",
-      "sha256": "6ac92fbdce59bf8954b81070ff59ad9315bb4af9196e57823c640606f386e5b3",
-      "base_blob_sha1": null
+      "origin": "reviewed-uncertain-food-identity",
+      "sha256": "6889669cf02a00ba695b3efdba34c8dab59bb80dec715bdda2b5d2c81de31dd1",
+      "base_blob_sha1": null,
+      "previous_validation_sha256": "6ac92fbdce59bf8954b81070ff59ad9315bb4af9196e57823c640606f386e5b3"
     },
     {
       "path": "tests/coach-model-conversation.test.cjs",
@@ -453,9 +454,10 @@
     },
     {
       "path": "tests/library-barcode-integration.test.cjs",
-      "origin": "published-9193c224",
-      "sha256": "12b554939d25fc9ed32cea1d16a93f676d0868879965e9ddc3a505adb50e8739",
-      "base_blob_sha1": null
+      "origin": "reviewed-uncertain-food-identity",
+      "sha256": "6b9adc3e87a9c70ae0225f24d9c6b9a452514a7ce7465b42edaf4c17405bd8c5",
+      "base_blob_sha1": null,
+      "previous_validation_sha256": "12b554939d25fc9ed32cea1d16a93f676d0868879965e9ddc3a505adb50e8739"
     },
     {
       "path": "tests/manual-recovery-save.test.mjs",
@@ -466,8 +468,15 @@
     {
       "path": "tests/release-review/client/independent-final-callbacks.cjs",
       "base_blob_sha1": null,
-      "sha256": "2f6c2e2cf7fc3d20d4b44a74d518db2efcd3bc3195dea560e4aa60881ece3afc",
-      "origin": "reviewed-library-domain-v2"
+      "sha256": "9f41b33d6191a456bae3b11e9e615f6a0395cb28905d1f3de24968bbded8d0cc",
+      "origin": "reviewed-uncertain-food-identity",
+      "previous_validation_sha256": "2f6c2e2cf7fc3d20d4b44a74d518db2efcd3bc3195dea560e4aa60881ece3afc"
+    },
+    {
+      "path": "tests/release-review/client/independent-off-search-v4.cjs",
+      "base_blob_sha1": "eeb0ac5264d81bc110bb8cd93e4fd6eec30276f8",
+      "sha256": "b28032df27f9be348feba375351b74f967fd067e7a927067157d91ef549e1514",
+      "origin": "reviewed-uncertain-food-identity"
     },
     {
       "path": "tests/search-selection-safety.test.cjs",
@@ -500,6 +509,12 @@
       "origin": "central-app-type-contracts"
     },
     {
+      "path": "tests/type-contracts/usda-selection-identity.typecheck.ts",
+      "base_blob_sha1": null,
+      "sha256": "18116a131b63b372842ec7530e58758b3fb0f4e0eef697cb3a11ca74017a0d03",
+      "origin": "reviewed-uncertain-food-identity"
+    },
+    {
       "path": "tests/unknown-barcode-callbacks.cjs",
       "origin": "published-9193c224",
       "sha256": "461e01f022c3906d84a69754009b9905f2ec323d84401fc41398dfce4acd85a2",
@@ -510,6 +525,12 @@
       "origin": "published-9193c224",
       "sha256": "c2496afe2f3555cec9fcf43f92221d0196d6b0f82a78b859a1eb836e9da419b7",
       "base_blob_sha1": null
+    },
+    {
+      "path": "tests/usda-selection-identity.test.cjs",
+      "base_blob_sha1": null,
+      "sha256": "fb5a09ed49bab097746574924d6d14c37f97f6ac014fda7e5edbf328a0895188",
+      "origin": "reviewed-uncertain-food-identity"
     },
     {
       "path": "utils/cameraCaptureBytes.ts",
@@ -579,10 +600,10 @@
     },
     {
       "path": "utils/foodSearchUtils.ts",
-      "origin": "reviewed-library-domain-v2",
-      "sha256": "956dba1c14e1e5e2b003f5ac78c2301a1adab714802602460211b40ea4d5a974",
+      "origin": "reviewed-uncertain-food-identity",
+      "sha256": "4cfc9b93d0f1a70552210f58273fabb8edd9ded11a782bf9dcdcf5245ba73888",
       "base_blob_sha1": "5420f0b8e6d74ff2acbe16ab73a3184848745c01",
-      "previous_validation_sha256": "a629271e86078f4f3ad6353f2df6341db3b7269f9019b73b86816c3166e3ea25"
+      "previous_validation_sha256": "956dba1c14e1e5e2b003f5ac78c2301a1adab714802602460211b40ea4d5a974"
     },
     {
       "path": "utils/manualRecoveryProduct.ts",
@@ -602,6 +623,12 @@
       "base_blob_sha1": null,
       "sha256": "349df46494796160b4df38f03792562f4fdc0cdfb84c3f8fd94968f57b16133a",
       "origin": "central-app-type-contracts"
+    },
+    {
+      "path": "utils/myMealsDraft.ts",
+      "base_blob_sha1": "7f5734980e241f34ec9b2851f81415a5b8599fd1",
+      "sha256": "878fcfd42b3a8e21fc41c7fa39ea37aea0d8f10278855dca9fab14f8f3244402",
+      "origin": "reviewed-uncertain-food-identity"
     },
     {
       "path": "utils/openFoodFacts.ts",
@@ -640,13 +667,19 @@
       "origin": "published-9193c224",
       "sha256": "7322e1e744d805f853d36a9c43f278d0b199eed8ada34c4c5b039ce243a2869f",
       "base_blob_sha1": null
+    },
+    {
+      "path": "utils/usdaSelectionPersistence.ts",
+      "base_blob_sha1": null,
+      "sha256": "676dd237a2a770af04add83bd85cac52153ae1bfcf601b0e5f3d0689d91b0dcd",
+      "origin": "reviewed-uncertain-food-identity"
     }
   ],
   "inactive_sql_count": 3,
   "readiness_changed_source_count": 7,
   "readiness_new_test_count": 1,
   "client_readiness_manifest_sha256": "f4871bdd813dd0d88f70a2a303f17dcc7872d6385e939d59375f0cc054c92d3a",
-  "lineage_note": "Round3 final source hashes with exact published predecessor provenance. Reviewed native/session, search deadline, authentic CI locks and explicit regression coverage; library v2 only if recorded in round3-provenance.json. No Coach or Health runtime changes.",
-  "current_base_commit": "0fb1db21adb10c1ec84088c44f98e027462024de",
-  "current_base_tree": "d552b15cb8f53b5cb04244ed657bc3ea1ed32669"
+  "lineage_note": "Round4 narrows changes to reviewed client uncertain USDA identity persistence and explicit test selection. Published predecessor hashes are checked against the fresh Git tree. Server source, SQL, locks, consumers, workflow and other runtime remain unchanged.",
+  "current_base_commit": "1fa113058b989421181f6e5adf3b82e823f126ae",
+  "current_base_tree": "6f1e5f33bc1ea6783e37f920ca5c83f0fffa1752"
 }

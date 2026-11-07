@@ -1,3 +1,4 @@
+import { persistUsdaSelection, usdaIdentityIsCurrent, type UsdaSelectionOutcome } from '@/utils/usdaSelectionPersistence';
 import { foodJsonSnapshot, savedMealForFoodDetails, savedMealFoodUpdate, savedMealPortionForDetails } from '@/utils/foodPersistence';
 import { catalogPackageBarcode, exactFdcId, readSavedPortion, readSavedPortionLabel, savedPortionSnapshot, portionDescription, type SavedPortion } from '@/utils/catalogSelection';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -491,8 +492,20 @@ export default function FoodDetailsLayout({
   const isDark = false;
   const router = useRouter();
   const routeContext = useLocalSearchParams();
+  const usdaHydrationActive = useRef(true);
+  const viewGeneration = useRef(createLoadGeneration());
+  const viewLoadComplete = useRef(false);
+  const viewSelectionRequest = useRef<{ route: string; promise: Promise<UsdaSelectionOutcome> } | null>(null);
   const latestOffData = useRef(offData);
   latestOffData.current = offData;
+  const viewRouteKey = JSON.stringify([mode, itemId, offData, routeContext.recoverySaved]);
+  const latestViewRoute = useRef(viewRouteKey);
+  if (latestViewRoute.current !== viewRouteKey) {
+    latestViewRoute.current = viewRouteKey;
+    viewGeneration.current.invalidate();
+    viewLoadComplete.current = false;
+    viewSelectionRequest.current = null;
+  }
   const editGeneration = useRef(createLoadGeneration());
   const editRouteKey = JSON.stringify([itemId,itemTable,offData,routeContext.recoverySaved]);
   const latestEditRoute = useRef(editRouteKey);
@@ -662,9 +675,11 @@ export default function FoodDetailsLayout({
   const cardBackground = isDark ? colors.cardDark : colors.card;
 
   const loadViewData = useCallback(async () => {
+    const generationCurrent = viewGeneration.current.begin();
+    const isCurrent = () => generationCurrent() && usdaHydrationActive.current && latestViewRoute.current === viewRouteKey;
     if (!offData) {
       console.log('No offData provided');
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
       return;
     }
 
@@ -675,21 +690,22 @@ export default function FoodDetailsLayout({
       if (fdcId && parsedProduct._serving_authority!=='confirmed_correction') {
         parsedProduct._usda_fdc_id=fdcId;
         if (!readUsdaPortions(parsedProduct._portion_evidence,parsedProduct._usda_fdc_id).length) {
-          let timer: ReturnType<typeof setTimeout> | undefined;
-          try {
-            const response:any=await Promise.race([
-              supabase.functions.invoke('lookup-barcode',{body:{operation:'usda_portions_v1',fdc_id:parsedProduct._usda_fdc_id}}),
-              new Promise(resolve=>{timer=setTimeout(()=>resolve(null),1800);})
-            ]);
-            if(latestOffData.current!==offData)return;
-            if(response?.data?.fdc_id===parsedProduct._usda_fdc_id){
-              parsedProduct._portion_evidence=response.data.portion_evidence;
-              if(response.data.food_item_id)parsedProduct._db_id=response.data.food_item_id;
-            }
-          } catch {} finally {if(timer)clearTimeout(timer);}
+          // Refocus resumes this route's initial hydration, not a new explicit capture.
+          if (!viewSelectionRequest.current || viewSelectionRequest.current.route !== viewRouteKey) {
+            viewSelectionRequest.current = { route: viewRouteKey, promise: persistUsdaSelection(parsedProduct) };
+          }
+          const selection = await viewSelectionRequest.current.promise;
+          if (!isCurrent()) return;
+          if (selection.status !== 'not_applicable' && selection.identity && await usdaIdentityIsCurrent(selection.identity)) {
+            if (!isCurrent()) return;
+            // Only the initial response may populate portions; late completion never resets edits.
+            if (selection.portionEvidence !== undefined) parsedProduct._portion_evidence = selection.portionEvidence;
+            if (selection.status === 'persisted') parsedProduct._db_id = selection.foodItemId;
+          }
         }
         parsedProduct=normalizeUsdaProduct(parsedProduct);
       }
+      if (!isCurrent()) return;
       // Ensure product_name is always populated — some OFacts entries have it in generic_name only
       if (!parsedProduct.product_name && parsedProduct.generic_name) {
         parsedProduct.product_name = parsedProduct.generic_name;
@@ -732,15 +748,17 @@ export default function FoodDetailsLayout({
         setSelectedServingOptionKey('default');
       }
 
-      await checkFavoriteStatus(parsedProduct);
+      await checkFavoriteStatus(parsedProduct, isCurrent);
+      if (isCurrent()) viewLoadComplete.current = true;
     } catch (error) {
+      if (!isCurrent()) return;
       console.error('Error loading view data:', error);
       Alert.alert(t('common.error'), t('foodDetails.failedToAdd'));
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [offData]);
+  }, [offData, viewRouteKey]);
 
   // Helper: build a minimal OpenFoodFactsProduct from a food_items row
   const buildMockProductFromFoodItem = (
@@ -1187,13 +1205,18 @@ export default function FoodDetailsLayout({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemId, router, itemTable, offData, editRouteKey, routeContext.recoverySaved]);
 
+  useFocusEffect(useCallback(() => {
+    usdaHydrationActive.current = true;
+    if (!itemId && mode === 'view' && !viewLoadComplete.current) void loadViewData();
+    const generation = viewGeneration.current;
+    return () => { usdaHydrationActive.current = false; generation.invalidate(); };
+  }, [itemId, mode, loadViewData]));
+
   useEffect(() => {
     if (itemId) {
       // itemId always means edit/load from DB — mode may be empty when coming from Recent Foods
       console.log('[FoodDetailsLayout] loadEditItem triggered', { itemId, mode });
       loadEditItem();
-    } else if (mode === 'view') {
-      loadViewData();
     } else if (mode === 'edit') {
       loadEditItem();
     }

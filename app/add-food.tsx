@@ -21,7 +21,9 @@ import { ResultSource, SearchResultItem, buildResultItem, mergeProducts, buildOf
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { buildSyntheticOffData } from '@/utils/servingParser';
 import { Food } from '@/types';
-import { addToDraft } from '@/utils/myMealsDraft';
+import { addToDraft, reconcileDraftIdentity } from '@/utils/myMealsDraft';
+import { continueUsdaSelection, usdaSelectionIsCurrent } from '@/utils/usdaSelectionPersistence';
+import { exactFdcId } from '@/utils/catalogSelection';
 import { addMealPlanItem } from '@/utils/mealPlansApi';
 import { toLocalDateString } from '@/utils/dateUtils';
 import QuickAddHome from '@/components/QuickAddHome';
@@ -108,6 +110,14 @@ export default function AddFoodScreen() {
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchResultsMapRef = useRef<Map<string, SearchResultItem>>(new Map());
   const currentSearchQueryRef = useRef<string>('');
+  const quickAddNavigationRef = useRef({ active: false, id: '' });
+  const quickAddPendingRef = useRef(new Set<string | OpenFoodFactsProduct>());
+  useFocusEffect(useCallback(() => {
+    const navigation = { active: true, id: `${JSON.stringify([context, returnTo, mode, planId, date, mealType])}:${Date.now()}-${Math.random()}` };
+    quickAddNavigationRef.current = navigation;
+    return () => { navigation.active = false; };
+  }, [context, returnTo, mode, planId, date, mealType]));
+
 
   // BANNER QUEUE SYSTEM - INTERRUPT + STACK CONFIRMATIONS
   const [bannerQueue, setBannerQueue] = useState<BannerEvent[]>([]);
@@ -585,8 +595,18 @@ export default function AddFoodScreen() {
       return;
     }
 
+    const navigation = quickAddNavigationRef.current;
+    const fdcId = exactFdcId(product._usda_fdc_id);
+    const clickKey = fdcId ? `${navigation.id}:fdc:${fdcId}` : product;
+    if (!navigation.active || quickAddPendingRef.current.has(clickKey)) return;
+    quickAddPendingRef.current.add(clickKey);
     try {
-      const capturedFoodItemId = await persistUsdaSelection(product);
+      const selection = await persistUsdaSelection(product);
+      const identity = selection.status === 'not_applicable' ? null : selection.identity;
+      const isCurrent = async () => navigation.active && quickAddNavigationRef.current === navigation &&
+        usdaSelectionIsCurrent(selection) && navigation.active;
+      if (!await isCurrent()) return;
+      const capturedFoodItemId = selection.status === 'persisted' ? selection.foodItemId : undefined;
       const packageBarcode = catalogPackageBarcode(product);
       const servingInfo = extractServingSize(product);
       const nutrition = extractNutritionPerServing(product, servingInfo.grams);
@@ -615,6 +635,7 @@ export default function AddFoodScreen() {
       }
 
       if (!foodId) {
+        if (!await isCurrent()) return;
         const { data: newFood, error: foodError } = await supabase
           .from('foods')
           .insert({
@@ -648,10 +669,14 @@ export default function AddFoodScreen() {
         return;
       }
 
-      // Add to draft
-      await addToDraft({
+      if (!await isCurrent()) return;
+      const pending = !product._db_id && !capturedFoodItemId && identity
+        ? { ...identity, navigationId: navigation.id } : undefined;
+      // The nutrition snapshot is valid even when its optional catalog link is pending.
+      const tempId = await addToDraft({
         food_id: foodId,
-        ...((product._db_id || capturedFoodItemId) ? {food_item_id:product._db_id || capturedFoodItemId!}:{}),
+        ...((product._db_id || capturedFoodItemId) ? { food_item_id: product._db_id || capturedFoodItemId } : {}),
+        ...(pending ? { pending_usda_identity: pending } : {}),
         serving_description:servingInfo.displayText,
         food_name: product.product_name || 'Unknown Product',
         food_brand: product.brands || undefined,
@@ -663,8 +688,19 @@ export default function AddFoodScreen() {
         carbs: safeNum(carbs),
         fats: safeNum(fat),
         fiber: safeNum(fiber),
-      });
+      }, isCurrent);
 
+      if (!tempId) {
+        if (!await isCurrent()) return;
+        throw Error('draft_save_failed');
+      }
+      if (pending) {
+        void continueUsdaSelection(pending).then(async result => {
+          if (result.status !== 'persisted' || !await isCurrent()) return;
+          await reconcileDraftIdentity({ tempId, foodId, pending }, result.foodItemId, isCurrent);
+        }).catch(() => { /* Unknown identity stays pending; never repeat the write. */ });
+      }
+      if (!await isCurrent()) return;
       console.log('[AddFood] ✅ Quick added to My Meal draft!');
       showSuccessBanner(t('addFood.added'));
       const { data: sessionData } = await supabase.auth.getSession();
@@ -674,7 +710,9 @@ export default function AddFoodScreen() {
       }
     } catch (error) {
       console.error('[AddFood] Error quick adding search result:', error);
-      Alert.alert(t('common.error'), t('addFood.failedToAdd'));
+      if (navigation.active) Alert.alert(t('common.error'), t('addFood.failedToAdd'));
+    } finally {
+      quickAddPendingRef.current.delete(clickKey);
     }
   }, [context, showSuccessBanner, t, router, params, mealType, date, mode, returnTo, planId]);
 

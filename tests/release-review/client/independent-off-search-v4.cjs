@@ -22,7 +22,8 @@ for (const [file, action] of actions) test('actual '+action+' still permits cano
     const plan = [], draft = [], provider = [], rows = [];
     const h = closure({
       ...safety, ...adapter, ...selection, params: routeContext,
-      persistUsdaSelection: async x => { provider.push(x); return null; },
+      persistUsdaSelection: async x => { provider.push(x); return {status:'not_applicable'}; },usdaSelectionIsCurrent:()=>true,
+      quickAddNavigationRef:{current:{active:true,id:'fixture-navigation'}},quickAddPendingRef:{current:new Set()},
       addMealPlanItem: async (...x) => plan.push(x),
       addToDraft: async x => draft.push(x), invalidatePIECache() {},
       supabase: {

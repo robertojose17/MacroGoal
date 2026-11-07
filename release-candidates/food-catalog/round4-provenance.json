@@ -1,0 +1,153 @@
+{
+  "base_commit": "1fa113058b989421181f6e5adf3b82e823f126ae",
+  "base_tree": "6f1e5f33bc1ea6783e37f920ca5c83f0fffa1752",
+  "approved_input_manifests": [
+    {
+      "label": "reviewed-uncertain-food-identity",
+      "manifest": "manifest.json",
+      "manifest_sha256": "dd2a045bac85a96990bdc27b2881888db38917344de2f6e7343e8eb844fe8028",
+      "zip_sha256": "dc9871a11ee3b6187f04adaeaf6b39f354657f1299be1a2e952be38eb7fa6e75"
+    }
+  ],
+  "source_changes": {
+    "app/add-food.tsx": {
+      "layer": "reviewed-uncertain-food-identity",
+      "previous_sha256": "d6d68a48c50587f6854c88d4f18d70015c33234adceb2236b92d07f873609fd6",
+      "previous_git_blob_sha1": "03145eb640bf555ef892c367e0c170a20af829a3",
+      "sha256": "ca2b4b7920955b9de959fcce22f1b8389595f64c7664a0df842e6e4fcc06c1a9"
+    },
+    "components/FoodDetailsLayout.tsx": {
+      "layer": "reviewed-uncertain-food-identity",
+      "previous_sha256": "c3eeeaf8bb22dbb7353bc29451e46417b6df5e0ca012a84870266e6b1e39786e",
+      "previous_git_blob_sha1": "7cd815494d1b0a8d96db51f16e768257182a6870",
+      "sha256": "0cde4ef4eb2e8bdd5fb8e8d112f40216e55824869fbb409518d6dfc67ef30b18"
+    },
+    "utils/myMealsDraft.ts": {
+      "layer": "reviewed-uncertain-food-identity",
+      "previous_sha256": "74e6fbba701793970890fb508605c2d81c010c5e409df2e4d8c43b7beab0d927",
+      "previous_git_blob_sha1": "7f5734980e241f34ec9b2851f81415a5b8599fd1",
+      "sha256": "878fcfd42b3a8e21fc41c7fa39ea37aea0d8f10278855dca9fab14f8f3244402"
+    },
+    "utils/foodSearchUtils.ts": {
+      "layer": "reviewed-uncertain-food-identity",
+      "previous_sha256": "956dba1c14e1e5e2b003f5ac78c2301a1adab714802602460211b40ea4d5a974",
+      "previous_git_blob_sha1": "c6649bc37eab61e528a18f4b074ee87462c00fe0",
+      "sha256": "4cfc9b93d0f1a70552210f58273fabb8edd9ded11a782bf9dcdcf5245ba73888"
+    },
+    "utils/usdaSelectionPersistence.ts": {
+      "layer": "reviewed-uncertain-food-identity",
+      "previous_sha256": null,
+      "previous_git_blob_sha1": null,
+      "sha256": "676dd237a2a770af04add83bd85cac52153ae1bfcf601b0e5f3d0689d91b0dcd"
+    },
+    "tests/usda-selection-identity.test.cjs": {
+      "layer": "reviewed-uncertain-food-identity",
+      "previous_sha256": null,
+      "previous_git_blob_sha1": null,
+      "sha256": "fb5a09ed49bab097746574924d6d14c37f97f6ac014fda7e5edbf328a0895188"
+    },
+    "tests/type-contracts/usda-selection-identity.typecheck.ts": {
+      "layer": "reviewed-uncertain-food-identity",
+      "previous_sha256": null,
+      "previous_git_blob_sha1": null,
+      "sha256": "18116a131b63b372842ec7530e58758b3fb0f4e0eef697cb3a11ca74017a0d03"
+    },
+    "tests/library-barcode-integration.test.cjs": {
+      "layer": "reviewed-uncertain-food-identity",
+      "previous_sha256": "12b554939d25fc9ed32cea1d16a93f676d0868879965e9ddc3a505adb50e8739",
+      "previous_git_blob_sha1": "1170d92b09a8b4680a02a3eaf72574dd6b0fbad6",
+      "sha256": "6b9adc3e87a9c70ae0225f24d9c6b9a452514a7ce7465b42edaf4c17405bd8c5"
+    },
+    "tests/client-readiness.test.cjs": {
+      "layer": "reviewed-uncertain-food-identity",
+      "previous_sha256": "6ac92fbdce59bf8954b81070ff59ad9315bb4af9196e57823c640606f386e5b3",
+      "previous_git_blob_sha1": "5a11582ebd9c2d15887aed490df8cd5c35f1c52a",
+      "sha256": "6889669cf02a00ba695b3efdba34c8dab59bb80dec715bdda2b5d2c81de31dd1"
+    },
+    "tests/release-review/client/independent-off-search-v4.cjs": {
+      "layer": "reviewed-uncertain-food-identity",
+      "previous_sha256": "98b626f21cfca2eea7e4634c5c2ce1a2e51ae124b1fdadcd0daaeb98b41afdac",
+      "previous_git_blob_sha1": "eeb0ac5264d81bc110bb8cd93e4fd6eec30276f8",
+      "sha256": "b28032df27f9be348feba375351b74f967fd067e7a927067157d91ef549e1514"
+    },
+    "tests/release-review/client/independent-final-callbacks.cjs": {
+      "layer": "reviewed-uncertain-food-identity",
+      "previous_sha256": "2f6c2e2cf7fc3d20d4b44a74d518db2efcd3bc3195dea560e4aa60881ece3afc",
+      "previous_git_blob_sha1": "86cac260e27261b801fe5bf678e1d947c399652d",
+      "sha256": "9f41b33d6191a456bae3b11e9e615f6a0395cb28905d1f3de24968bbded8d0cc"
+    },
+    "scripts/release-review/check.mjs": {
+      "layer": "explicit-identity-client-allowlist",
+      "previous_sha256": "a45146cc329732131687904405395fb54a7217d8716f2598eb7d7d21a5fde72f",
+      "previous_git_blob_sha1": "5e86167094cb284d816b79616d006347c5e84879",
+      "sha256": "352cbbc4dff003b6969426d33c198b122e4ae3503818cff07f3894fa401b8fca"
+    }
+  },
+  "published_base_verification": {
+    "commit": "1fa113058b989421181f6e5adf3b82e823f126ae",
+    "tree": "6f1e5f33bc1ea6783e37f920ca5c83f0fffa1752",
+    "manifest_sha256": "dd2a045bac85a96990bdc27b2881888db38917344de2f6e7343e8eb844fe8028",
+    "files": [
+      {
+        "path": "app/add-food.tsx",
+        "git_blob_sha1": "03145eb640bf555ef892c367e0c170a20af829a3",
+        "sha256": "d6d68a48c50587f6854c88d4f18d70015c33234adceb2236b92d07f873609fd6"
+      },
+      {
+        "path": "components/FoodDetailsLayout.tsx",
+        "git_blob_sha1": "7cd815494d1b0a8d96db51f16e768257182a6870",
+        "sha256": "c3eeeaf8bb22dbb7353bc29451e46417b6df5e0ca012a84870266e6b1e39786e"
+      },
+      {
+        "path": "utils/myMealsDraft.ts",
+        "git_blob_sha1": "7f5734980e241f34ec9b2851f81415a5b8599fd1",
+        "sha256": "74e6fbba701793970890fb508605c2d81c010c5e409df2e4d8c43b7beab0d927"
+      },
+      {
+        "path": "utils/foodSearchUtils.ts",
+        "git_blob_sha1": "c6649bc37eab61e528a18f4b074ee87462c00fe0",
+        "sha256": "956dba1c14e1e5e2b003f5ac78c2301a1adab714802602460211b40ea4d5a974"
+      },
+      {
+        "path": "utils/usdaSelectionPersistence.ts",
+        "absent_in_published_base": true
+      },
+      {
+        "path": "tests/usda-selection-identity.test.cjs",
+        "absent_in_published_base": true
+      },
+      {
+        "path": "tests/type-contracts/usda-selection-identity.typecheck.ts",
+        "absent_in_published_base": true
+      },
+      {
+        "path": "tests/library-barcode-integration.test.cjs",
+        "git_blob_sha1": "1170d92b09a8b4680a02a3eaf72574dd6b0fbad6",
+        "sha256": "12b554939d25fc9ed32cea1d16a93f676d0868879965e9ddc3a505adb50e8739"
+      },
+      {
+        "path": "tests/client-readiness.test.cjs",
+        "git_blob_sha1": "5a11582ebd9c2d15887aed490df8cd5c35f1c52a",
+        "sha256": "6ac92fbdce59bf8954b81070ff59ad9315bb4af9196e57823c640606f386e5b3"
+      },
+      {
+        "path": "tests/release-review/client/independent-off-search-v4.cjs",
+        "git_blob_sha1": "eeb0ac5264d81bc110bb8cd93e4fd6eec30276f8",
+        "sha256": "98b626f21cfca2eea7e4634c5c2ce1a2e51ae124b1fdadcd0daaeb98b41afdac"
+      },
+      {
+        "path": "tests/release-review/client/independent-final-callbacks.cjs",
+        "git_blob_sha1": "86cac260e27261b801fe5bf678e1d947c399652d",
+        "sha256": "2f6c2e2cf7fc3d20d4b44a74d518db2efcd3bc3195dea560e4aa60881ece3afc"
+      }
+    ],
+    "all_match": true
+  },
+  "unchanged_server_ci_fixture_file_count": 122,
+  "backend_runtime_or_schema_changed": false,
+  "deno_locks_changed": false,
+  "consumer_runtime_changed": false,
+  "new_client_suite": "tests/usda-selection-identity.test.cjs",
+  "existing_test_selection_preserved": true,
+  "release_ready": false
+}

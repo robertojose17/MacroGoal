@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "repository": "robertojose17/MacroGoal",
-  "base_commit": "0fb1db21adb10c1ec84088c44f98e027462024de",
-  "delta_base_tree_sha": "d552b15cb8f53b5cb04244ed657bc3ea1ed32669",
+  "base_commit": "1fa113058b989421181f6e5adf3b82e823f126ae",
+  "delta_base_tree_sha": "6f1e5f33bc1ea6783e37f920ca5c83f0fffa1752",
   "original_main_tree_sha": "7256c7c81b78d821955316580a5bd76f9079c1f3",
-  "scope": "Round3 complete review overlay relative to original main; no deletions or deployment; excludes self-referential manifest",
+  "scope": "Round4 complete review overlay relative to original main; no deletions or deployment; excludes self-referential manifest",
   "files": [
     {
       "path": ".eslintignore",
@@ -30,9 +30,9 @@
     {
       "path": "app/add-food.tsx",
       "mode": "100644",
-      "sha256": "d6d68a48c50587f6854c88d4f18d70015c33234adceb2236b92d07f873609fd6",
-      "git_blob_sha1": "03145eb640bf555ef892c367e0c170a20af829a3",
-      "bytes": 95656
+      "sha256": "ca2b4b7920955b9de959fcce22f1b8389595f64c7664a0df842e6e4fcc06c1a9",
+      "git_blob_sha1": "4629323e0e73cd502ccd18b01af606b769aef90b",
+      "bytes": 97994
     },
     {
       "path": "app/barcode-lookup.tsx",
@@ -100,9 +100,9 @@
     {
       "path": "components/FoodDetailsLayout.tsx",
       "mode": "100644",
-      "sha256": "c3eeeaf8bb22dbb7353bc29451e46417b6df5e0ca012a84870266e6b1e39786e",
-      "git_blob_sha1": "7cd815494d1b0a8d96db51f16e768257182a6870",
-      "bytes": 108812
+      "sha256": "0cde4ef4eb2e8bdd5fb8e8d112f40216e55824869fbb409518d6dfc67ef30b18",
+      "git_blob_sha1": "5546d6872d2c926fda4457128d1551a9707348f2",
+      "bytes": 110375
     },
     {
       "path": "components/IconSymbol.tsx",
@@ -142,9 +142,9 @@
     {
       "path": "release-candidates/food-catalog/README.md",
       "mode": "100644",
-      "sha256": "c38d2ba5cdf2e4aa32d1731a16c471a47ce3d3d9322f28d6c909df95f058d58a",
-      "git_blob_sha1": "cb87a8f30ecc7dd8bdfec0ecaff9e26033041980",
-      "bytes": 7048
+      "sha256": "842bcde0e2cc6881697645d128ee55e39171a8f195ee520e4de6840280c1c673",
+      "git_blob_sha1": "b2890be0762713701372d9845b3976c2a84ed6c9",
+      "bytes": 5860
     },
     {
       "path": "release-candidates/food-catalog/auth-observations.json",
@@ -175,11 +175,18 @@
       "bytes": 15492
     },
     {
+      "path": "release-candidates/food-catalog/round4-provenance.json",
+      "mode": "100644",
+      "sha256": "ddeb3c73c594a78154c2b1d2a0dca70ccfbb2dffc7c54b0cec019ccfe48501c7",
+      "git_blob_sha1": "874afe562bdc70fe7c0f8a96ac091e39b8773391",
+      "bytes": 7206
+    },
+    {
       "path": "release-candidates/food-catalog/source-lineage.json",
       "mode": "100644",
-      "sha256": "2c73ab78332fae4bb2d6afefb6e43fbd07c67615e42bb6be2d1bd88f164cbb9d",
-      "git_blob_sha1": "d348a1ae2fc146ead5b3b0e9d630fcd4bc957058",
-      "bytes": 27145
+      "sha256": "391b192c6d027b165158388618c205a68197f080ad95c757ed91dd0e850e629c",
+      "git_blob_sha1": "fdbb897b7708b63566ac3c7e428dd2c9ddf2831d",
+      "bytes": 28773
     },
     {
       "path": "release-candidates/food-catalog/sql/01-nutrition/enrichment.CANDIDATE.sql",
@@ -429,9 +436,9 @@
     {
       "path": "scripts/release-review/check.mjs",
       "mode": "100644",
-      "sha256": "a45146cc329732131687904405395fb54a7217d8716f2598eb7d7d21a5fde72f",
-      "git_blob_sha1": "5e86167094cb284d816b79616d006347c5e84879",
-      "bytes": 3303
+      "sha256": "352cbbc4dff003b6969426d33c198b122e4ae3503818cff07f3894fa401b8fca",
+      "git_blob_sha1": "4ef9f10e7db9ee6445ea8e1420032d7268931bed",
+      "bytes": 3346
     },
     {
       "path": "scripts/release-review/verify.mjs",
@@ -758,9 +765,9 @@
     {
       "path": "tests/client-readiness.test.cjs",
       "mode": "100644",
-      "sha256": "6ac92fbdce59bf8954b81070ff59ad9315bb4af9196e57823c640606f386e5b3",
-      "git_blob_sha1": "5a11582ebd9c2d15887aed490df8cd5c35f1c52a",
-      "bytes": 9752
+      "sha256": "6889669cf02a00ba695b3efdba34c8dab59bb80dec715bdda2b5d2c81de31dd1",
+      "git_blob_sha1": "729830d99b6518c896d6b9ba39b94043e8e1bb8e",
+      "bytes": 9957
     },
     {
       "path": "tests/coach-model-conversation.test.cjs",
@@ -807,9 +814,9 @@
     {
       "path": "tests/library-barcode-integration.test.cjs",
       "mode": "100644",
-      "sha256": "12b554939d25fc9ed32cea1d16a93f676d0868879965e9ddc3a505adb50e8739",
-      "git_blob_sha1": "1170d92b09a8b4680a02a3eaf72574dd6b0fbad6",
-      "bytes": 11067
+      "sha256": "6b9adc3e87a9c70ae0225f24d9c6b9a452514a7ce7465b42edaf4c17405bd8c5",
+      "git_blob_sha1": "b9821b11728676176306687c2909a202fa146d14",
+      "bytes": 11579
     },
     {
       "path": "tests/manual-recovery-save.test.mjs",
@@ -877,9 +884,9 @@
     {
       "path": "tests/release-review/client/independent-final-callbacks.cjs",
       "mode": "100644",
-      "sha256": "2f6c2e2cf7fc3d20d4b44a74d518db2efcd3bc3195dea560e4aa60881ece3afc",
-      "git_blob_sha1": "86cac260e27261b801fe5bf678e1d947c399652d",
-      "bytes": 20654
+      "sha256": "9f41b33d6191a456bae3b11e9e615f6a0395cb28905d1f3de24968bbded8d0cc",
+      "git_blob_sha1": "2b0ebe78f832763069cee46c96b0ed5fb66a75c8",
+      "bytes": 20874
     },
     {
       "path": "tests/release-review/client/independent-identity-reservation-v5.cjs",
@@ -905,9 +912,9 @@
     {
       "path": "tests/release-review/client/independent-off-search-v4.cjs",
       "mode": "100644",
-      "sha256": "98b626f21cfca2eea7e4634c5c2ce1a2e51ae124b1fdadcd0daaeb98b41afdac",
-      "git_blob_sha1": "eeb0ac5264d81bc110bb8cd93e4fd6eec30276f8",
-      "bytes": 15146
+      "sha256": "b28032df27f9be348feba375351b74f967fd067e7a927067157d91ef549e1514",
+      "git_blob_sha1": "9bf2482f628cbaa1666429f7844d6525d6994d79",
+      "bytes": 15315
     },
     {
       "path": "tests/release-review/client/independent-review-capability-v5.cjs",
@@ -1323,6 +1330,13 @@
       "bytes": 2550
     },
     {
+      "path": "tests/type-contracts/usda-selection-identity.typecheck.ts",
+      "mode": "100644",
+      "sha256": "18116a131b63b372842ec7530e58758b3fb0f4e0eef697cb3a11ca74017a0d03",
+      "git_blob_sha1": "110ebc118d9b5e54eedf3dc7a003e7dc40cc2ca4",
+      "bytes": 1599
+    },
+    {
       "path": "tests/unknown-barcode-callbacks.cjs",
       "mode": "100644",
       "sha256": "461e01f022c3906d84a69754009b9905f2ec323d84401fc41398dfce4acd85a2",
@@ -1335,6 +1349,13 @@
       "sha256": "c2496afe2f3555cec9fcf43f92221d0196d6b0f82a78b859a1eb836e9da419b7",
       "git_blob_sha1": "89cafdfc0988c9fb95cfbf33e16f613c380b2b08",
       "bytes": 4357
+    },
+    {
+      "path": "tests/usda-selection-identity.test.cjs",
+      "mode": "100644",
+      "sha256": "fb5a09ed49bab097746574924d6d14c37f97f6ac014fda7e5edbf328a0895188",
+      "git_blob_sha1": "2151eb99a6bc132dfa233113d0945b9efec8f380",
+      "bytes": 44751
     },
     {
       "path": "utils/cameraCaptureBytes.ts",
@@ -1416,9 +1437,9 @@
     {
       "path": "utils/foodSearchUtils.ts",
       "mode": "100644",
-      "sha256": "956dba1c14e1e5e2b003f5ac78c2301a1adab714802602460211b40ea4d5a974",
-      "git_blob_sha1": "c6649bc37eab61e528a18f4b074ee87462c00fe0",
-      "bytes": 8114
+      "sha256": "4cfc9b93d0f1a70552210f58273fabb8edd9ded11a782bf9dcdcf5245ba73888",
+      "git_blob_sha1": "d30d831ebf313c80b02e48afc00752d6dd01ecda",
+      "bytes": 7270
     },
     {
       "path": "utils/manualRecoveryProduct.ts",
@@ -1440,6 +1461,13 @@
       "sha256": "349df46494796160b4df38f03792562f4fdc0cdfb84c3f8fd94968f57b16133a",
       "git_blob_sha1": "c91b1356eea8ae2398cabe7f29e546f91eb34c57",
       "bytes": 1285
+    },
+    {
+      "path": "utils/myMealsDraft.ts",
+      "mode": "100644",
+      "sha256": "878fcfd42b3a8e21fc41c7fa39ea37aea0d8f10278855dca9fab14f8f3244402",
+      "git_blob_sha1": "c257b2378660859c1d0ca45a177ccb85ab528d9e",
+      "bytes": 5063
     },
     {
       "path": "utils/openFoodFacts.ts",
@@ -1482,6 +1510,13 @@
       "sha256": "7322e1e744d805f853d36a9c43f278d0b199eed8ada34c4c5b039ce243a2869f",
       "git_blob_sha1": "63ebd8f7a4fdc5f5b3c04bfda4abe3340ae8aa3f",
       "bytes": 1469
+    },
+    {
+      "path": "utils/usdaSelectionPersistence.ts",
+      "mode": "100644",
+      "sha256": "676dd237a2a770af04add83bd85cac52153ae1bfcf601b0e5f3d0689d91b0dcd",
+      "git_blob_sha1": "55d6573ccd03589b6963b83727f3c008dc2b8a71",
+      "bytes": 11762
     }
   ]
 }
