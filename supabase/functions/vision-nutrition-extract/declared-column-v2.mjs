@@ -52,6 +52,9 @@ Return only compact JSON matching columns_v2. Include all schema-required fields
 export function declaredColumnResponseFormat(primary){
  const format=structuredClone(formatV1(primary));
  const s=format.json_schema.schema;
+ // Avoid Gemini bounded-array decoder state explosion; runtime still rejects >6 columns.
+ delete s.properties.columns.maxItems;
+ delete s.properties.columns.minItems;
  s.properties.schema.enum=['columns_v2'];
  delete s.properties.declared_serving_line;
  s.required=s.required.map(k=>k==='declared_serving_line'?'declared_serving':k);
