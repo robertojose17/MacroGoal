@@ -16,7 +16,8 @@ function displayOnly(p,s,issue){assert.equal(p._db_id,s.id);assert.equal(p.produ
 for(const value of [null,'',false,undefined,{},[],NaN,Infinity,-1])test('missing/malformed fallback core retains identity with explicit review, never invented zero: '+String(value),async()=>{
  const s=snapshot({protein:value});const {result,body,providers,admin}=await response(s);
  assert.equal(result.status,200);assert.equal(body.status,'partial');assert.equal(body.products.length,1);displayOnly(body.products[0],s,'core_nutrition_requires_confirmation');assert.equal(providers,0);
- assert.deepEqual(body.providers,{db:'ok',usda:'skipped',off:'skipped'});assert.deepEqual(admin.calls.map(c=>c.name),['search_food_catalog_v2','read_food_search_snapshots_v1']);
+ assert.deepEqual(body.providers,{db:'ok',usda:'skipped',off:'skipped'});assert.deepEqual(admin.calls.map(c=>c.name),['search_food_catalog_v2','read_food_search_snapshots_v1','read_catalog_portion_sources_v1']);
+  assert.deepEqual(admin.calls.at(-1).args,{p_food_ids:[s.id]});
 });
 test('normalized optional fiber overflow retains protected identity for review without clamping, null or serving numbers',async()=>{
  const s=snapshot({macros_per:'serving',serving_size:1,calories:1,protein:0,carbs:0,fat:0,fiber:1e308});const {result,body,providers}=await response(s,'label_confirmation_v1',true);

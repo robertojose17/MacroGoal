@@ -36,8 +36,10 @@ export async function resolveExactPortions(fdcId, dependencies, signal) {
 /** One bounded operation covers cache read, exact fetch, JSON decode and persistence.
  * A non-cooperative dependency cannot leave the request waiting forever.
  */
-export async function resolvePortionsWithin(fdcId, dependencies, milliseconds = 1500) {
-  const budget = Math.min(2000, Math.max(1, milliseconds));
+export async function resolvePortionsWithin(fdcId, dependencies, milliseconds = 1500, authenticatedExactLookup = false) {
+  // Only the authenticated UUID handler opts in; search/cache reads and existing
+  // direct-FDC callers retain their original limits and never retry providers.
+  const budget = Math.min(authenticatedExactLookup ? 8000 : 2000, Math.max(1, milliseconds));
   const controller = new AbortController();
   let timer;
   const expired = new Promise(resolve => {
@@ -83,3 +85,4 @@ export async function decorateCachedProducts(products, admin, milliseconds = 150
  const evidence=new Map(rows.map(r=>[r.fdc_id,r.payload]));
  return products.map(p=>applyUsdaPortion(p,evidence.get(p._usda_fdc_id)));
 }
+

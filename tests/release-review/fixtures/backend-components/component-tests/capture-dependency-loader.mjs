@@ -21,5 +21,5 @@ export function captureDependencies(root){
   },module,module.exports);
   return module.exports;
  }
- return {endpoint:load(path.join(root,'_shared/selectedNutritionEndpoint.ts')),hooks:load(path.join(root,'_shared/selectedNutritionHooks.ts'))};
+ return {portions:load(path.join(root,'_shared/catalogPortionBatch.mjs')),endpoint:load(path.join(root,'_shared/selectedNutritionEndpoint.ts')),hooks:load(path.join(root,'_shared/selectedNutritionHooks.ts'))};
 }

@@ -62,7 +62,7 @@ export async function resolveCatalogUsdaPortions(foodId:unknown,mode:'detail'|'b
   }
   return !expired&&same(await selectedNutritionScope(),owner)&&!expired?result:null;
  };
- try{return await Promise.race([run(),new Promise<null>(resolve=>{timer=setTimeout(()=>{expired=true;resolve(null);},mode==='background'?8000:4000);})]);}
+ try{return await Promise.race([run(),new Promise<null>(resolve=>{timer=setTimeout(()=>{expired=true;resolve(null);},mode==='background'?12000:4000);})]);}
  catch{return null;}
  finally{if(timer)clearTimeout(timer);}
 }

@@ -1,7 +1,7 @@
-import { usdaPortionOptions } from '@/utils/usdaPortionOptions';
+import { usdaPortionOptions, dedupePracticalServingOptions } from '@/utils/usdaPortionOptions';
 import { resolveCatalogUsdaPortions } from '@/utils/catalogUsdaPortions';
 import { captureSelectedNutrition } from '@/utils/selectedNutritionCapture';
-import { preferredUsdaPortion } from '@/utils/preferredUsdaPortion';
+import { preferredUsdaPortion, readProductPracticalPortions } from '@/utils/preferredUsdaPortion';
 import { persistUsdaSelection, usdaIdentityIsCurrent, type UsdaSelectionOutcome } from '@/utils/usdaSelectionPersistence';
 import { foodJsonSnapshot, savedMealForFoodDetails, savedMealFoodUpdate, savedMealPortionForDetails } from '@/utils/foodPersistence';
 import { catalogPackageBarcode, exactFdcId, readSavedPortion, readSavedPortionLabel, savedPortionSnapshot, portionDescription, type SavedPortion } from '@/utils/catalogSelection';
@@ -613,8 +613,8 @@ export default function FoodDetailsLayout({
     }
 
     // Only new selections receive verified choices; saved diary edit grams remain untouched.
-    if(mode!=='edit'&&!itemId&&product?._usda_fdc_id&&product._serving_authority!=='confirmed_correction'){
-      options.unshift(...usdaPortionOptions(readUsdaPortions(product._portion_evidence,product._usda_fdc_id),i18n.language));
+    if(mode!=='edit'&&!itemId&&product&&product._serving_authority!=='confirmed_correction'){
+      options.unshift(...usdaPortionOptions(readProductPracticalPortions(product),i18n.language,preferredUsdaPortion(product,mode,itemId)?.key));
     }
     if(savedPortion)options.push({key:'saved_portion',label:portionDescription(savedPortion.description,1,savedPortion.gramsPerUnit),gramsPerUnit:savedPortion.gramsPerUnit});
     // ── Standard measurement units (always present) ──────────────────────
@@ -632,8 +632,8 @@ export default function FoodDetailsLayout({
       { key: 'fl oz', label: '1 fl oz', gramsPerUnit: 29.57 },
     );
 
-    return options;
-  }, [product, editDefaultGramsPerUnit, savedPortion, mode, itemId, t, i18n.language]);
+    return mode==='edit'||itemId ? options : dedupePracticalServingOptions(options,selectedServingOptionKey);
+  }, [product, editDefaultGramsPerUnit, savedPortion, mode, itemId, t, i18n.language, selectedServingOptionKey]);
 
   // Per-100g macros from the foods table — the immutable calculation reference
   const [per100Macros, setPer100Macros] = useState<{ calories: number; protein: number; carbs: number; fats: number; fiber: number } | null>(null);
@@ -688,7 +688,7 @@ export default function FoodDetailsLayout({
       let parsedProduct: OpenFoodFactsProduct = JSON.parse(offData);
       if(routeContext.recoverySaved==='1')parsedProduct._serving_authority='confirmed_correction';
       if(mode!=='edit'&&!itemId)void captureSelectedNutrition(parsedProduct,food_item_id).catch(()=>{});
-      if(mode!=='edit'&&!itemId&&!exactFdcId(parsedProduct._usda_fdc_id)&&parsedProduct._db_id&&parsedProduct._serving_authority!=='confirmed_correction'&&!parsedProduct._manual_food_id){
+      if(mode!=='edit'&&!itemId&&!preferredUsdaPortion(parsedProduct,mode,itemId)&&!exactFdcId(parsedProduct._usda_fdc_id)&&parsedProduct._db_id&&parsedProduct._serving_authority!=='confirmed_correction'&&!parsedProduct._manual_food_id){
         const catalogPortions=await resolveCatalogUsdaPortions(parsedProduct._db_id);
         if(!isCurrent())return;
         const identityName=(value:unknown)=>typeof value==='string'?value.normalize('NFKC').trim().toLowerCase().replace(/\s+/g,' '):'';
@@ -1456,7 +1456,7 @@ export default function FoodDetailsLayout({
     // Discrete units (default / natural_unit / natural_serving) must be whole numbers.
     // Continuous units (g/oz/lb) can be fractional.
     const isDiscrete = option.key === 'default' || option.key === 'natural_unit' || option.key === 'natural_serving';
-    if(option.key.startsWith('portion:') || option.key==='saved_portion' || (mode!=='edit' && !!product?._portion_evidence)) {
+    if(option.key.startsWith('portion:') || option.key==='saved_portion' || (mode!=='edit' && !!(product?._portion_evidence || product?._practical_portion_evidence))) {
       setNumberOfServings(String(newNumberOfServings));
     } else if (isDiscrete) {
       const rounded = Math.max(1, Math.round(newNumberOfServings));
@@ -1684,9 +1684,9 @@ export default function FoodDetailsLayout({
       const baseServing = extractServingSize(product);
       const servingsCountForDisplay = parseFloat(numberOfServings) || 1;
 
-      const verifiedPortions = product._serving_authority==='confirmed_correction' ? [] : readUsdaPortions(product._portion_evidence,product._usda_fdc_id || '');
+      const verifiedPortions = product._serving_authority==='confirmed_correction' ? [] : readProductPracticalPortions(product);
       const selectedPortion = selectedServingOptionKey === 'saved_portion' ? savedPortion
-        : selectedServingOptionKey.startsWith('portion:') ? (()=>{const p=readUsdaPortions(product._portion_evidence,product._usda_fdc_id || '').find(p=>'portion:'+p.key===selectedServingOptionKey);return p?{description:p.description,gramsPerUnit:p.grams/p.amount}:null;})()
+        : selectedServingOptionKey.startsWith('portion:') ? (()=>{const p=readProductPracticalPortions(product).find(p=>'portion:'+p.key===selectedServingOptionKey);return p?{description:p.description,gramsPerUnit:p.grams/p.amount}:null;})()
         : ['default','natural_unit'].includes(selectedServingOptionKey) && verifiedPortions.length===1 ? {description:verifiedPortions[0].description,gramsPerUnit:verifiedPortions[0].grams/verifiedPortions[0].amount} : null;
       const portionSnapshot = selectedPortion ? savedPortionSnapshot(selectedPortion.description,servingsCountForDisplay,totalGrams) : null;
       const saveOffData = foodJsonSnapshot({...(mode==='edit'?savedOffDataRef.current:product),_macrogoal_selected_portion_v1:portionSnapshot});

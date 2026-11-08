@@ -1,6 +1,6 @@
 import { createOffMass } from '../_shared/offMass.mjs';
 import {captureSelectedNutrition,readProviderJSON,refreshCachedSelection} from '../_shared/nutritionRefresh.mjs';
-import { decorateCachedProducts } from '../_shared/portionCache.mjs';
+import {decorateCatalogScanItem} from '../_shared/catalogPortionBatch.mjs';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { barcodeCandidates } from './identity.mjs';
@@ -282,8 +282,8 @@ Deno.serve(async (req: Request) => {
   if (dbRow) {
     scheduleCachedNutrition(supabase,req,String(dbRow.id));
     await refreshCachedSelection(supabase,req,{foodId:dbRow.id,provider:dbRow.usda_fdc_id?'usda':'openfoodfacts',sourceId:String(dbRow.usda_fdc_id||dbRow.barcode)});
-    const decorated=await decorateCachedProducts([{_usda_fdc_id:dbRow.usda_fdc_id,product_name:dbRow.name,nutriments:{}}],supabase,150);
-    return jsonResponse({ found: true, item: {...dbRow,_portion_evidence:decorated[0]?._portion_evidence??null}, source: 'supabase' });
+    const decorated=await decorateCatalogScanItem(dbRow,supabase,300);
+    return jsonResponse({ found: true, item: decorated, source: 'supabase' });
   }
 
   // Store supabase item for fallback
@@ -327,7 +327,8 @@ Deno.serve(async (req: Request) => {
     const mass=await createOffMass({admin:supabase,request:req,product:offProduct,
       expectedId:barcode,requestId:crypto.randomUUID(),enabled:Deno.env.get('OFF_MASS_CAPTURE_ENABLED')==='true'});
     if((mass.status==='created'||mass.status==='existing')&&mass.food_item?.id){
-      return jsonResponse({found:true,item:mass.food_item,source:mass.status==='created'?'openfoodfacts':'supabase',persisted:true});
+      const decorated=await decorateCatalogScanItem(mass.food_item,supabase,300);
+      return jsonResponse({found:true,item:decorated,source:mass.status==='created'?'openfoodfacts':'supabase',persisted:true});
     }
     // Unsupported units, ambiguous identity, rejected proof and uncertain writes all
     // use explicit label confirmation. Never invent a normalized food from them.
@@ -338,4 +339,5 @@ Deno.serve(async (req: Request) => {
   }
 
 });
+
 

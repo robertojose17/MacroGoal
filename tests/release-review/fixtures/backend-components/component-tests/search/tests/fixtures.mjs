@@ -19,6 +19,8 @@ export function adminFor(rpcRows, hydrationRows, cacheRows = []) {
       calls.at(-1).signal = signal;
       if (name === 'search_food_catalog_v2') return Promise.resolve({ data: rpcRows, error: null });
       if (name === 'read_food_search_snapshots_v1') return typeof hydrationRows === 'function' ? hydrationRows(signal) : Promise.resolve({ data: hydrationRows, error: null });
+      // New atomic read is intentionally empty in frozen fallback cases; dedicated actual-handler tests cover fresh recovery.
+      if (name === 'read_catalog_portion_sources_v1') return Promise.resolve({ data: [], error: null });
       if (name === 'read_usda_portions_v1') return Promise.resolve({ data: cacheRows, error: null });
       throw new Error('Unexpected RPC ' + name);
     } };

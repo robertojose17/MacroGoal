@@ -69,6 +69,7 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
     if(!claim.error)admission=claim.data;
    }catch{/* Existing portion resolution remains available if capture is unavailable. */}
    const cachedRaw=['fresh','duplicate'].includes(admission?.status)?admission.evidence?.raw_payload:null;
+   if(uuidMode&&admission?.status!=='claimed'&&!cachedRaw)throw Error('USDA_PORTION_ADMISSION_UNAVAILABLE');
    let food:any=cachedRaw;
    if(!food){
     const apiKey=Deno.env.get('USDA_API_KEY')||'DEMO_KEY';
@@ -103,7 +104,8 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
     }
    }
    // Capture the already fetched full response before returning. The existing
-   // 1500ms operation signal bounds this best-effort write; never refetch here.
+   // operation signal (1500ms legacy, 8000ms authenticated UUID) bounds this
+   // best-effort write; never refetch here.
    if(admission?.status==='claimed')try{
     const evidence=selectedSourceEnvelope('usda',fdcId,food);
     await admin.rpc('record_selected_nutrition_v1',{p_food_id:captureFoodId,p_request_id:captureRequestId,p_evidence:evidence}).abortSignal(signal);
@@ -111,7 +113,7 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
    selectedProviderFood=food; // Preserve the complete raw nutrient array before mapping.
    return food;
   }
- },1500);
+ },uuidMode&&!cachedOnly?8000:1500,uuidMode&&!cachedOnly);
  if(uuidMode){
   try{
    const current=await readBinding();
@@ -122,4 +124,5 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
  if(!uuidMode&&catalogId&&(!providerFetchAttempted||selectedProviderFood!==undefined))await refreshCachedSelection(admin,req,{foodId:catalogId,provider:'usda',sourceId:key,providerFood:selectedProviderFood,authenticated:true});
  return reply({fdc_id:key,portion_evidence:result.envelope,portion_persisted:result.persisted,food_item_id:catalogId,...(cachedOnly?{cache_only:true,cached:!!result.envelope,...(!result.envelope?{code:'cache_miss'}:{})}:{}),...(uuidMode?{food_description:binding.name,binding_verified:true}:{})});
 }
+
 

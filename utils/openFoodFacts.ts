@@ -24,6 +24,8 @@ import { singularizeUnit } from '@/utils/stringUtils';
 export interface OpenFoodFactsProduct {
   code: string;
   _portion_evidence?: unknown;
+  _practical_portion_evidence?: unknown;
+  _portion_source_revision?: number;
   _db_id?: string;
   _serving_authority?: 'confirmed_correction';
   _manual_food_id?: string;

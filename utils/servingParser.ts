@@ -185,6 +185,11 @@ export function buildSyntheticOffData(item: {
   const product = {
     ...(preserveServing ? { _serving_authority: 'confirmed_correction' as const } : {}),
     _portion_evidence: item._portion_evidence,
+    ...(item._practical_portion_evidence && !preserveServing ? {
+      _practical_portion_evidence: item._practical_portion_evidence,
+      _portion_source_revision: typeof item._portion_source_revision==='number' ? item._portion_source_revision : undefined,
+      _db_id: typeof item.id==='string' ? item.id : undefined,
+    } : {}),
     code: item.barcode || '',
     product_name: item.name || '',
     generic_name: item.name || '',
@@ -193,7 +198,7 @@ export function buildSyntheticOffData(item: {
     serving_quantity: totalGrams,
     nutriments,
     image_url: item.image_url || undefined,
-    _source: item.source || undefined,
+    _source: item._practical_portion_evidence && !preserveServing ? 'supabase' : item.source || undefined,
     _usda_fdc_id: exactFdcId(item.usda_fdc_id) || undefined,
     _data_quality_score: item.data_quality_score || undefined,
     ingredients_text: item.ingredients_text || undefined,

@@ -1,3 +1,4 @@
+import {attachCatalogPortionSources} from '../_shared/catalogPortionBatch.mjs';
 import {createSearchNutritionBatch,scheduleSearchNutritionBatch} from '../_shared/searchNutritionCapture.mjs';
 // @ts-types="../_shared/searchHydration.d.mts"
 import { hydrateSearchRows, hasCanonicalGramServing, normalizeSearchNutrition, searchNutritionIssue, serializeSearchProduct } from '../_shared/searchHydration.mjs';
@@ -262,6 +263,8 @@ export async function handleSearch(req: Request): Promise<Response> {
   // Preserve received nutrition without extra provider calls or query/user history.
   const nutritionRuntime=(globalThis as typeof globalThis & {EdgeRuntime?:{waitUntil?:(promise:Promise<unknown>)=>void}}).EdgeRuntime;
   const nutrition_capture=scheduleSearchNutritionBatch(supabase,nutritionBatch,{waitUntil:typeof nutritionRuntime?.waitUntil==='function'?nutritionRuntime.waitUntil.bind(nutritionRuntime):undefined});
+  result.products = await attachCatalogPortionSources(result.products,supabase,
+    (row:Record<string,unknown>,protectedRow:boolean)=>mapDbRowToOff(row,query,protectedRow),300);
   // Old clients default absent nutrition to zero and cannot safely consume review-only rows.
   // Gate only responses that actually contain confirmation-required results.
   const responseRequiresConfirmation = result.products.some(product => product.requires_label_confirmation === true);
@@ -283,4 +286,5 @@ export async function handleSearch(req: Request): Promise<Response> {
   return jsonResponse({...result,nutrition_capture},result.count === 0 && result.status === 'partial' ? 503 : 200);
 }
 Deno.serve(handleSearch);
+
 

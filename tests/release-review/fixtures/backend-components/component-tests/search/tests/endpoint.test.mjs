@@ -51,7 +51,8 @@ for(const [name,hydration] of [['missing',[]],['duplicate',[row(snapshot()),row(
   const admin=adminFor([old],hydration,cached); const start=Date.now();
   const body=await (await endpoint(admin).handleSearch(request())).json(); const p=body.products[0];
   assert.equal(body.status,'partial'); assert.equal(body.count,1); assert.ok(Date.now()-start<900);
-  assert.deepEqual(admin.calls.map(c=>c.name),['search_food_catalog_v2','read_food_search_snapshots_v1']);
+  assert.deepEqual(admin.calls.map(c=>c.name),['search_food_catalog_v2','read_food_search_snapshots_v1','read_catalog_portion_sources_v1']);
+  assert.deepEqual(admin.calls.at(-1).args,{p_food_ids:[old.id]});
   assert.equal(p.serving_quantity,'45');assert.equal(p.serving_size,'45 g');assert.equal(p._db_id,old.id);
   assert.equal(p._usda_fdc_id,undefined);assert.equal(p._serving_authority,undefined);assert.equal(p._portion_evidence,undefined);
   assert.strictEqual(client.normalizeUsdaProduct(p),p); assert.equal(client.extractNutritionPerServing(p,45).calories,80);
