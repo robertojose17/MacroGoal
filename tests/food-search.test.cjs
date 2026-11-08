@@ -179,6 +179,7 @@ function screenHarness(file) {
   const state = { results: [], error: null, searching: false, searched: false, query: '' };
   const calls = [];
   const timers = new Map();
+  const practicalSchedules = [];
   let timerId = 0;
   const ref = () => ({ current: null });
   const abort = ref(), debounce = ref(), map = { current: new Map() };
@@ -189,6 +190,7 @@ function screenHarness(file) {
     setTimeout: fn => { const id = ++timerId; timers.set(id, fn); return id; },
     clearTimeout: id => timers.delete(id),
     hybridSearch: (query, callbacks, signal) => calls.push({ query, callbacks, signal }),
+    scheduleSearchPracticalPortion: (...args) => practicalSchedules.push(args),
     mergeProducts: (target, products) => { for (const p of products) target.set(p.code, p); return [...target.values()]; },
     abortControllerRef: abort, searchAbortRef: abort,
     debounceTimerRef: debounce, searchDebounceRef: debounce,
@@ -234,7 +236,7 @@ function screenHarness(file) {
       && node.arguments[0].getText(tree).includes('debounceTimerRef'), 'search debounce effect');
     change = text => { context.changeInput(text); context.searchQuery = text; run(effect.getText(tree)); };
   }
-  return { state, calls, change, start: query => context.performSearch(query),
+  return { state, calls, change, practicalSchedules, start: query => context.performSearch(query),
     flush() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); } };
 }
 for (const file of ['app/food-search.tsx', 'app/add-food.tsx']) {
@@ -256,7 +258,8 @@ for (const file of ['app/food-search.tsx', 'app/add-food.tsx']) {
     const h = screenHarness(file); h.start('apple'); const cb = h.calls[0].callbacks;
     cb.onLocalCacheHit([food('cached')]); cb.onSupabaseHit([food('fresh')]);
     assert.deepEqual(plain(h.state.results).map(p => p.product_name), ['fresh']);
-    cb.onSupabaseHit([]); cb.onComplete(); assert.equal(h.state.results.length, 0);
+    cb.onSupabaseHit([]); cb.onComplete(); cb.onComplete(); assert.equal(h.state.results.length, 0);
+    assert.equal(h.practicalSchedules.length,1); assert.equal(h.practicalSchedules[0][1],h.calls[0].signal);
     assert.equal(h.state.error, null); assert.equal(h.state.searching, false);
   });
   test(file + ': completion preserves connection failure', () => {
@@ -479,3 +482,4 @@ test('sanitized provider diagnostics reject out-of-range status and unbounded me
   assert.equal(logs[0][1].code,'PROVIDER_FAILURE');assert.equal(logs[0][1].http_status,undefined);
   assert.ok(!JSON.stringify(logs).includes('secret')); assert.ok(!JSON.stringify(logs).includes('apple'));
 });
+
