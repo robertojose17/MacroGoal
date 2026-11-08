@@ -1,0 +1,146 @@
+{
+  "rows": [
+    {
+      "unit": null,
+      "dv_text": null,
+      "row_label": "Calories / Calorías",
+      "amount_text": "60",
+      "printed_text": "Calories / Calorías 60",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "g",
+      "dv_text": "3%",
+      "row_label": "Total Fat / Grasas Totales",
+      "amount_text": "2.5",
+      "printed_text": "Total Fat / Grasas Totales 2.5g 3%",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "g",
+      "dv_text": "8%",
+      "row_label": "Sat. Fat/Grasas Saturadas",
+      "amount_text": "1.5",
+      "printed_text": "Sat. Fat/Grasas Saturadas 1.5g 8%",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "g",
+      "dv_text": null,
+      "row_label": "Trans fat/Grasas Trans",
+      "amount_text": "0",
+      "printed_text": "Trans fat/Grasas Trans 0g",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "g",
+      "dv_text": null,
+      "row_label": "Polyunsaturated Fat/ Grasa Poliinsaturada",
+      "amount_text": "0",
+      "printed_text": "Polyunsaturated Fat/ Grasa Poliinsaturada 0g",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "g",
+      "dv_text": null,
+      "row_label": "Monounsat. Fat / Grasa Monoinsat.",
+      "amount_text": "0",
+      "printed_text": "Monounsat. Fat / Grasa Monoinsat. 0g",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "mg",
+      "dv_text": "0%",
+      "row_label": "Cholesterol/Colesterol",
+      "amount_text": "0",
+      "printed_text": "Cholesterol/Colesterol 0mg 0%",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "mg",
+      "dv_text": "1%",
+      "row_label": "Sodium/Sodio",
+      "amount_text": "15",
+      "printed_text": "Sodium/Sodio 15mg 1%",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "g",
+      "dv_text": "5%",
+      "row_label": "Total Carb./Carbohidrato Total",
+      "amount_text": "13",
+      "printed_text": "Total Carb./Carbohidrato Total 13g 5%",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "g",
+      "dv_text": "0%",
+      "row_label": "Dietary Fiber/Fibra Dietaria",
+      "amount_text": "0",
+      "printed_text": "Dietary Fiber/Fibra Dietaria 0g 0%",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "g",
+      "dv_text": null,
+      "row_label": "Total Sugars / Azúcares Totales",
+      "amount_text": "6",
+      "printed_text": "Total Sugars / Azúcares Totales 6g",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "g",
+      "dv_text": "12%",
+      "row_label": "Includes/Incluye Added Sugars/Azúcares Añadidas",
+      "amount_text": "6",
+      "printed_text": "Includes/Incluye 6g Added Sugars/Azúcares Añadidas 12%",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "g",
+      "dv_text": null,
+      "row_label": "Protein / Proteína",
+      "amount_text": "0",
+      "printed_text": "Protein / Proteína 0g",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "mcg",
+      "dv_text": "0%",
+      "row_label": "Vitamin/Vitamina D",
+      "amount_text": "0",
+      "printed_text": "Vitamin/Vitamina D 0mcg 0%",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "mg",
+      "dv_text": "0%",
+      "row_label": "Calcium/Calcio",
+      "amount_text": "0",
+      "printed_text": "Calcium/Calcio 0mg 0%",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "mg",
+      "dv_text": "2%",
+      "row_label": "Iron/Hierro",
+      "amount_text": "0.3",
+      "printed_text": "Iron/Hierro 0.3mg 2%",
+      "column_header": "Amount per serving / Cantidad por ración"
+    },
+    {
+      "unit": "mg",
+      "dv_text": "0%",
+      "row_label": "Potassium/Potasio",
+      "amount_text": "0",
+      "printed_text": "Potassium/Potasio 0mg 0%",
+      "column_header": "Amount per serving / Cantidad por ración"
+    }
+  ],
+  "schema": "label_rows_v1",
+  "complete": true,
+  "row_count": 17,
+  "selected_basis": "per_serving",
+  "declared_serving_line": "Serving size/Tamaño servicio 1 unit/unidad (16g)",
+  "selected_column_header": "Amount per serving / Cantidad por ración"
+}

@@ -1,3 +1,4 @@
+import {persistSupplementalLabel} from './label-all-rows.mjs';
 import {handleManualReview,manualConfirmationPayload} from './recovery-manual.mjs';
 import { ownerRecoveryPhoto, frontRecoverySubmission } from './recovery-front.ts';
 import { sanitizeRecoverySearchFailure } from './recovery-search-diagnostics.mjs';
@@ -76,10 +77,18 @@ export async function handleRecovery(body:any,deps:Dependencies) {
     partialEvidence=result.partialEvidence;
     basisDiagnostics=result.basis_diagnostics||null;
     if(result.ok) {
+      let supplementalStored=false;
+      if(result.supplementalEvidence){
+        try{supplementalStored=await persistSupplementalLabel(supabase,userId,session.submission,revision,{
+          ...result.supplementalEvidence,captured_at:new Date().toISOString(),label_url:body.photo_label_url,
+          front_url:frontUrl,model:'openai/gpt-6.1-sol',photo_revision:revision,
+          product_name:result.productName,brand:result.brand||null,serving_g:result.servingSize
+        });}catch{/* Supplemental evidence cannot prevent validated macro review. */}
+      }
       photo={name:result.productName,brand:result.brand||'',variant:result.productName,
         barcode:session.binding.barcode,exact_barcode:false,serving:result.servingQuantity,serving_g:result.servingSize,
         nutrition:result.nutrition,image_url:frontUrl,nutrition_image_url:body.photo_label_url,
-        validated:true,confidence:'physical_label',provenance:{kind:'physical_label',url:body.photo_label_url,
+        validated:true,confidence:'physical_label',supplemental_capture:{status:supplementalStored?result.supplementalEvidence.status:'not_saved',complete:supplementalStored&&result.supplementalEvidence.complete===true,revision},provenance:{kind:'physical_label',url:body.photo_label_url,
           front_url:frontUrl,retrieved_at:new Date().toISOString(),basis:'two_independent_label_reads',serving_mass_basis:result.servingMassBasis||'label_grams',identity:'user_confirms_scanned_package'}};
       session.name=photo.name; session.brand=photo.brand;
     } else {

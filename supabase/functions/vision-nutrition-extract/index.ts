@@ -1,3 +1,4 @@
+import {readSupplementalLabel,supplementalLabelPrompt} from "./label-all-rows.mjs";
 import { readFrontIdentity } from './recovery-front.ts';
 import { adaptDeclaredColumnRead, declaredColumnPrompt, declaredColumnResponseFormat } from "./declared-column-v2.mjs";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -240,19 +241,31 @@ Deno.serve(async (req) => {
           if(Date.now()>=recoveryDeadline)throw Error('request_deadline');
           let identity: {name?:string;brand?:string} = {};
           let partialEvidence: unknown = null;
+          let supplementalAnchor:any=null;
           const result = await runTwoReadGate(async signal => {
             const response=await callVision(labelData,frontData,known,signal,true,providerFetch,sourceLabel);
             const raw=extractJSON(response.text) as any;
             const parsed=(sourceLabel?adaptDeclaredColumnRead(raw):raw) as any;
             identity={name:raw?.product_name,brand:raw?.brand};
             partialEvidence=readableLabelEvidence(parsed);
+            if(!sourceLabel)supplementalAnchor={header:raw?.selected_column_header,basis:raw?.selected_basis,serving_line:raw?.serving_size_evidence??null};
             return {result:parsed,finishReason:response.finishReason};
           },async signal => {
             const response=await callIndependentLabelRead(labelData,frontData,signal,true,providerFetch,sourceLabel);
             const raw=extractJSON(response.text);
             return {result:sourceLabel?adaptDeclaredColumnRead(raw):raw,finishReason:response.finishReason};
           },{timeoutMs:Math.max(1,Math.min(30000,recoveryDeadline-Date.now()))});
-          return {...result,identity,partialEvidence};
+          let supplementalEvidence:any=null;
+          if(result.ok&&!sourceLabel&&supplementalAnchor&&Date.now()<recoveryDeadline){
+            supplementalEvidence=await readSupplementalLabel(async (_read:number,signal:AbortSignal)=>{
+              const response=await requestVision('supplemental_label_rows',[
+                {type:'image_url',image_url:{url:labelData}},{type:'image_url',image_url:{url:frontData}},
+                {type:'text',text:supplementalLabelPrompt(supplementalAnchor)}
+              ],signal,true,providerFetch,undefined,false);
+              return {result:extractJSON(response.text),finishReason:response.finishReason};
+            },supplementalAnchor,{timeoutMs:Math.max(1,Math.min(30000,recoveryDeadline-Date.now()))});
+          }
+          return {...result,identity,partialEvidence,supplementalEvidence};
         },
       });
       return jsonResponse(result);
