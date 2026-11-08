@@ -9,7 +9,7 @@ const BASE='https://example.supabase.co/storage/v1/object/public/food-photos/';
 export const ANCHOR={header:'Amount per serving / Cantidad por ración',basis:'per_serving',serving_line:'Serving size/Tamaño servicio 1 unit/unidad (16g)'};
 // Retain only bounded nutrition-schema fields, never request headers, credentials,
 // image URLs/base64 or unrestricted provider envelopes/free-form response text.
-const safeText=v=>typeof v==='string'?v.slice(0,500).replace(/[\u0000-\u001f]/g,' ').replace(/(?:https?:\/\/|data:)[^\s]+/gi,'[redacted]'):v===null?null:typeof v==='boolean'?v:'[invalid_type]';
+const safeText=v=>typeof v==='string'?Array.from(v.slice(0,500),c=>c.charCodeAt(0)<32?' ':c).join('').replace(/(?:https?:\/\/|data:)[^\s]+/gi,'[redacted]'):v===null?null:typeof v==='boolean'?v:'[invalid_type]';
 export function diagnosticRead(raw){
  if(!raw||typeof raw!=='object'||Array.isArray(raw))return {shape:'invalid_object'};
  const out={};for(const k of ['schema','declared_serving_line','selected_column_header','selected_basis','complete'])out[k]=safeText(raw[k]);
@@ -34,7 +34,7 @@ export async function runLabelRowsProbe({db,readImage,requestVision,parseJSON,ex
   const response=await fetcher(url,{...init,signal:controller.signal,redirect:'error'});
   const reader=response.body?.getReader();if(!reader)throw Error('probe_response');
   let bytes=0,raw='';const decoder=new TextDecoder();
-  try{while(true){if(controller.signal.aborted)throw Error('probe_deadline');const part=await reader.read();if(part.done)break;bytes+=part.value.length;if(bytes>1048576){await reader.cancel();throw Error('probe_response');}raw+=decoder.decode(part.value,{stream:true});}raw+=decoder.decode();}finally{reader.releaseLock();}
+  try{for(;;){if(controller.signal.aborted)throw Error('probe_deadline');const part=await reader.read();if(part.done)break;bytes+=part.value.length;if(bytes>1048576){await reader.cancel();throw Error('probe_response');}raw+=decoder.decode(part.value,{stream:true});}raw+=decoder.decode();}finally{reader.releaseLock();}
   const parsed=JSON.parse(raw),cost=parsed.usage?.cost;
   attempt.http_status=response.status;attempt.generation_id=typeof parsed.id==='string'&&/^[a-zA-Z0-9_-]{1,150}$/.test(parsed.id)?parsed.id:null;
   attempt.cost_usd=typeof cost==='number'&&Number.isFinite(cost)&&cost>=0?cost:null;attempt.state='response_retained';
