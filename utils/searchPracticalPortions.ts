@@ -21,7 +21,7 @@ export function scheduleSearchPracticalPortion(rows:Map<string,SearchResultItem>
   if(!entry)return;
   const [key,original]=entry;const product=original.product;
   const description=name(product.product_name||product.generic_name);
-  const evidence=await resolveCatalogUsdaPortions(product._db_id);
+  const evidence=await resolveCatalogUsdaPortions(product._db_id,'background');
   if(!evidence||signal.aborted||!isCurrent())return;
   const currentOwner=await selectedNutritionScope();
   if(currentOwner?.userId!==owner.userId||currentOwner.epoch!==owner.epoch||signal.aborted||!isCurrent()||rows.get(key)!==original||original.product!==product||name(product.product_name||product.generic_name)!==description||name(evidence.foodDescription)!==description||evidence.foodItemId!==product._db_id)return;

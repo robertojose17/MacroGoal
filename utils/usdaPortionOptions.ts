@@ -1,0 +1,19 @@
+type Portion={key:string;description:string;grams:number;amount:number};
+/** Presentation only. Keep original keys and measured grams; saved provenance
+ * continues to use the original provider description, never these short labels. */
+export function usdaPortionOptions(portions:Portion[],locale:string){
+ const es=locale.toLowerCase().startsWith('es');
+ const labels:Record<string,[string,string,number]>={
+  medium:['Medium','Mediana',0],average:['Average','Promedio',0],small:['Small','Pequeña',1],large:['Large','Grande',2],
+  'extra small':['Extra small','Extrapequeña',3],'extra large':['Extra large','Extragrande',4],
+  'cup, sliced':['Cup, sliced','Taza en rodajas',5],'cup, mashed':['Cup, mashed','Taza triturada',5],
+  'nlea serving':['NLEA serving','Porción NLEA',5],
+ };
+ return portions.map((p,index)=>{
+  const size=p.description.trim().match(/^(extra small|extra large|medium|average|small|large)(?:\s*\([^()]*\))?$/i)?.[1].toLowerCase();
+  const known=labels[size||p.description.trim().toLowerCase()];
+  const description=known?known[es?1:0]:p.description;
+  const grams=p.grams/p.amount;
+  return {key:'portion:'+p.key,label:description+' ('+Number(grams.toFixed(2))+' g)',gramsPerUnit:grams,rank:known?.[2]??5,index};
+ }).sort((a,b)=>a.rank-b.rank||a.index-b.index).map(({rank,index,...option})=>option);
+}

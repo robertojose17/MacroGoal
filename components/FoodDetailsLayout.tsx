@@ -1,3 +1,4 @@
+import { usdaPortionOptions } from '@/utils/usdaPortionOptions';
 import { resolveCatalogUsdaPortions } from '@/utils/catalogUsdaPortions';
 import { captureSelectedNutrition } from '@/utils/selectedNutritionCapture';
 import { preferredUsdaPortion } from '@/utils/preferredUsdaPortion';
@@ -613,10 +614,7 @@ export default function FoodDetailsLayout({
 
     // Only new selections receive verified choices; saved diary edit grams remain untouched.
     if(mode!=='edit'&&!itemId&&product?._usda_fdc_id&&product._serving_authority!=='confirmed_correction'){
-      for(const p of readUsdaPortions(product._portion_evidence,product._usda_fdc_id)){
-        const grams=p.grams/p.amount;
-        options.push({key:'portion:'+p.key,label:'1 '+p.description+' ('+Number(grams.toFixed(2))+'g)',gramsPerUnit:grams});
-      }
+      options.unshift(...usdaPortionOptions(readUsdaPortions(product._portion_evidence,product._usda_fdc_id),i18n.language));
     }
     if(savedPortion)options.push({key:'saved_portion',label:portionDescription(savedPortion.description,1,savedPortion.gramsPerUnit),gramsPerUnit:savedPortion.gramsPerUnit});
     // ── Standard measurement units (always present) ──────────────────────
@@ -635,7 +633,7 @@ export default function FoodDetailsLayout({
     );
 
     return options;
-  }, [product, editDefaultGramsPerUnit, savedPortion, mode, itemId, t]);
+  }, [product, editDefaultGramsPerUnit, savedPortion, mode, itemId, t, i18n.language]);
 
   // Per-100g macros from the foods table — the immutable calculation reference
   const [per100Macros, setPer100Macros] = useState<{ calories: number; protein: number; carbs: number; fats: number; fiber: number } | null>(null);
@@ -2352,5 +2350,6 @@ export default function FoodDetailsLayout({
     </SafeAreaView>
   );
 }
+
 
 
