@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
 
   if (body.action?.startsWith('recovery_')) {
     if (body.action === 'recovery_capabilities') return jsonResponse({recovery_enabled:Deno.env.get('BARCODE_RECOVERY_ENABLED') === 'true',unknown_barcode_front:true});
-    if (!['recovery_discover', 'recovery_photos', 'recovery_confirm'].includes(body.action)) return jsonResponse({status:'error',code:'invalid_action'},400);
+    if (!['recovery_discover', 'recovery_photos', 'recovery_confirm', 'recovery_manual_start', 'recovery_manual_review'].includes(body.action)) return jsonResponse({status:'error',code:'invalid_action'},400);
     try {
       const recoveryDeadline=Date.now()+125000;
       const result = await handleRecovery(body, {
@@ -257,7 +257,7 @@ Deno.serve(async (req) => {
       });
       return jsonResponse(result);
     } catch (error) {
-      const codes=['invalid_proposal','expired_proposal','confirmation_required','identity_or_nutrition_unverified','save_conflict','invalid_photo','invalid_request_id'];
+      const codes=['invalid_proposal','expired_proposal','confirmation_required','identity_or_nutrition_unverified','save_conflict','invalid_photo','invalid_request_id','invalid_manual_values','invalid_manual_session'];
       const code=error instanceof Error&&codes.includes(error.message)?error.message:'recovery_unavailable';
       console.warn('[VisionNutrition] recovery_failure', {code});
       return jsonResponse({status:'error',code},code==='save_conflict'?409:400);

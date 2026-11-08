@@ -55,4 +55,4 @@ if(group==='all'||group==='syntax'){
  if(errors)process.exit(1);
 }
 if(group==='all'||group==='client')run(client);
-if(group==='all'||group==='contracts')run(['tests/release-review/backend/assembled-contracts.test.mjs']);
+if(group==='all'||group==='contracts')run(['tests/release-review/backend/assembled-contracts.test.mjs','tests/manual-recovery-contract.test.mjs']);

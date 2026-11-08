@@ -1,3 +1,4 @@
+import {handleManualReview,manualConfirmationPayload} from './recovery-manual.mjs';
 import { ownerRecoveryPhoto, frontRecoverySubmission } from './recovery-front.ts';
 import { sanitizeRecoverySearchFailure } from './recovery-search-diagnostics.mjs';
 import { candidateEligible, imagePreservationBlocked, preservationAction, confirmationPayload, conflictsWithPhoto, distinctCandidates, openDraft, sealDraft, validBarcode } from './recovery-contract.mjs';
@@ -19,11 +20,12 @@ export async function handleRecovery(body:any,deps:Dependencies) {
     async findById(id:string){const {data,error}=await supabase.rpc('read_food_correction_targets_v1',{p_id:id,p_barcodes:null});if(error)throw error;return data?.[0]||null;},
     async findByBarcodes(codes:string[]){const {data,error}=await supabase.rpc('read_food_correction_targets_v1',{p_id:null,p_barcodes:codes});if(error)throw error;return data||[];},
   };
+  if(['recovery_manual_start','recovery_manual_review'].includes(body.action))return handleManualReview(body,deps,repo);
   if(body.action==='recovery_confirm') {
     const proposal=await openDraft(body.proposal,deps.secret,userId);
-    if(proposal.kind!=='candidate')throw Error('invalid_proposal');
+    if(!['candidate','manual_candidate'].includes(proposal.kind))throw Error('invalid_proposal');
     if (proposal.image_action !== undefined && deps.preserveExistingImageVerified !== true) throw Error('image_preservation_unverified');
-    const payload={...confirmationPayload(proposal.candidate,proposal.binding,body.confirmations,proposal.image_action),revision:proposal.revision};
+    const payload={...(proposal.kind==='manual_candidate'?manualConfirmationPayload(proposal.candidate,proposal.binding,body.confirmations):confirmationPayload(proposal.candidate,proposal.binding,body.confirmations,proposal.image_action)),revision:proposal.revision,...(proposal.kind==='manual_candidate'?{manual_revision:proposal.manual_revision}:{})};
     const {data,error}=await supabase.rpc('confirm_barcode_recovery',{
       p_owner:userId,p_submission:proposal.submission,p_payload:payload,
     });

@@ -1,12 +1,14 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),vm=require('vm');
 const ts=require(process.env.BARCODE_RECOVERY_NODE_MODULES ? process.env.BARCODE_RECOVERY_NODE_MODULES+'/typescript' : 'typescript');
 const root=require('node:path').resolve(__dirname,'..');
+const sourceFiles=process.env.BARCODE_RECOVERY_SOURCE_JSON?JSON.parse(fs.readFileSync(process.env.BARCODE_RECOVERY_SOURCE_JSON,'utf8')):null;
 function harness(enabled=true,platform="ios",granted=true,type="new_product",opts={}){
  let slots=[],i=0,effects=[],cleanup=[],requests=[],responses=[],uploads=0,fileReads=0,uploaded=[],captureOptions=[],route=[],photoResolve,session={user:{id:Math.random().toString()},access_token:'fixture'};
- const react={useEffect(f,deps){focus(react.useCallback(f,deps));},useRef(v){const k=i++;return slots[k]??=( {current:v});},useState(v){const k=i++;if(!(k in slots))slots[k]=v;return [slots[k],x=>slots[k]=typeof x==='function'?x(slots[k]):x];},useCallback(f,deps){const k=i++,old=slots[k];if(!old||JSON.stringify(old.deps)!==JSON.stringify(deps))slots[k]={f,deps};return slots[k].f;}};
- function focus(f){const k=i++;if(slots[k]!==f){slots[k]=f;effects.push(f);}}
+ const react={useEffect(f,deps){focus(react.useCallback(f,deps));},useRef(v){const k=i++;return slots[k]??=( {current:v});},useState(v){const k=i++;if(!(k in slots))slots[k]=typeof v==='function'?v():v;return [slots[k],x=>slots[k]=typeof x==='function'?x(slots[k]):x];},useCallback(f,deps){const k=i++,old=slots[k];if(!old||JSON.stringify(old.deps)!==JSON.stringify(deps))slots[k]={f,deps};return slots[k].f;}};
+ const focusCallbacks=new Map();
+ function focus(f){const k=i++;focusCallbacks.set(k,f);if(slots[k]!==f){slots[k]=f;effects.push(f);}}
  const jsx=(type,props)=>({type,props});
- const cache={};function load(file){if(cache[file])return cache[file];const code=ts.transpileModule(fs.readFileSync(root+'/'+file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;const m={exports:{}};const req=x=>{
+ const cache={};function load(file){if(cache[file])return cache[file];const code=ts.transpileModule(sourceFiles?.[file]??fs.readFileSync(root+'/'+file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;const m={exports:{}};const req=x=>{
  if(x==='react')return react;if(x==='react/jsx-runtime')return {jsx,jsxs:jsx,Fragment:'Fragment'};
  if(x==='react-native')return new Proxy({Platform:{OS:platform},StyleSheet:{create:x=>x},Linking:{openURL:async()=>{}}},{get:(o,k)=>o[k]||k});
  if(x==='react-native-safe-area-context')return {SafeAreaView:'SafeAreaView'};
@@ -28,13 +30,13 @@ function harness(enabled=true,platform="ios",granted=true,type="new_product",opt
  function text(n){if(typeof n==='string')return n;if(Array.isArray(n))return n.map(text).join('');return n?.props?text(n.props.children):'';}
  function click(label){let result;walk(tree,n=>{if(n.props?.onPress&&(text(n)===label||n.props.accessibilityLabel===label))result=n.props.onPress;});assert.ok(result,'button '+label);return result();}
  const flush=async()=>{for(let n=0;n<40;n++)await Promise.resolve();render();};
- return {render,flush,click,responses,requests,route,get uploads(){return uploads;},photo:(photo={uri:'fixture'})=>photoResolve(photo),get fileReads(){return fileReads;},uploaded,captureOptions,blur:()=>cleanup.forEach(f=>f?.()),input:value=>walk(tree,n=>{if(n.type==='TextInput')n.props.onChangeText(value);}),texts:()=>text(tree)};
+ return {render,flush,click,responses,requests,route,owner:id=>{session={user:{id},access_token:'fixture'};},field:(label,value)=>{let found=false;walk(tree,n=>{if(n.type==='TextInput'&&n.props.accessibilityLabel===label){n.props.onChangeText(value);found=true;}});assert(found,'input '+label);},get uploads(){return uploads;},photo:(photo={uri:'fixture'})=>photoResolve(photo),get fileReads(){return fileReads;},uploaded,captureOptions,blur:()=>cleanup.forEach(f=>f?.()),refocus:()=>{for(const f of focusCallbacks.values())cleanup.push(f());},input:value=>walk(tree,n=>{if(n.type==='TextInput')n.props.onChangeText(value);}),texts:()=>text(tree)};
 }
-test('actual callbacks: front first, selectable candidates, rear failure, manual route preserves plan',async()=>{
+test('actual callbacks: front first, selectable candidates, rear failure, manual review confirms barcode and preserves plan',async()=>{
  const h=harness();h.render();await h.flush();assert.match(h.texts(),/Photograph the package front/);assert.equal(h.requests.length,0);
  h.click('Take front photo');await h.flush();const p=h.click('Take photo');await h.flush();h.responses.push({session:'signed',next_step:'rear_label',candidates:[]});h.photo();await p;await h.flush();assert.equal(h.requests[0].action,'recovery_discover');assert.ok(h.requests[0].photo_front_url);assert.ok(h.requests[0].request_id);
  h.click('Take rear label photo');await h.flush();const rear=h.click('Take photo');await h.flush();h.responses.push({session:'signed',next_step:'manual'});h.photo();await rear;await h.flush();assert.equal(h.requests[1].action,'recovery_photos');assert.equal(h.requests[1].photo_front_url,undefined);
- h.click('Enter manually');assert.equal(h.route[0].pathname,'/my-foods-create');assert.equal(h.route[0].params.planId,'plan');assert.equal(h.route[0].params.recoveryManual,'1');assert.equal(h.requests.filter(r=>r.action==='recovery_confirm').length,0);
+ assert.match(h.texts(),/Review or enter package values/);assert.equal(h.route.length,0);fillManual(h);await h.flush();h.responses.push({session:'signed',photo:manualCandidate});h.click('Review values before saving');await h.flush();assert.equal(h.requests[2].action,'recovery_manual_review');assert.equal(h.requests[2].session,'signed');assert.equal(h.requests[2].values.nutrition.fiber,null);assert.equal(h.requests.filter(r=>r.action==='recovery_confirm').length,0);h.responses.push({status:'approved',food_item:{id:'saved',barcode:'123'}});h.click('Confirm reviewed values and save');await h.flush();assert.equal(h.route[0].pathname,'/food-details');assert.equal(h.route[0].params.planId,'plan');
 });
 test('actual callback Back during camera capture prevents upload/search/navigation',async()=>{
  const h=harness();h.render();await h.flush();h.click('Take front photo');await h.flush();const p=h.click('Take photo');await h.flush();h.click('Back');h.photo();await p;await h.flush();assert.equal(h.uploads,0);assert.equal(h.requests.length,0);assert.equal(h.route.length,0);
@@ -84,3 +86,39 @@ test('web typed no-session or Back during auth makes no lookup',async()=>{
 test('web typed Back during lookup prevents late result navigation',async()=>{
  const h=harness(true,'web',false,'new_product',{scanner:true});h.render();await h.flush();h.input('012345678905');await h.flush();let release;h.responses.push(new Promise(r=>release=r));h.click('Look up product');await h.flush();assert.equal(h.requests.length,1);h.click('Back');release({found:false});await h.flush();assert.deepEqual(h.route,['back']);
 });
+
+const manualCandidate={...candidate,proposal:'manual-proposal',provenance:{kind:'user_entered',url:'',retrieved_at:''}};
+function fillManual(h){for(const [label,value] of Object.entries({'Product name and variant':'Fixture food','Brand':'Fixture','Serving description':'1 piece','Grams per serving':'20','Calories (kcal)':'60','Protein (g)':'0','Carbohydrates (g)':'4','Fat (g)':'4.5'}))h.field(label,value);}
+async function manualWithoutSession(){const h=harness(false);h.render();await h.flush();h.click('Take front photo');await h.flush();h.click('Continue to manual entry');await h.flush();return h;}
+async function withCandidate(){const h=harness();h.render();await h.flush();h.click('Take front photo');await h.flush();h.click('Take photo');await h.flush();h.responses.push({session:'signed',candidates:[candidate]});h.photo();await h.flush();return h;}
+test('actual manual callbacks: blanks rejected, zero preserved, optional fiber and stable scanned code',async()=>{
+ const h=await manualWithoutSession();h.click('Review values before saving');await h.flush();assert.equal(h.requests.length,0);
+ fillManual(h);await h.flush();h.responses.push({session:'manual-session',next_step:'manual'},{session:'manual-session',photo:manualCandidate});h.click('Review values before saving');h.click('Review values before saving');await h.flush();
+ assert.equal(h.requests.length,2);assert.equal(h.requests[0].action,'recovery_manual_start');assert.equal(h.requests[0].barcode,'123');assert.equal(h.requests[1].action,'recovery_manual_review');assert.equal(h.requests[1].values.nutrition.protein,0);assert.equal(h.requests[1].values.nutrition.fiber,null);assert.equal(h.route.length,0);assert.doesNotMatch(h.texts(),/None of these — photograph rear label/);
+});
+test('actual editing callbacks: edits require fresh signed review before final save',async()=>{
+ const h=await withCandidate();h.click('Edit before saving');await h.flush();h.field('Calories (kcal)','61');await h.flush();h.responses.push({session:'signed',photo:{...manualCandidate,nutrition:{...candidate.nutrition,calories:61}}});h.click('Review values before saving');await h.flush();
+ assert.equal(h.requests[1].action,'recovery_manual_review');assert.equal(h.requests[1].values.nutrition.calories,61);assert.equal(h.requests.some(r=>r.action==='recovery_confirm'),false);
+ h.responses.push({status:'approved',food_item:{id:'saved'}});h.click('Confirm reviewed values and save');h.click('Confirm reviewed values and save');await h.flush();assert.equal(h.requests.filter(r=>r.action==='recovery_confirm').length,1);assert.equal(h.requests.at(-1).proposal,'manual-proposal');
+});
+test('actual manual owner flip before dispatch makes no request',async()=>{
+ const h=await manualWithoutSession();fillManual(h);await h.flush();h.owner('other-owner');h.click('Review values before saving');await h.flush();assert.equal(h.requests.length,0);assert.equal(h.route.length,0);assert.match(h.texts(),/sign in/i);
+});
+test('actual expired manual review explicitly renews session without losing draft or searching',async()=>{
+ const h=await withCandidate();h.click('Edit before saving');await h.flush();h.field('Calories (kcal)','61');await h.flush();h.responses.push({status:'error',code:'expired_proposal'});h.click('Review values before saving');await h.flush();assert.match(h.texts(),/Start a new manual review/);const n=h.requests.length;
+ h.click('Start a new manual review');await h.flush();assert.equal(h.requests.length,n);h.responses.push({session:'renewed',next_step:'manual'},{session:'renewed',photo:manualCandidate});h.click('Review values before saving');await h.flush();assert.equal(h.requests.at(-2).action,'recovery_manual_start');assert.equal(h.requests.at(-1).values.nutrition.calories,61);assert.equal(h.requests.filter(r=>r.action==='recovery_discover').length,1);
+});
+test('actual uncertain save keeps same proposal despite edit callback, then retries only confirmation',async()=>{
+ const h=await withCandidate();h.click('Edit before saving');await h.flush();h.responses.push({session:'signed',photo:manualCandidate});h.click('Review values before saving');await h.flush();h.responses.push(undefined);h.click('Confirm reviewed values and save');await h.flush();const n=h.requests.length;h.click('Edit before saving');await h.flush();assert.equal(h.requests.length,n);assert.match(h.texts(),/Confirm reviewed values and save/);h.responses.push({status:'approved',food_item:{id:'saved'}});h.click('Confirm reviewed values and save');await h.flush();assert.equal(h.requests.at(-1).action,'recovery_confirm');assert.equal(h.requests.at(-1).proposal,'manual-proposal');
+});
+test('manual revision dispatch removes superseded AI proposal from cached attempt',async()=>{
+ const h=await withCandidate();h.click('Edit before saving');await h.flush();h.field('Calories (kcal)','61');await h.flush();let resolve;h.responses.push(new Promise(r=>resolve=r));h.click('Review values before saving');await h.flush();
+ assert.match(h.texts(),/Preparing your review/);h.click('Back');h.blur();await h.flush();resolve({session:'signed',photo:manualCandidate});await h.flush();h.refocus();await h.flush();
+ // The pending callback cannot navigate or expose its earlier AI proposal.
+ assert.equal(h.requests.filter(r=>r.action==='recovery_confirm').length,0);assert.doesNotMatch(h.texts(),/This is my product/);assert.match(h.texts(),/Confirm reviewed values and save/);
+});
+test('lost manual revision response cannot revive AI confirmation after refocus and preserves edited draft',async()=>{
+ const h=await withCandidate();h.click('Edit before saving');await h.flush();h.field('Calories (kcal)','61');await h.flush();h.responses.push(undefined);h.click('Review values before saving');await h.flush();h.blur();h.refocus();await h.flush();assert.doesNotMatch(h.texts(),/This is my product/);assert.match(h.texts(),/Review or enter package values/);
+ h.responses.push({session:'signed',photo:manualCandidate});h.click('Review values before saving');await h.flush();assert.equal(h.requests.at(-1).action,'recovery_manual_review');assert.equal(h.requests.at(-1).values.nutrition.calories,61);assert.equal(h.requests.filter(r=>r.action==='recovery_confirm').length,0);
+});
+

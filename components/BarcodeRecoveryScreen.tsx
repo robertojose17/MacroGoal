@@ -1,6 +1,6 @@
 import { recoveryRouteContext } from '@/utils/recoveryRouteContext';
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Image, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -20,6 +20,9 @@ type Candidate = {
   provenance:{kind:string;url:string;retrieved_at:string};
 };
 type Review = {session?:string;candidates?:Candidate[];photo?:Candidate|null;issues?:{field:string;reason:string}[];search_code?:string;source_links?:string[];next_step?:string;front_photo_url?:string;code?:string};
+type ManualFields = {name:string;brand:string;serving:string;serving_g:string;calories:string;protein:string;carbs:string;fat:string;fiber:string};
+const emptyManual = ():ManualFields => ({name:'',brand:'',serving:'',serving_g:'',calories:'',protein:'',carbs:'',fat:'',fiber:''});
+const manualNumber = (value:string):number|null => {const raw=value.trim();if(!/^\d+(?:[.,]\d+)?$/.test(raw))return null;const n=Number(raw.replace(',','.'));return Number.isFinite(n)&&n>=0&&n<=1000000?n:null;};
 type Stage = 'search'|'results'|'front'|'label'|'front_prompt'|'label_prompt'|'manual'|'unavailable';
 export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEnabled?:boolean}) {
   const params=useLocalSearchParams(),router=useRouter(),{i18n}=useTranslation();
@@ -29,7 +32,7 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
   const name=param('name'),brand=param('brand');
   const unknown=param('type')==='new_product';
   const owner=useRef('');
-  const attempt=useRef<UnknownAttempt|null>(null),generation=useRef(0),focused=useRef(false);
+  const attempt=useRef<(UnknownAttempt & {manualRequestId?:string;manualDraft?:ManualFields})|null>(null),generation=useRef(0),focused=useRef(false);
   useFocusEffect(React.useCallback(()=>{focused.current=true;generation.current++;return()=>{focused.current=false;generation.current++;};},[]));
   const [stage,setStage]=useState<Stage>(unknown?'front_prompt':'search'),[busy,setBusy]=useState(!unknown),[error,setError]=useState('');
   const [review,setReview]=useState<Review>({}),[selected,setSelected]=useState<Candidate|null>(null);
@@ -37,6 +40,9 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
   const recoveryKey=useRef('');
   const camera=useRef<CameraView>(null),inFlight=useRef(false),front=useRef<string|null>(null);
   const [saving,setSaving]=useState(false);
+  const [manual,setManual]=useState<ManualFields>(emptyManual);
+  const manualRequestId=useRef<string>('');
+  const [manualSessionExpired,setManualSessionExpired]=useState(false);
   const ink=dark?'#F5F6FA':'#182326',background=dark?'#101719':'#F7F9F8',card=dark?'#1D292B':'#FFFFFF';
   const fieldNames:Record<string,string>={label:tr('nutrition label','etiqueta nutricional'),serving:tr('the serving column and serving description','la columna y descripción de la porción'),preparation:tr('whether the label is for prepared food or food as sold','si la etiqueta corresponde al alimento preparado o tal como se vende'),serving_g:tr('serving grams; for a single package, show one serving per container and the front net weight','gramos por porción; para un paquete individual, muestra una porción por envase y el peso neto del frente'),calories:tr('calories','calorías'),protein:tr('protein','proteína'),carbs:tr('total carbohydrates','carbohidratos totales'),fat:tr('total fat','grasa total'),fiber:tr('fiber','fibra'),barcode:tr('barcode','código de barras')};
   function message(code:string) {
@@ -48,6 +54,8 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
       save_unknown:tr('We could not confirm whether the save finished. Retrying this same confirmation checks its receipt without another AI search.','No pudimos confirmar si se terminó de guardar. Reintentar esta misma confirmación consulta su recibo sin otra búsqueda de IA.'),
       auth:tr('Please sign in again before reporting product data.','Inicia sesión de nuevo antes de reportar datos.'),
       invalid_photo:tr('Please retake the photos in this session.','Vuelve a tomar las fotos en esta sesión.'),
+      invalid_manual_values:tr('Check the required fields and numbers before reviewing.','Comprueba los campos requeridos y los números antes de revisar.'),
+      invalid_manual_session:tr('This manual review session is no longer available. Start a new manual review.','Esta sesión de revisión manual ya no está disponible. Inicia una nueva revisión manual.'),
     };
     return messages[code]||tr('We could not complete this step. Your product data has not been confirmed. Please try again.','No pudimos completar este paso. Los datos no se han confirmado. Inténtalo de nuevo.');
   }
@@ -71,7 +79,7 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
     if(inFlight.current)return;
     inFlight.current=true;setBusy(true);setError('');
     const current=generation.current,active=()=>focused.current&&generation.current===current;
-    try{await work(active);}catch(e){if(!active())return;const code=e instanceof Error?e.message:'';setError(message(code));if(unknown&&code==='auth'){setReview({});setSelected(null);setStage('unavailable');}if(['expired_proposal','request_already_used_or_limit','save_conflict'].includes(code)){expireRecovery(recoveryKey.current);if(!unknown)setStage('search');}}
+    try{await work(active);}catch(e){if(!active())return;const code=e instanceof Error?e.message:'';setError(message(code));if(unknown&&stage==='manual'&&!selected&&['expired_proposal','invalid_manual_session'].includes(code))setManualSessionExpired(true);if(unknown&&code==='auth'){setReview({});setSelected(null);setStage('unavailable');}if(['expired_proposal','request_already_used_or_limit','save_conflict'].includes(code)){expireRecovery(recoveryKey.current);if(!unknown)setStage('search');}}
     finally{inFlight.current=false;if(active())setBusy(false);}
   }
   async function discover(retry=false,active=()=>true) {
@@ -90,12 +98,14 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
     setBusy(false);
     if(!unknown)void discover(false,active);
     else void (async()=>{
-      setReview({});setSelected(null);setStage('front_prompt');setError('');front.current=null;owner.current='';attempt.current=null;
+      setReview({});setSelected(null);setStage('front_prompt');setError('');front.current=null;owner.current='';attempt.current=null;setManual(emptyManual());setManualSessionExpired(false);
       const {data:{session}}=await supabase.auth.getSession();
       if(!active())return;
       if(!session){setError(message('auth'));setStage('unavailable');return;}
       owner.current=session.user.id;
       attempt.current=unknownBarcodeAttempt(session.user.id,param('barcode'));
+      manualRequestId.current=attempt.current.manualRequestId||'';
+      if(attempt.current.manualDraft)setManual({...attempt.current.manualDraft});
       front.current=attempt.current.frontUrl||null;
       if(attempt.current.pending) {
         setBusy(true);
@@ -114,10 +124,45 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
     if(data.next_step==='manual'){setStage('manual');return;}
     setStage((data.candidates||[]).some(c=>c.can_confirm)||data.photo?.can_confirm?'results':attempt.current?.rearAttempted?'manual':'label_prompt');
   }
-  function manualEntry() {
-    if(inFlight.current||selected)return;
-    generation.current++;
-    router.replace({pathname:'/my-foods-create',params:{...recoveryRouteContext(params),recoveryManual:'1'}});
+  function manualEntry(candidate?:Candidate) {
+    if(!unknown||inFlight.current||selected)return;
+    const value=(n:unknown)=>typeof n==='number'&&Number.isFinite(n)?String(n):'';
+    setManual(candidate?{name:candidate.name||'',brand:candidate.brand||'',serving:candidate.serving||'',serving_g:value(candidate.serving_g),
+      calories:value(candidate.nutrition.calories),protein:value(candidate.nutrition.protein),carbs:value(candidate.nutrition.carbs),fat:value(candidate.nutrition.fat),fiber:value(candidate.nutrition.fiber)}:emptyManual());
+    setError('');setStage('manual');
+  }
+  async function reviewManual() {
+    if(!unknown||inFlight.current||selected||manualSessionExpired)return;
+    const serving_g=manualNumber(manual.serving_g),calories=manualNumber(manual.calories),protein=manualNumber(manual.protein),carbs=manualNumber(manual.carbs),fat=manualNumber(manual.fat);
+    const fiber=manual.fiber.trim()===''?null:manualNumber(manual.fiber);
+    if(!manual.name.trim()||!manual.brand.trim()||!manual.serving.trim()||serving_g===null||serving_g<=0||calories===null||protein===null||carbs===null||fat===null||(manual.fiber.trim()!==''&&fiber===null)){
+      setError(tr('Complete the name, brand, serving and required numbers. Enter 0 only when the label says zero; fiber is optional.','Completa nombre, marca, porción y números requeridos. Ingresa 0 solo si la etiqueta indica cero; la fibra es opcional.'));return;
+    }
+    const values={name:manual.name.trim(),brand:manual.brand.trim(),serving:manual.serving.trim(),serving_g,nutrition:{calories,protein,carbs,fat,fiber}};
+    await operation(async active=>{
+      let sessionToken=review.session;
+      if(!sessionToken){
+        if(!manualRequestId.current)manualRequestId.current='xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.floor(Math.random()*16);return(c==='x'?r:(r&3)|8).toString(16);});
+        if(attempt.current)attempt.current.manualRequestId=manualRequestId.current;
+        const started=await request({action:'recovery_manual_start',barcode:param('barcode'),request_id:manualRequestId.current},active);
+        if(!active())return;
+        if(started.code==='barcode_now_known'||started.next_step==='reload_product'){applyUnknownReview(started);return;}
+        if(!started.session)throw Error('unavailable');
+        sessionToken=started.session;setReview(started);if(attempt.current)attempt.current.review=started;
+      }
+      // A dispatched manual revision may permanently invalidate earlier signed
+      // AI proposals, even if its response is lost or this screen loses focus.
+      // Retain only the draft/session until the new signed review is received.
+      const manualPending:Review={session:sessionToken,next_step:'manual',candidates:[],photo:null};
+      const currentAttempt=attempt.current;
+      if(currentAttempt){currentAttempt.manualDraft={...manual};currentAttempt.review=manualPending;}
+      setReview(manualPending);
+      const data=await request({action:'recovery_manual_review',session:sessionToken,values},active);
+      if(!data.photo?.can_confirm||!data.photo?.proposal||data.photo?.provenance?.kind!=='user_entered')throw Error('unavailable');
+      if(currentAttempt)currentAttempt.review=data;
+      if(!active())return;
+      setReview(data);setStage('results');
+    });
   }
   async function beginUnknownPhoto(kind:'front'|'label') {
     if(inFlight.current)return;
@@ -234,8 +279,8 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
       {candidate.image_url&&<Image accessibilityLabel={candidate.name} source={{uri:candidate.image_url}} style={styles.image} resizeMode="contain"/>}
       <Text style={[styles.title,{color:ink}]}>{candidate.name}</Text>
       <Text style={[styles.text,{color:ink}]}>{candidate.brand} · {candidate.variant}</Text>
-      {candidate.provenance.kind!=='physical_label'&&<Text style={[styles.caption,{color:ink}]}>{candidate.provenance.kind==='source_label'?tr('Published label image · two readings','Imagen de etiqueta publicada · dos lecturas'):tr('Published product nutrition · check against your package','Datos nutricionales publicados · comprueba tu empaque')}</Text>}
-      <Text style={[styles.caption,{color:ink}]}>{candidate.provenance.kind==='physical_label'
+      {candidate.provenance.kind!=='physical_label'&&candidate.provenance.kind!=='user_entered'&&<Text style={[styles.caption,{color:ink}]}>{candidate.provenance.kind==='source_label'?tr('Published label image · two readings','Imagen de etiqueta publicada · dos lecturas'):tr('Published product nutrition · check against your package','Datos nutricionales publicados · comprueba tu empaque')}</Text>}
+      <Text style={[styles.caption,{color:ink}]}>{candidate.provenance.kind==='user_entered'?tr('Entered or corrected by you · not independently verified','Ingresado o corregido por ti · sin verificación independiente'):candidate.provenance.kind==='physical_label'
         ?tr('Your package · two label readings · confirm scanned identity','Tu empaque · dos lecturas de etiqueta · confirma la identidad escaneada')
         :candidate.exact_barcode?tr('Source publishes the same barcode','La fuente publica el mismo código'):tr('Source does not publish the barcode — you confirm the product','La fuente no publica el código — tú confirmas el producto')}</Text>
       <Text style={[styles.text,{color:ink}]}>{tr('Per','Por')} {candidate.serving} · {candidate.serving_g} g</Text>
@@ -243,11 +288,12 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
         <Text style={{color:ink,fontWeight:'700',fontSize:18}}>{candidate.nutrition[k]}{k==='calories'?' kcal':' g'}</Text>
         <Text style={{color:ink,fontSize:12}}>{fieldNames[k]}</Text>
       </View>)}</View>
-      {candidate.provenance.kind!=='physical_label'&&source(candidate.provenance.url,tr('View product source','Ver fuente del producto'))}
+      {candidate.provenance.kind!=='physical_label'&&candidate.provenance.kind!=='user_entered'&&source(candidate.provenance.url,tr('View product source','Ver fuente del producto'))}
       {candidate.nutrition_image_url&&source(candidate.nutrition_image_url,tr('View nutrition label','Ver etiqueta nutricional'))}
       {!!candidate.label_issue&&<Text style={styles.warning}>{tr('The published label could not be reconciled with this record. These values cannot update the catalog; use clear package photos.','No se pudo conciliar la etiqueta publicada con este registro. Estos valores no pueden actualizar el catálogo; usa fotos claras del empaque.')}</Text>}
       {!!candidate.conflicts?.length&&!candidate.label_issue&&<Text style={styles.warning}>{tr('These online values differ from your readable label. Use your package values below.','Estos valores de internet difieren de tu etiqueta legible. Usa los valores de tu empaque abajo.')}</Text>}
-      {stage==='results'&&candidate.can_confirm&&button(tr('This is my product','Este es mi producto'),()=>void select(candidate),!!selected&&selected.proposal!==candidate.proposal)}
+      {unknown&&stage==='results'&&candidate.can_confirm&&button(tr('Edit before saving','Editar antes de guardar'),()=>manualEntry(candidate),!!selected,true)}
+      {stage==='results'&&candidate.can_confirm&&button(candidate.provenance.kind==='user_entered'?tr('Confirm reviewed values and save','Confirmar valores revisados y guardar'):tr('This is my product','Este es mi producto'),()=>void select(candidate),!!selected&&selected.proposal!==candidate.proposal)}
     </View>;
   }
   const usableCandidates=(review.candidates||[]).filter(candidate=>candidate.can_confirm);
@@ -269,7 +315,7 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
       </View>
     </View>:<ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {!!error&&<Text accessibilityRole="alert" style={styles.warning}>{error}</Text>}
-      {busy&&<View style={styles.loading}><ActivityIndicator/><Text style={{color:ink}}>{saving?tr('Saving product data','Guardando los datos del producto'):tr('Searching for your product data','Buscando los datos de tu producto')}</Text></View>}
+      {busy&&<View style={styles.loading}><ActivityIndicator/><Text style={{color:ink}}>{saving?tr('Saving product data','Guardando los datos del producto'):stage==='manual'?tr('Preparing your review','Preparando tu revisión'):tr('Searching for your product data','Buscando los datos de tu producto')}</Text></View>}
       {!unknown&&!busy&&stage==='search'&&!!error&&button(tr('Retry this scanned product','Reintentar este producto escaneado'),()=>void discover(true))}
       {unknown&&!busy&&stage==='front_prompt'&&<>
         <Text style={[styles.title,{color:ink}]}>{tr('Photograph the package front','Toma una foto del frente del empaque')}</Text>
@@ -280,7 +326,7 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
         <Text style={[styles.title,{color:ink}]}>{tr('Try the nutrition label','Prueba con la etiqueta nutricional')}</Text>
         <Text style={[styles.text,{color:ink}]}>{tr('No usable online option is available. Photograph the back with the serving size and all nutrition rows.','No hay una opción utilizable de internet. Fotografía la parte de atrás con la porción y todos los nutrientes.')}</Text>
         {button(tr('Take rear label photo','Tomar foto de la etiqueta de atrás'),()=>void beginUnknownPhoto('label'))}
-        {button(tr('Label unavailable — enter manually','Etiqueta no disponible — ingresar manualmente'),()=>setStage('manual'),false,true)}
+        {button(tr('Label unavailable — enter manually','Etiqueta no disponible — ingresar manualmente'),()=>manualEntry(),false,true)}
       </>}
       {unknown&&!busy&&stage==='unavailable'&&<>
         <Text style={[styles.title,{color:ink}]}>{tr('Photo recovery unavailable','Recuperación por foto no disponible')}</Text>
@@ -288,15 +334,22 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
         {button(tr('Continue to manual entry','Continuar al ingreso manual'),()=>setStage('manual'),!!selected)}
       </>}
       {unknown&&!busy&&stage==='manual'&&<>
-        <Text style={[styles.title,{color:ink}]}>{tr('Enter the product manually','Ingresa el producto manualmente')}</Text>
-        <Text style={[styles.text,{color:ink}]}>{tr('We could not recover complete product data. Enter the values from your package and review them before adding.','No pudimos recuperar datos completos. Ingresa los valores del empaque y revísalos antes de añadirlos.')}</Text>
-        {button(tr('Enter manually','Ingresar manualmente'),manualEntry,!!selected)}
+        <Text style={[styles.title,{color:ink}]}>{tr('Review or enter package values','Revisa o ingresa los valores del empaque')}</Text>
+        <Text style={[styles.text,{color:ink}]}>{tr('Barcode: ','Código: ')}{param('barcode')}</Text>
+        <Text style={[styles.text,{color:ink}]}>{tr('Use one serving from your package. These values are user-entered, not independently verified. Nothing is saved until you review and confirm on the next screen.','Usa una porción del empaque. Estos valores son ingresados por ti, sin verificación independiente. No se guarda nada hasta revisar y confirmar en la siguiente pantalla.')}</Text>
+        {(['name','brand','serving','serving_g','calories','protein','carbs','fat','fiber'] as (keyof ManualFields)[]).map(key=>{
+          const labels:Record<keyof ManualFields,string>={name:tr('Product name and variant','Nombre y variante'),brand:tr('Brand','Marca'),serving:tr('Serving description','Descripción de la porción'),serving_g:tr('Grams per serving','Gramos por porción'),calories:tr('Calories (kcal)','Calorías (kcal)'),protein:tr('Protein (g)','Proteína (g)'),carbs:tr('Carbohydrates (g)','Carbohidratos (g)'),fat:tr('Fat (g)','Grasa (g)'),fiber:tr('Fiber (g), optional','Fibra (g), opcional')};
+          const numeric=!['name','brand','serving'].includes(key);
+          return <View key={key}><Text style={[styles.caption,{color:ink}]}>{labels[key]}</Text><TextInput accessibilityLabel={labels[key]} style={[styles.input,{color:ink,backgroundColor:card}]} value={manual[key]} editable={!busy&&!selected} keyboardType={numeric?'decimal-pad':'default'} maxLength={numeric?12:160} onChangeText={value=>setManual(previous=>({...previous,[key]:value}))}/></View>;
+        })}
+        {manualSessionExpired&&button(tr('Start a new manual review','Iniciar una nueva revisión manual'),()=>{if(inFlight.current||selected)return;manualRequestId.current='';if(attempt.current){attempt.current.manualRequestId=undefined;attempt.current.review=undefined;}setReview({});setManualSessionExpired(false);setError('');},!!selected,true)}
+        {button(tr('Review values before saving','Revisar valores antes de guardar'),()=>void reviewManual(),!!selected||manualSessionExpired)}
       </>}
       {unknown&&!busy&&stage==='search'&&button(tr('Look up updated product','Consultar producto actualizado'),()=>router.replace({pathname:'/barcode-lookup',params:{...recoveryRouteContext(params),barcode:param('barcode')}}))}
       {(!busy||saving)&&stage==='results'&&<>
-        <Text style={[styles.title,{color:ink}]}>{review.photo?tr('Compare with your package','Compara con tu empaque'):usableCandidates.length?tr('Product data found','Datos del producto encontrados'):tr('Package photos needed','Necesitamos fotos del empaque')}</Text>
+        <Text style={[styles.title,{color:ink}]}>{review.photo?.provenance.kind==='user_entered'?tr('Confirm your reviewed values','Confirma los valores revisados'):review.photo?tr('Compare with your package','Compara con tu empaque'):usableCandidates.length?tr('Product data found','Datos del producto encontrados'):tr('Package photos needed','Necesitamos fotos del empaque')}</Text>
         {!!review.search_code&&<Text style={styles.warning}>{tr('Web search could not finish. You can continue with clear package photos.','La búsqueda web no pudo terminar. Puedes continuar con fotos claras del empaque.')}</Text>}
-        {(usableCandidates.length>0||review.photo?.can_confirm)&&<Text style={[styles.text,{color:ink}]}>{tr('This is my product confirms the exact product, variant, serving and displayed nutrition, and saves the correction to the shared barcode catalog. Nothing is added to your diary.','Este es mi producto confirma el producto, variante, porción y datos mostrados, y guarda la corrección en el catálogo compartido. No se añade nada a tu diario.')}</Text>}
+        {(usableCandidates.length>0||review.photo?.can_confirm)&&<Text style={[styles.text,{color:ink}]}>{review.photo?.provenance.kind==='user_entered'?tr('Confirming saves these user-entered values for the scanned barcode in the shared catalog. Check every field against your package. Nothing is added to your diary.','Confirmar guarda estos valores ingresados por ti para el código escaneado en el catálogo compartido. Comprueba cada campo con el empaque. No se añade nada a tu diario.'):tr('This is my product confirms the exact product, variant, serving and displayed nutrition, and saves the correction to the shared barcode catalog. Nothing is added to your diary.','Este es mi producto confirma el producto, variante, porción y datos mostrados, y guarda la corrección en el catálogo compartido. No se añade nada a tu diario.')}</Text>}
         {usableCandidates.map((candidate,index)=>candidateCard(candidate,'web-'+index))}
         {!usableCandidates.length&&!review.photo&&<Text style={[styles.text,{color:ink}]}>{tr('No complete, verified product option was found. We will not fill in missing numbers.','No encontramos una opción completa y verificada. No rellenaremos números ausentes.')}</Text>}
         {review.photo&&candidateCard(review.photo,'physical')}
@@ -304,7 +357,7 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
           ?tr('The analysis service could not finish. This does not mean your label is wrong. Please try a new photo attempt later.','El servicio de análisis no pudo terminar. Esto no significa que tu etiqueta esté mal. Intenta otra lectura más tarde.')
           :tr('Please show clearly: ','Muestra claramente: ')+(issue.field==='front'?tr('the product name, brand and exact variant','el nombre, marca y variante exactos'):fieldNames[issue.field]||fieldNames.label)+(issue.reason==='reads_disagree'?tr(' — the two readings disagree.',' — las dos lecturas no coinciden.'):'.')}</Text>)}
         {!unknown&&button(review.photo?tr('Retake package photos','Volver a tomar fotos'):usableCandidates.length?tr('None of these — take package photos','Ninguno de estos — tomar fotos del empaque'):tr('Take package photos','Tomar fotos del empaque'),()=>void beginPhotos(),!review.session||!!selected,true)}
-        {unknown&&button(attempt.current?.rearAttempted?tr('These values are not usable — enter manually','Estos valores no sirven — ingresar manualmente'):tr('None of these — photograph rear label','Ninguno de estos — fotografiar etiqueta de atrás'),()=>setStage(attempt.current?.rearAttempted?'manual':'label_prompt'),!!selected,true)}
+        {unknown&&review.photo?.provenance.kind!=='user_entered'&&button(attempt.current?.rearAttempted?tr('These values are not usable — enter manually','Estos valores no sirven — ingresar manualmente'):tr('None of these — photograph rear label','Ninguno de estos — fotografiar etiqueta de atrás'),()=>{if(attempt.current?.rearAttempted)manualEntry(review.photo||undefined);else setStage('label_prompt');},!!selected,true)}
       </>}
     </ScrollView>}
   </SafeAreaView>;
@@ -318,4 +371,5 @@ const styles=StyleSheet.create({
   link:{color:'#2D8C79',fontSize:15,paddingVertical:8},warning:{color:'#B15B23',fontSize:15,lineHeight:23,paddingVertical:6},
   loading:{padding:20,gap:12,alignItems:'center'},check:{flexDirection:'row',gap:12,paddingVertical:10,alignItems:'flex-start'},
 });
+
 
