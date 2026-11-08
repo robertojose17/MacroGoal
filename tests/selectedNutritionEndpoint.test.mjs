@@ -7,6 +7,7 @@ const require=createRequire(import.meta.url);
 const ts=require(process.env.BARCODE_RECOVERY_NODE_MODULES?process.env.BARCODE_RECOVERY_NODE_MODULES+'/typescript':'typescript');
 let source=fs.readFileSync(new URL('selectedNutritionEndpoint.ts',root),'utf8');
 source=source.replace("'./selectedNutrition.mjs'",JSON.stringify(new URL('selectedNutrition.mjs',root).href));
+source=source.replace("'./offMass.mjs'",JSON.stringify(new URL('offMass.mjs',root).href));
 source=source.replace("import {readProviderJSON,createSelectionCapture} from './nutritionRefresh.mjs';","const readProviderJSON=async r=>r.json();const createSelectionCapture=()=>async()=>({status:'disabled'});");
 const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 const {handleSelectedNutrition}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
@@ -33,3 +34,4 @@ test('fresh durable snapshot prevents all provider calls',async()=>{
  const admin={auth:{getUser:async()=>({data:{user:{id:'owner'}}})},rpc:()=>({abortSignal:async()=>({data:{status:'fresh',snapshot_id:'existing',version:2}})})};
  const response=await handleSelectedNutrition(request(),admin,{});const body=await response.json();assert.equal(body.status,'duplicate');assert.equal(body.snapshot_id,'existing');
 });
+
