@@ -9,6 +9,7 @@ const ts=require(process.env.TYPESCRIPT_MODULE || 'typescript');
 const SOURCE=process.env.DEADLINE_SOURCE || path.resolve(__dirname,'..');
 const OVERLAY=process.env.DEADLINE_OVERLAY;
 const ALLOWLIST=new Set([
+ 'supabase/functions/_shared/searchNutritionCapture.mjs','supabase/functions/_shared/selectedNutrition.mjs',
  'supabase/functions/search-foods/index.ts','supabase/functions/search-foods/searchCore.ts',
  'supabase/functions/_shared/searchHydration.mjs','supabase/functions/_shared/portionCache.mjs',
  'supabase/functions/_shared/foodPortions.mjs','supabase/functions/_shared/nutritionProvider.mjs',

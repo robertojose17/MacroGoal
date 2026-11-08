@@ -9,6 +9,7 @@ const ts = require(process.env.TYPESCRIPT_MODULE || 'typescript');
 // Runtime inputs are always the current checkout, never archived build609 copies.
 const root = path.resolve(__dirname, '..');
 const shared = {
+  '../_shared/searchNutritionCapture.mjs': require(path.join(root, 'supabase/functions/_shared/searchNutritionCapture.mjs')),
   '../_shared/searchHydration.mjs': require(path.join(root, 'supabase/functions/_shared/searchHydration.mjs')),
   '../_shared/nutritionProvider.mjs': require(path.join(root, 'supabase/functions/_shared/nutritionProvider.mjs')),
   '../_shared/portionCache.mjs': require(path.join(root, 'supabase/functions/_shared/portionCache.mjs')),

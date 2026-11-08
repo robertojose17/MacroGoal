@@ -56,6 +56,12 @@ function harness() {
   };
 }
 function bind(file, name, context) {
+  // Optional snapshot capture is isolated from this coordinator's provider clock.
+  context.captureSelectedNutrition??=async()=> 'unavailable';
+  context.preferredUsdaPortion??=loader({})('utils/preferredUsdaPortion.ts').preferredUsdaPortion;
+  if(!Object.hasOwn(context,'mode'))context.mode='view';
+  if(!Object.hasOwn(context,'itemId'))context.itemId=undefined;
+  if(!Object.hasOwn(context,'food_item_id'))context.food_item_id=undefined;
   const source = fs.readFileSync(path.join(root, file), 'utf8'), ast = ts.createSourceFile(file, source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TSX);
   let found;
   function walk(node) { if (ts.isVariableDeclaration(node) && node.name.getText(ast) === name) found = node.initializer; ts.forEachChild(node, walk); }
@@ -457,3 +463,4 @@ test('LRU eviction cannot cancel accepted nutrition queued behind a slow draft w
  for(let i=1;i<=65;i++){const p=h.api.persistUsdaSelection(product({_usda_fdc_id:String(i),code:String(i)}));await flush();h.success(h.requests.at(-1),String(i));await p;}
  gate.resolve();await blocker;await adding;const entries=await h.draft.loadDraft();assert.equal(entries.length,1);assert.equal(entries[0].calories,130);assert.equal(entries[0].food_item_id,id);assert.equal(ui.banners.length,1);assert.equal(ui.alerts.length,0);
 });
+

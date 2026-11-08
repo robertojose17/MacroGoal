@@ -16,6 +16,7 @@ function fixture({gateStage='state',cached=false,existing=cached,providerFailure
   calls.rpc.push({name,args});
   if(name==='read_usda_portions_v1')return {data:cache?[{fdc_id:'123',payload:cache}]:[]};
   if(name==='record_usda_portions_v1'){cache=structuredClone(args.p_payload);return {data:null};}
+  if(name==='claim_selected_nutrition_v1')return {data:{status:'unavailable'}}; // Isolate legacy enrichment; new capture has dedicated tests.
   const stage=name==='read_food_nutrition_refresh_state_v1'?'state':name==='claim_food_nutrition_refresh_v1'?'claim':'write';
   calls.order.push(stage);calls.signals.push(signal);
   if(stage===gateStage)await gate;
