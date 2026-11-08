@@ -9,6 +9,7 @@ const ts=require(process.env.TYPESCRIPT_MODULE || 'typescript');
 const SOURCE=process.env.DEADLINE_SOURCE || path.resolve(__dirname,'..');
 const OVERLAY=process.env.DEADLINE_OVERLAY;
 const ALLOWLIST=new Set([
+ 'supabase/functions/_shared/catalogPortionBatch.mjs','supabase/functions/_shared/catalogPortionEvidence.mjs',
  'supabase/functions/_shared/searchNutritionCapture.mjs','supabase/functions/_shared/selectedNutrition.mjs',
  'supabase/functions/search-foods/index.ts','supabase/functions/search-foods/searchCore.ts',
  'supabase/functions/_shared/searchHydration.mjs','supabase/functions/_shared/portionCache.mjs',
@@ -120,3 +121,4 @@ test('all original provider budgets and sequential OFF coverage remain unchanged
  const result=observe(core.searchCatalog('apple',30,providers));await f.clock.advance(3799);assert.equal(result.settled,false);await f.clock.advance(3800);assert.equal(result.value.count,0);
  assert.deepEqual(stages.map(x=>[x.name,x.at,x.deadlineMs]),[['db',0,1800],['usda',1800,3200],['off',3200,3800]]);assert.ok(stages.every(x=>x.signal.aborted));
 });
+

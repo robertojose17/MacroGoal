@@ -1,6 +1,7 @@
 import { readUsdaPortions } from '../supabase/functions/_shared/foodPortions.mjs';
 type PortionProduct={code?:unknown;_source?:unknown;_db_id?:unknown;_portion_source_revision?:unknown;_practical_portion_evidence?:unknown;_usda_fdc_id?:unknown;_portion_evidence?:unknown;_serving_authority?:unknown;product_name?:unknown;generic_name?:unknown};
 type MeasuredOption={key:string;description:string;grams:number;amount:number};
+const hasAsciiControl=(value:string)=>Array.from(value).some(c=>c.charCodeAt(0)<32);
 const normalizedLabel=(value:string)=>value.normalize('NFKC').trim().toLowerCase().replace(/\s+/g,' ');
 /** A display preference among already validated source measures, not a claim that
  * the source recommends a serving. No food names, densities or weight tables. */
@@ -49,7 +50,7 @@ export function readProductPracticalPortions(product:PortionProduct):MeasuredOpt
   if(product._source!=='supabase'||off.version!==1||off.provider!=='openfoodfacts'||!uuid(product._db_id)||off.food_item_id!==product._db_id||!Number.isInteger(product._portion_source_revision)||Number(product._portion_source_revision)<0||off.food_revision!==product._portion_source_revision||!productName||productName!==identity(off.food_description)||!gtin(product.code)||gtin(product.code)!==gtin(off.source_id)||typeof off.retrieved_at!=='string'||!Number.isFinite(Date.parse(off.retrieved_at))||!Array.isArray(off.portions)||!off.portions.length||off.portions.length>32)return [];
   const keys=new Set<string>();const rows:MeasuredOption[]=[];
   for(const p of off.portions){
-   if(!p||typeof p!=='object'||typeof p.key!=='string'||!p.key||p.key.length>80||keys.has(p.key)||typeof p.description!=='string'||!p.description.trim()||p.description.length>160||/[\x00-\x1f<>]/.test(p.description)||typeof p.grams!=='number'||!Number.isFinite(p.grams)||p.grams<=0||p.grams>100000||typeof p.amount!=='number'||!Number.isFinite(p.amount)||p.amount<=0||!Number.isFinite(p.grams/p.amount)||p.grams/p.amount>100000)return [];
+   if(!p||typeof p!=='object'||typeof p.key!=='string'||!p.key||p.key.length>80||keys.has(p.key)||typeof p.description!=='string'||!p.description.trim()||p.description.length>160||(hasAsciiControl(p.description)||/[<>]/.test(p.description))||typeof p.grams!=='number'||!Number.isFinite(p.grams)||p.grams<=0||p.grams>100000||typeof p.amount!=='number'||!Number.isFinite(p.amount)||p.amount<=0||!Number.isFinite(p.grams/p.amount)||p.grams/p.amount>100000)return [];
    keys.add(p.key);rows.push({key:p.key,description:p.description,grams:p.grams,amount:p.amount});
   }
   return rows;

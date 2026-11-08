@@ -20,7 +20,7 @@ export function usdaPortionOptions(portions:Portion[],locale:string,preferredKey
 /** Display dedupe only: never discard the selected key or distinct qualifiers. */
 export function dedupePracticalServingOptions<T extends {key:string;label:string;gramsPerUnit:number}>(options:T[],selectedKey:string){
  const label=(s:string)=>s.normalize('NFKC').trim().toLowerCase().replace(/\s*\(\s*\d+(?:[.,]\d+)?\s*g\s*\)\s*$/,'').replace(/^1\s+/,'').replace(/\s+/g,' ');
- return options.filter((o,index)=>{
+ return options.filter((o)=>{
   if(!o.key.startsWith('portion:')&&!['default','natural_unit','natural_serving'].includes(o.key))return true;
   if(o.key===selectedKey)return true;
   const same=options.filter(p=>p.gramsPerUnit===o.gramsPerUnit&&label(p.label)===label(o.label));

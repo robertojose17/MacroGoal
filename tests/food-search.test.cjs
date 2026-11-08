@@ -9,6 +9,7 @@ const ts = require(process.env.TYPESCRIPT_MODULE || 'typescript');
 // Runtime inputs are always the current checkout, never archived build609 copies.
 const root = path.resolve(__dirname, '..');
 const shared = {
+  '../_shared/catalogPortionBatch.mjs': require(path.join(root, 'supabase/functions/_shared/catalogPortionBatch.mjs')),
   '../_shared/searchNutritionCapture.mjs': require(path.join(root, 'supabase/functions/_shared/searchNutritionCapture.mjs')),
   '../_shared/searchHydration.mjs': require(path.join(root, 'supabase/functions/_shared/searchHydration.mjs')),
   '../_shared/nutritionProvider.mjs': require(path.join(root, 'supabase/functions/_shared/nutritionProvider.mjs')),
@@ -110,8 +111,8 @@ function edgeFixture(rows = [], options = {}) {
     ...shared, 'jsr:@supabase/functions-js/edge-runtime.d.ts': {},'./searchCore.ts': options.core || core,
     'jsr:@supabase/supabase-js@2': { createClient: () => ({ rpc(name,values) {
       calls.push({name,values});
-      assert.ok(['search_food_catalog_v2','read_food_search_snapshots_v1','read_usda_portions_v1'].includes(name), name);
-      const data = name === 'search_food_catalog_v2' ? rows : name === 'read_food_search_snapshots_v1' ? snapshots : [];
+      assert.ok(['search_food_catalog_v2','read_food_search_snapshots_v1','read_usda_portions_v1','read_catalog_portion_sources_v1'].includes(name), name);
+      const data = name === 'search_food_catalog_v2' ? rows : name === 'read_food_search_snapshots_v1' ? snapshots : name === 'read_catalog_portion_sources_v1' ? [] : [];
       return {abortSignal:async () => ({data,error:null})};
     } }) },
   },{ Deno:{ env:{get:()=> 'fixture'},serve:value=>{handler=value;} },fetch:options.fetch || (async()=> {throw new Error('unexpected provider');}) });
@@ -127,8 +128,9 @@ test('real Edge handler sends p_queries, preserves DB UUID/macros/serving and re
   assert.equal(body.products[0].serving_size,'118 g'); assert.equal(body.ranking_version,'food-v2');
   assert.equal(body.status,'complete');
   assert.equal(Object.hasOwn(body.products[0],'_db_row'),false);
-  assert.deepEqual(plain(f.calls.map(call => call.name)),['search_food_catalog_v2','read_food_search_snapshots_v1']);
+  assert.deepEqual(plain(f.calls.map(call => call.name)),['search_food_catalog_v2','read_food_search_snapshots_v1','read_catalog_portion_sources_v1']);
   assert.deepEqual(plain(f.calls[1].values),{p_food_ids:[row.id]});
+  assert.deepEqual(plain(f.calls[2].values),{p_food_ids:[row.id]});
 });
 test('DB serving-based nutrition with explicit gram basis is normalized exactly once',() => {
   const f=edgeFixture(); const p=f.api.mapDbRowToOff({id:'serving',name:'Food',macros_per:'serving',serving_size:50,serving_unit:'g',calories:100,protein:5,carbs:10,fat:2},'food');
@@ -482,4 +484,5 @@ test('sanitized provider diagnostics reject out-of-range status and unbounded me
   assert.equal(logs[0][1].code,'PROVIDER_FAILURE');assert.equal(logs[0][1].http_status,undefined);
   assert.ok(!JSON.stringify(logs).includes('secret')); assert.ok(!JSON.stringify(logs).includes('apple'));
 });
+
 

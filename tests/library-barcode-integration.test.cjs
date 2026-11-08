@@ -85,10 +85,11 @@ test('actual source wires guards into save/favorite, exact custom row and recipe
  const detail=read('components/FoodDetailsLayout.tsx'),add=read('app/add-food.tsx');
  assert.match(detail,/const foodBarcode = catalogPackageBarcode\(product\)/);assert.match(detail,/const barcode = catalogPackageBarcode\(prod\)/);assert.match(detail,/legacyFavorite \? 'barcode' : foodSource/);
  assert.match(detail,/eq\('id',product\._manual_food_id\)\.eq\('created_by',user.id\)/);assert.match(detail,/manualFoodId \? \{data:\{id:manualFoodId\}/);assert.match(detail,/off_data: saveOffData/);
- assert.match(detail,/mode!=='edit'&&!itemId&&product\?\._usda_fdc_id/);assert.match(detail,/setNumberOfServings\(String\(rawQuantity\)\)/);assert.match(detail,/grams: totalGrams,/);
+ assert.match(detail,/mode!=='edit'&&!itemId&&product&&product\._serving_authority!=='confirmed_correction'/);assert.match(detail,/usdaPortionOptions\(readProductPracticalPortions\(product\)/);assert.match(detail,/setNumberOfServings\(String\(rawQuantity\)\)/);assert.match(detail,/grams: totalGrams,/);
  assert.match(add,/const selection = await persistUsdaSelection\(product\)/);assert.match(add,/selection.status === 'persisted' \? selection.foodItemId : undefined/);assert.match(add,/product\._db_id \|\| capturedFoodItemId/);assert.match(add,/barcode: packageBarcode/);
 });
 test('ordinary detail use cannot overwrite existing canonical catalog nutrition',()=>{
  const source=read('components/FoodDetailsLayout.tsx'),part=source.slice(source.indexOf('  const upsertFoodItem ='),source.indexOf('  const handleSave ='));
  assert.doesNotMatch(part,/\.update\(|\.upsert\(/);assert.match(part,/eq\('usda_fdc_id',prod\._usda_fdc_id\)/);assert.match(part,/if \(!barcode\) return null/);
 });
+
