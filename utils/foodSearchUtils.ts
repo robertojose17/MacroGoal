@@ -32,6 +32,17 @@ export interface SearchResultItem {
   source: ResultSource;
 }
 
+/** Display only: omit dimensional size notes, never preparation qualifiers or source evidence. */
+export function practicalPortionRowText(description: string, grams: number): string {
+  const size = description.trim().match(/^(extra small|extra large|medium|average|small|large|extrapequeña|extragrande|mediana|mediano|promedio|pequeña|pequeño|grande)\s*\(([^()]*)\)$/i);
+  const dimensional = size && /\d/.test(size[2]) && /(?:["″]|\b(?:inches?|cm|diameter|dia|long|pulgadas?|diámetro|largo)\b)/i.test(size[2]);
+  const dimensionsOnly = dimensional && size[2].toLowerCase()
+    .replace(/\b(?:inches?|cm|diameter|dia|long|pulgadas?|diámetro|largo|to|de|a)\b/g, '')
+    .replace(/[\d\s"″/.,–—-]/g, '') === '';
+  const label = dimensionsOnly ? size[1] : description.trim();
+  return `1 ${label} (${Number(grams.toFixed(2))}g)`;
+}
+
 export function buildResultItem(product: OpenFoodFactsProduct, source: ResultSource): SearchResultItem {
   // Keep external names/brands visible without interpreting ambiguous mass or nutrient values.
   if (searchSelectionNeedsConfirmation(product)) return {
@@ -53,7 +64,7 @@ export function buildResultItem(product: OpenFoodFactsProduct, source: ResultSou
     displayCarbs: nutrition.carbs,
     displayFats: nutrition.fat,
     displayFiber: nutrition.fiber,
-    servingText: formatFoodRowServing(servingInfo.displayText, 1, servingInfo.grams),
+    servingText: practical ? practicalPortionRowText(practical.description, practical.gramsPerUnit) : formatFoodRowServing(servingInfo.displayText, 1, servingInfo.grams),
     hasNutrition: nutrition.calories > 0 || nutrition.protein > 0 || nutrition.carbs > 0 || nutrition.fat > 0,
     source,
   };
