@@ -9,12 +9,15 @@ const ts = require(process.env.TYPESCRIPT_MODULE || 'typescript');
 const root = path.resolve(__dirname, '../..');
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 
-test('search type annotation leaves the exact original source and emitted JavaScript intact', () => {
+test('search type annotation leaves the reviewed capture source emitted JavaScript intact', () => {
   const text = fs.readFileSync(path.join(root, 'supabase/functions/search-foods/index.ts'), 'utf8');
   const annotation = '// @ts-types="../_shared/searchHydration.d.mts"\n';
-  assert.ok(text.startsWith(annotation));
-  const original = text.slice(annotation.length);
-  assert.equal(sha256(original), '33ea6254dd70ac1b19f5c1a5095ff38a69f98f50b60d4c11d7c5bc613cdde9f5');
+  // Capture is an intentional reviewed runtime change. The declaration comment
+  // must still annotate hydration's import, not whichever import happens to be first.
+  assert.equal(text.split(annotation).length - 1, 1);
+  assert.ok(text.includes(annotation + "import { hydrateSearchRows, hasCanonicalGramServing, normalizeSearchNutrition, searchNutritionIssue, serializeSearchProduct } from '../_shared/searchHydration.mjs';"));
+  const original = text.replace(annotation, '');
+  assert.equal(sha256(original), 'e08e5571d05e13773d2f4d6952afd9d09ebb83a38d02a70913a46f3d27aaf280');
   const compilerOptions = { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, removeComments: true };
   assert.equal(ts.transpileModule(text, { compilerOptions }).outputText, ts.transpileModule(original, { compilerOptions }).outputText);
   assert.equal(sha256(fs.readFileSync(path.join(root, 'supabase/functions/_shared/searchHydration.mjs'))), '76029d8f3a758bb399dcf19aea784759eb511dfa5a8fac5b841c9607740565f6');

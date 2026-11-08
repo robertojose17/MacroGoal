@@ -172,7 +172,7 @@
     "supabase/functions/_shared/nutritionRefresh.mjs": "a23d8cf47a584b612ab71c6299553b13a11547f62ebf5927bf200f8a598f7649",
     "supabase/functions/_shared/offMass.mjs": "73accc8abcbd48ddd621f6c669056e5f70c5ff6fbfe70e7c8d8c158946c79687",
     "supabase/functions/_shared/portionCache.mjs": "0863ff4f7087260ca22d905f90cdda7b307e0e376cc4dba0486e8e7329b2ae30",
-    "supabase/functions/_shared/portionEndpoint.ts": "17ca8a698ce8423c81265160106e3206ac031166bfa46864c4a92413c4b38c6e",
+    "supabase/functions/_shared/portionEndpoint.ts": "93f367d6f097d00f80a5082920dedb87294567674beb4ec50251daf7fd4f36f0",
     "supabase/functions/_shared/searchHydration.mjs": "76029d8f3a758bb399dcf19aea784759eb511dfa5a8fac5b841c9607740565f6",
     "supabase/functions/lookup-barcode/identity.mjs": "b70394495d826c51667923cb5d32598c9ae0caa2aa2ea4a4efeae3bb558d9863",
     "supabase/functions/lookup-barcode/index.ts": "8fa4e46be3a4299f068dfcce4d84f7f7158e17b014900adf8ae9413d687789f7",

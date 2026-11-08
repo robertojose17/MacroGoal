@@ -1,3 +1,4 @@
+import { resolveCatalogUsdaPortions } from '@/utils/catalogUsdaPortions';
 import { captureSelectedNutrition } from '@/utils/selectedNutritionCapture';
 import { preferredUsdaPortion } from '@/utils/preferredUsdaPortion';
 import { persistUsdaSelection, usdaIdentityIsCurrent, type UsdaSelectionOutcome } from '@/utils/usdaSelectionPersistence';
@@ -689,6 +690,14 @@ export default function FoodDetailsLayout({
       let parsedProduct: OpenFoodFactsProduct = JSON.parse(offData);
       if(routeContext.recoverySaved==='1')parsedProduct._serving_authority='confirmed_correction';
       if(mode!=='edit'&&!itemId)void captureSelectedNutrition(parsedProduct,food_item_id).catch(()=>{});
+      if(mode!=='edit'&&!itemId&&!exactFdcId(parsedProduct._usda_fdc_id)&&parsedProduct._db_id&&parsedProduct._serving_authority!=='confirmed_correction'&&!parsedProduct._manual_food_id){
+        const catalogPortions=await resolveCatalogUsdaPortions(parsedProduct._db_id);
+        if(!isCurrent())return;
+        const identityName=(value:unknown)=>typeof value==='string'?value.normalize('NFKC').trim().toLowerCase().replace(/\s+/g,' '):'';
+        if(catalogPortions&&identityName(catalogPortions.foodDescription)===identityName(parsedProduct.product_name||parsedProduct.generic_name)){
+          parsedProduct={...parsedProduct,_usda_fdc_id:catalogPortions.fdcId,_portion_evidence:catalogPortions.portionEvidence};
+        }
+      }
       const fdcId=exactFdcId(parsedProduct._usda_fdc_id);
       if (fdcId && parsedProduct._serving_authority!=='confirmed_correction') {
         parsedProduct._usda_fdc_id=fdcId;
