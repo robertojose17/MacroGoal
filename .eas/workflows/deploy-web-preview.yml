@@ -1,0 +1,11 @@
+name: Deploy current web preview
+on:
+  workflow_dispatch: {}
+jobs:
+  deploy_web:
+    name: Isolated Macro Goal web preview
+    type: deploy
+    environment: production
+    params:
+      prod: false
+      source_maps: false
