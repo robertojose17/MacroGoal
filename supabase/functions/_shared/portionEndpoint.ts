@@ -1,3 +1,4 @@
+import {selectedSourceEnvelope} from './selectedNutrition.mjs';
 import {refreshCachedSelection,readProviderJSON} from './nutritionRefresh.mjs';
 import {resolvePortionsWithin,servicePortionCache} from './portionCache.mjs';
 
@@ -35,10 +36,20 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
   },
   fetchExactFood:async(fdcId:string,signal:AbortSignal)=>{
    providerFetchAttempted=true;
-   const apiKey=Deno.env.get('USDA_API_KEY')||'DEMO_KEY';
-   const response=await fetch('https://api.nal.usda.gov/fdc/v1/food/'+fdcId+'?api_key='+encodeURIComponent(apiKey),{signal});
-   if(!response.ok)throw Error('USDA_PORTION_UNAVAILABLE');
-   const food=Deno.env.get('NUTRIENT_REFRESH_ENABLED')==='true'?await readProviderJSON(response,{signal}):await response.json();
+   const captureRequestId=crypto.randomUUID(),captureFoodId=catalogId;
+   let admission:any=null;
+   try{
+    const claim=await admin.rpc('claim_selected_nutrition_v1',{p_user_id:auth.data.user.id,p_request_id:captureRequestId,p_food_id:captureFoodId,p_provider:'usda',p_source_id:fdcId}).abortSignal(signal);
+    if(!claim.error)admission=claim.data;
+   }catch{/* Existing portion resolution remains available if capture is unavailable. */}
+   const cachedRaw=['fresh','duplicate'].includes(admission?.status)?admission.evidence?.raw_payload:null;
+   let food:any=cachedRaw;
+   if(!food){
+    const apiKey=Deno.env.get('USDA_API_KEY')||'DEMO_KEY';
+    const response=await fetch('https://api.nal.usda.gov/fdc/v1/food/'+fdcId+'?api_key='+encodeURIComponent(apiKey),{signal});
+    if(!response.ok)throw Error('USDA_PORTION_UNAVAILABLE');
+    food=await readProviderJSON(response,{signal});
+   }
    if(String(food?.fdcId)!==fdcId)throw Error('USDA_IDENTITY_MISMATCH');
    // Persist exact provider food only when all core per100 nutrients are present.
    // The unique USDA-FDC constraint resolves concurrent insertions without overwrites.
@@ -64,6 +75,12 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
      }
     }
    }
+   // Capture the already fetched full response before returning. The existing
+   // 1500ms operation signal bounds this best-effort write; never refetch here.
+   if(admission?.status==='claimed')try{
+    const evidence=selectedSourceEnvelope('usda',fdcId,food);
+    await admin.rpc('record_selected_nutrition_v1',{p_food_id:captureFoodId,p_request_id:captureRequestId,p_evidence:evidence}).abortSignal(signal);
+   }catch{}
    selectedProviderFood=food; // Preserve the complete raw nutrient array before mapping.
    return food;
   }
@@ -71,3 +88,4 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
  if(catalogId&&(!providerFetchAttempted||selectedProviderFood!==undefined))await refreshCachedSelection(admin,req,{foodId:catalogId,provider:'usda',sourceId:key,providerFood:selectedProviderFood,authenticated:true});
  return reply({fdc_id:key,portion_evidence:result.envelope,portion_persisted:result.persisted,food_item_id:catalogId});
 }
+

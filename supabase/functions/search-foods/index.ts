@@ -1,3 +1,4 @@
+import {createSearchNutritionBatch,scheduleSearchNutritionBatch} from '../_shared/searchNutritionCapture.mjs';
 // @ts-types="../_shared/searchHydration.d.mts"
 import { hydrateSearchRows, hasCanonicalGramServing, normalizeSearchNutrition, searchNutritionIssue, serializeSearchProduct } from '../_shared/searchHydration.mjs';
 import {usdaSearchNutriments} from '../_shared/nutritionProvider.mjs';
@@ -213,6 +214,7 @@ export async function handleSearch(req: Request): Promise<Response> {
       || normalizeQuery(query).split(' ').length > 12) throw new Error('Invalid query');
   } catch { return jsonResponse({ products: [],count: 0,error: 'Invalid search request' },400); }
   const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '',Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+  const nutritionBatch=createSearchNutritionBatch();
   const uncertainProducts = new WeakSet<object>();
   let hydrationPartial = false;
   let requiresLabelConfirmation = false;
@@ -242,19 +244,23 @@ export async function handleSearch(req: Request): Promise<Response> {
       if (!response.ok) throw new ProviderHttpError('USDA_UNAVAILABLE',response.status);
       const body = await response.json();
       if (!Array.isArray(body.foods)) throw new Error('USDA_INVALID_RESPONSE');
+      nutritionBatch.add('usda',body.foods);
       return body.foods.map(mapUsdaToOff).filter((p: Record<string,unknown> | null): p is Record<string,unknown> => p !== null);
     },
     off: async (normalized,signal) => {
       const url = 'https://world.openfoodfacts.org/cgi/search.pl?search_terms=' + encodeURIComponent(normalized)
         + '&search_simple=1&action=process&json=1&page_size=20&sort_by=unique_scans_n'
-        + '&fields=code,product_name,generic_name,brands,serving_size,serving_quantity,nutriments,image_url';
+        + '&fields=code,product_name,generic_name,brands,serving_size,serving_quantity,serving_quantity_unit,nutriments,nutrition_data_per,nutrition_data_prepared_per,nutrition,preparation,nutrient_levels,last_modified_t,image_url';
       const response = await fetch(url,{ signal,headers: { 'User-Agent': 'MacroGoal/1.0 (contact@macrogoal.app)' } });
       if (!response.ok) throw new ProviderHttpError('OFF_UNAVAILABLE',response.status);
       const body = await response.json();
       if (!Array.isArray(body.products)) throw new Error('OFF_INVALID_RESPONSE');
+      nutritionBatch.add('openfoodfacts',body.products);
       return body.products.map((p: Record<string,unknown>) => mapOffProduct(p,scoreProduct(p)));
     },
   });
+  // Preserve received nutrition without extra provider calls or query/user history.
+  const nutrition_capture=scheduleSearchNutritionBatch(supabase,nutritionBatch,{waitUntil:typeof globalThis.EdgeRuntime?.waitUntil==='function'?globalThis.EdgeRuntime.waitUntil.bind(globalThis.EdgeRuntime):undefined});
   // Old clients default absent nutrition to zero and cannot safely consume review-only rows.
   // Gate only responses that actually contain confirmation-required results.
   const responseRequiresConfirmation = result.products.some(product => product.requires_label_confirmation === true);
@@ -273,6 +279,7 @@ export async function handleSearch(req: Request): Promise<Response> {
     : serializeSearchProduct(decorated[decoratedIndex++]));
   if (hydrationPartial) result.status = 'partial';
   // Empty + unavailable is not an authoritative no-results response.
-  return jsonResponse(result,result.count === 0 && result.status === 'partial' ? 503 : 200);
+  return jsonResponse({...result,nutrition_capture},result.count === 0 && result.status === 'partial' ? 503 : 200);
 }
 Deno.serve(handleSearch);
+

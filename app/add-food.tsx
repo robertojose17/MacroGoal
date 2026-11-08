@@ -1,3 +1,4 @@
+import { captureSelectedNutrition } from '@/utils/selectedNutritionCapture';
 import { foodLogIds } from '@/utils/foodPersistence';
 import { searchSelectionNeedsConfirmation, searchConfirmationRoute } from '@/utils/searchSelectionSafety';
 import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
@@ -513,6 +514,7 @@ export default function AddFoodScreen() {
    * CRITICAL: Pass context through to Food Details
    */
   const handleOpenSearchResultDetails = useCallback((item: SearchResultItem) => {
+    void captureSelectedNutrition(item.product).catch(()=>{});
     if (searchSelectionNeedsConfirmation(item.product)) {
       router.push(searchConfirmationRoute(item.product, { ...params, meal: mealType, date, mode, context, returnTo, planId }));
       return;
@@ -543,6 +545,7 @@ export default function AddFoodScreen() {
    * Only available in meal-plan mode
    */
   const handleQuickAddSearchResultToMealPlan = useCallback(async (item: SearchResultItem) => {
+    void captureSelectedNutrition(item.product).catch(()=>{});
     if (searchSelectionNeedsConfirmation(item.product)) {
       router.push(searchConfirmationRoute(item.product, { ...params, meal: mealType, date, mode, context, returnTo, planId }));
       return;
@@ -581,6 +584,7 @@ export default function AddFoodScreen() {
    * Only available in my_meals_builder context
    */
   const handleQuickAddSearchResult = useCallback(async (item: SearchResultItem) => {
+    void captureSelectedNutrition(item.product).catch(()=>{});
     if (searchSelectionNeedsConfirmation(item.product)) {
       router.push(searchConfirmationRoute(item.product, { ...params, meal: mealType, date, mode, context, returnTo, planId }));
       return;
@@ -2574,3 +2578,4 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 });
+

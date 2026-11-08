@@ -1,3 +1,4 @@
+import { captureSelectedNutrition } from '@/utils/selectedNutritionCapture';
 import { searchSelectionNeedsConfirmation, searchConfirmationRoute } from '@/utils/searchSelectionSafety';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -288,6 +289,7 @@ export default function FoodSearchScreen() {
 
   const handleSelectProduct = useCallback(
     (item: SearchResultItem) => {
+      void captureSelectedNutrition(item.product).catch(()=>{});
       if (searchSelectionNeedsConfirmation(item.product)) {
         router.push(searchConfirmationRoute(item.product, { ...params, meal: mealType, date, mode, context, returnTo, mealId: targetMealId, planId }));
         return;
@@ -715,3 +717,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

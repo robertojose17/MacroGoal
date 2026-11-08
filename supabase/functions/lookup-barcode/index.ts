@@ -4,6 +4,8 @@ import { decorateCachedProducts } from '../_shared/portionCache.mjs';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { barcodeCandidates } from './identity.mjs';
+import {handleSelectedNutrition} from '../_shared/selectedNutritionEndpoint.ts';
+import {scheduleCachedNutrition,scheduleFetchedNutrition} from '../_shared/selectedNutritionHooks.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -217,6 +219,13 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: 'Method not allowed' }, 405);
   }
 
+  let selectedOperation=false;
+  try{selectedOperation=(await req.clone().json())?.operation==='capture_selected_nutrition_v1';}catch{}
+  if(selectedOperation){
+    const admin=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    return await handleSelectedNutrition(req,admin,corsHeaders);
+  }
+
   // Only the explicit operation enters this terminal authenticated branch.
   let portionOperation=false;
   try {portionOperation=(await req.clone().json())?.operation==='usda_portions_v1';}
@@ -271,6 +280,7 @@ Deno.serve(async (req: Request) => {
 
   // If found in DB, return immediately
   if (dbRow) {
+    scheduleCachedNutrition(supabase,req,String(dbRow.id));
     await refreshCachedSelection(supabase,req,{foodId:dbRow.id,provider:dbRow.usda_fdc_id?'usda':'openfoodfacts',sourceId:String(dbRow.usda_fdc_id||dbRow.barcode)});
     const decorated=await decorateCachedProducts([{_usda_fdc_id:dbRow.usda_fdc_id,product_name:dbRow.name,nutriments:{}}],supabase,150);
     return jsonResponse({ found: true, item: {...dbRow,_portion_evidence:decorated[0]?._portion_evidence??null}, source: 'supabase' });
@@ -284,7 +294,7 @@ Deno.serve(async (req: Request) => {
   // Step 2: Call OpenFoodFacts
   let offProduct: Record<string, unknown> | null = null;
   try {
-    const offUrl = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=code,product_name,generic_name,brands,serving_size,serving_quantity,nutriments,nutriscore_grade,unique_scans_n,selected_images${(Deno.env.get('NUTRIENT_REFRESH_ENABLED')==='true'||Deno.env.get('OFF_MASS_CAPTURE_ENABLED')==='true')?',ingredients_text,preparation,serving_quantity_unit,nutrition_data_per,nutrition_data_prepared_per,nutrition':''}`;
+    const offUrl = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=code,product_name,generic_name,brands,serving_size,serving_quantity,nutriments,nutriscore_grade,unique_scans_n,selected_images,ingredients_text,preparation,serving_quantity_unit,nutrition_data_per,nutrition_data_prepared_per,nutrition`;
     const offRes = await fetch(offUrl, {
       headers: { 'User-Agent': 'MacroGoal/1.0 (macro-goal.app)' },
     });
@@ -309,6 +319,9 @@ Deno.serve(async (req: Request) => {
   // Identity must match before provider or model data is considered.
   if(!barcodeCandidates(String(offProduct.code??'')).some((code:string)=>barcodesToTry.includes(code))) return jsonResponse({found:false,error:'provider_identity_mismatch'},503);
 
+  // The filtered OFF response is persisted as partial source evidence only.
+  scheduleFetchedNutrition(supabase,req,'openfoodfacts',String(offProduct.code),offProduct,null,'search_response');
+
   // New-food-only known-mass path. No legacy insert or model fallback after this gate.
   { // Safety is unconditional; the write switch never enables a legacy insert.
     const mass=await createOffMass({admin:supabase,request:req,product:offProduct,
@@ -325,3 +338,4 @@ Deno.serve(async (req: Request) => {
   }
 
 });
+

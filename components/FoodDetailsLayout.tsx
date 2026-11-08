@@ -1,3 +1,5 @@
+import { captureSelectedNutrition } from '@/utils/selectedNutritionCapture';
+import { preferredUsdaPortion } from '@/utils/preferredUsdaPortion';
 import { persistUsdaSelection, usdaIdentityIsCurrent, type UsdaSelectionOutcome } from '@/utils/usdaSelectionPersistence';
 import { foodJsonSnapshot, savedMealForFoodDetails, savedMealFoodUpdate, savedMealPortionForDetails } from '@/utils/foodPersistence';
 import { catalogPackageBarcode, exactFdcId, readSavedPortion, readSavedPortionLabel, savedPortionSnapshot, portionDescription, type SavedPortion } from '@/utils/catalogSelection';
@@ -686,6 +688,7 @@ export default function FoodDetailsLayout({
     try {
       let parsedProduct: OpenFoodFactsProduct = JSON.parse(offData);
       if(routeContext.recoverySaved==='1')parsedProduct._serving_authority='confirmed_correction';
+      if(mode!=='edit'&&!itemId)void captureSelectedNutrition(parsedProduct,food_item_id).catch(()=>{});
       const fdcId=exactFdcId(parsedProduct._usda_fdc_id);
       if (fdcId && parsedProduct._serving_authority!=='confirmed_correction') {
         parsedProduct._usda_fdc_id=fdcId;
@@ -732,7 +735,12 @@ export default function FoodDetailsLayout({
       const servingSizeStr = typeof parsedProduct.serving_size === 'string' ? parsedProduct.serving_size.trim() : '';
       const { unitName, unitCount } = extractUnitFromString(servingSizeStr);
 
-      if (unitName && totalGrams > 0) {
+      const practicalPortion=preferredUsdaPortion(parsedProduct,mode,itemId);
+      if(practicalPortion){
+        setServingAmount(practicalPortion.gramsPerUnit);
+        setNumberOfServings('1');
+        setSelectedServingOptionKey(practicalPortion.key);
+      } else if (unitName && totalGrams > 0) {
         // We have a real unit — select natural_unit, set quantity to unitCount
         const gramsPerUnit = unitCount > 1 ? totalGrams / unitCount : totalGrams;
         const singular = singularizeUnit(unitName);
@@ -2335,3 +2343,5 @@ export default function FoodDetailsLayout({
     </SafeAreaView>
   );
 }
+
+

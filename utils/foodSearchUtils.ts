@@ -1,3 +1,4 @@
+import { preferredUsdaPortion } from './preferredUsdaPortion';
 
 /**
  * Shared food-search utilities used by add-food.tsx and food-search.tsx.
@@ -38,7 +39,12 @@ export function buildResultItem(product: OpenFoodFactsProduct, source: ResultSou
     displayCalories: NaN, displayProtein: NaN, displayCarbs: NaN, displayFats: NaN, displayFiber: NaN,
   };
   product = normalizeUsdaProduct(product);
-  const servingInfo = extractServingSize(product);
+  // Use only a source-measured practical portion already present in this result.
+  // No detail fetch per row; quick-add receives the same serving shown here.
+  const practical=preferredUsdaPortion(product,'view');
+  if(practical)product={...product,serving_quantity:practical.gramsPerUnit,
+    serving_size:'1 '+practical.description+' ('+practical.gramsPerUnit+' g)'};
+  const servingInfo = practical?{grams:practical.gramsPerUnit,displayText:product.serving_size!}:extractServingSize(product);
   const nutrition = extractNutritionPerServing(product, servingInfo.grams);
   return {
     product,
@@ -171,3 +177,4 @@ export async function buildOffProductFromFoodItemId(foodItemId: string): Promise
 }
 
 export { persistUsdaSelection } from './usdaSelectionPersistence';
+

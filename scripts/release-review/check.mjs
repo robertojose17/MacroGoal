@@ -15,6 +15,8 @@ const ts=require(typescript);
 const modules=process.env.BARCODE_RECOVERY_NODE_MODULES||path.dirname(path.dirname(path.dirname(require.resolve(typescript))));
 const env={...process.env,TYPESCRIPT_MODULE:typescript,BARCODE_RECOVERY_NODE_MODULES:modules,MACROGOAL_CLIENT_ROOT:root,SEARCH_AUTHORITY_FUNCTIONS_ROOT:path.join(root,'supabase/functions')};
 const client=[
+ 'tests/selected-nutrition-client.test.cjs',
+ 'tests/preferred-usda-portion.test.cjs',
  'tests/client-readiness.test.cjs',
  'tests/usda-selection-identity.test.cjs',
  'tests/food-search.test.cjs',
@@ -55,4 +57,5 @@ if(group==='all'||group==='syntax'){
  if(errors)process.exit(1);
 }
 if(group==='all'||group==='client')run(client);
-if(group==='all'||group==='contracts')run(['tests/release-review/backend/assembled-contracts.test.mjs','tests/manual-recovery-contract.test.mjs']);
+if(group==='all'||group==='contracts')run(['tests/release-review/backend/assembled-contracts.test.mjs','tests/manual-recovery-contract.test.mjs','tests/selectedNutrition.test.mjs','tests/selectedNutritionEndpoint.test.mjs','tests/selectedNutritionHooks.test.mjs','tests/portionNutrition.integration.test.mjs','tests/searchNutritionCapture.test.mjs','tests/selected-nutrition-sql.test.mjs','tests/selected-nutrition-pglite.test.mjs']);
+

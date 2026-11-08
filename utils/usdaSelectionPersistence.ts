@@ -219,3 +219,18 @@ export async function continueUsdaSelection(identity: PendingUsdaIdentity): Prom
   if (!await stillCurrent(owner)) return unknown(identity);
   return result.status === 'persisted' ? result : reconcileUsdaSelection(identity);
 }
+
+/** Reuse the existing auth-session epoch for optional detail capture. No credential is exposed. */
+export async function selectedNutritionScope():Promise<{userId:string;epoch:string}|null>{
+ const owner=await currentScope();return owner?{userId:owner.userId,epoch:owner.epoch}:null;
+}
+export async function invokeSelectedNutritionCapture(expected:{userId:string;epoch:string},body:Record<string,string>):Promise<unknown>{
+ const owner=await currentScope();
+ if(!owner||owner.userId!==expected.userId||owner.epoch!==expected.epoch)throw Error('selection_owner_changed');
+ const {data,error}=await supabase.auth.getSession();
+ const session=data?.session;
+ if(error||!session||session.user.id!==owner.userId||sessionId(session.access_token)!==owner.sessionId||!await stillCurrent(owner))throw Error('selection_owner_changed');
+ // Bind this dispatch to the admitted session, not a later SDK account snapshot.
+ return supabase.functions.invoke('lookup-barcode',{body,headers:{Authorization:'Bearer '+session.access_token}});
+}
+
