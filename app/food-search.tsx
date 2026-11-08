@@ -1,3 +1,5 @@
+import { scheduleSearchPracticalPortion } from '@/utils/searchPracticalPortions';
+import { useFocusEffect } from '@react-navigation/native';
 import { captureSelectedNutrition } from '@/utils/selectedNutritionCapture';
 import { searchSelectionNeedsConfirmation, searchConfirmationRoute } from '@/utils/searchSelectionSafety';
 
@@ -168,6 +170,8 @@ export default function FoodSearchScreen() {
     };
   }, [date, mealType]);
 
+  useFocusEffect(useCallback(()=>()=>{abortControllerRef.current?.abort();if(debounceTimerRef.current)clearTimeout(debounceTimerRef.current);},[]));
+
   const performSearch = useCallback((query: string) => {
     console.log('[FoodSearch] ========== PERFORMING HYBRID SEARCH ==========');
     console.log('[FoodSearch] Query:', query);
@@ -188,6 +192,7 @@ export default function FoodSearchScreen() {
     setHasSearched(true);
     setIsSearching(true);
 
+    let practicalScheduled=false;
     hybridSearch(
       query,
       {
@@ -228,6 +233,7 @@ export default function FoodSearchScreen() {
         },
         onComplete: () => {
           if (controller.signal.aborted) return;
+          if(!practicalScheduled){practicalScheduled=true;scheduleSearchPracticalPortion(resultsMapRef.current,controller.signal,()=>!controller.signal.aborted&&currentQueryRef.current===query,setResults);}
           console.log('[FoodSearch] Search complete for query:', query);
           setIsSearching(false);
         },

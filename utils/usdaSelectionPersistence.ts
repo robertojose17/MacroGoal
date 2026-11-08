@@ -234,3 +234,8 @@ export async function invokeSelectedNutritionCapture(expected:{userId:string;epo
  return supabase.functions.invoke('lookup-barcode',{body,headers:{Authorization:'Bearer '+session.access_token}});
 }
 
+
+/** Synchronous retirement check for queued optional UI updates. Auth observer owns scope. */
+export function selectedNutritionScopeIsCurrent(expected:{userId:string;epoch:string}):boolean{
+ return scope?.userId===expected.userId&&scope.epoch===expected.epoch;
+}

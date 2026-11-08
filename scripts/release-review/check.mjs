@@ -15,6 +15,7 @@ const ts=require(typescript);
 const modules=process.env.BARCODE_RECOVERY_NODE_MODULES||path.dirname(path.dirname(path.dirname(require.resolve(typescript))));
 const env={...process.env,TYPESCRIPT_MODULE:typescript,BARCODE_RECOVERY_NODE_MODULES:modules,MACROGOAL_CLIENT_ROOT:root,SEARCH_AUTHORITY_FUNCTIONS_ROOT:path.join(root,'supabase/functions')};
 const client=[
+ 'tests/search-practical-portions.test.cjs',
  'tests/catalog-usda-portions.test.cjs',
  'tests/selected-nutrition-client.test.cjs',
  'tests/preferred-usda-portion.test.cjs',

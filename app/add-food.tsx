@@ -1,3 +1,4 @@
+import { scheduleSearchPracticalPortion } from '@/utils/searchPracticalPortions';
 import { captureSelectedNutrition } from '@/utils/selectedNutritionCapture';
 import { foodLogIds } from '@/utils/foodPersistence';
 import { searchSelectionNeedsConfirmation, searchConfirmationRoute } from '@/utils/searchSelectionSafety';
@@ -116,7 +117,7 @@ export default function AddFoodScreen() {
   useFocusEffect(useCallback(() => {
     const navigation = { active: true, id: `${JSON.stringify([context, returnTo, mode, planId, date, mealType])}:${Date.now()}-${Math.random()}` };
     quickAddNavigationRef.current = navigation;
-    return () => { navigation.active = false; };
+    return () => { navigation.active = false; searchAbortRef.current?.abort(); if(searchDebounceRef.current)clearTimeout(searchDebounceRef.current); };
   }, [context, returnTo, mode, planId, date, mealType]));
 
 
@@ -420,6 +421,7 @@ export default function AddFoodScreen() {
     setHasSearched(true);
     setIsSearching(true);
 
+    let practicalScheduled=false;
     hybridSearch(
       query,
       {
@@ -457,6 +459,7 @@ export default function AddFoodScreen() {
         },
         onComplete: () => {
           if (controller.signal.aborted) return;
+          if(!practicalScheduled){practicalScheduled=true;scheduleSearchPracticalPortion(searchResultsMapRef.current,controller.signal,()=>!controller.signal.aborted&&currentSearchQueryRef.current===query,setSearchResults);}
           console.log('[AddFood] Hybrid search complete for query:', query);
           setIsSearching(false);
         },

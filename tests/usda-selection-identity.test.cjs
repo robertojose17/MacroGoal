@@ -57,7 +57,7 @@ function harness() {
 }
 function bind(file, name, context) {
   // Optional snapshot capture is isolated from this coordinator's provider clock.
-  context.resolveCatalogUsdaPortions??=async()=>null;context.captureSelectedNutrition??=async()=> 'unavailable';
+  context.resolveCatalogUsdaPortions??=async()=>null;context.scheduleSearchPracticalPortion??=()=>{};context.captureSelectedNutrition??=async()=> 'unavailable';
   context.preferredUsdaPortion??=loader({})('utils/preferredUsdaPortion.ts').preferredUsdaPortion;
   if(!Object.hasOwn(context,'mode'))context.mode='view';
   if(!Object.hasOwn(context,'itemId'))context.itemId=undefined;
