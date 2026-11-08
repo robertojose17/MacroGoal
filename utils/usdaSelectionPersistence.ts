@@ -31,6 +31,7 @@ const record = (v: unknown): v is Record<string, unknown> => typeof v === 'objec
 let scope: Scope | null = null;
 let initialized = false;
 let authRevision = 0;
+let lastAuthEvent: string | undefined;
 let continuityEpoch = 0;
 let observedAuth = false;
 let operationSequence = 0;
@@ -55,7 +56,7 @@ function sessionId(token: string): string | null {
   } catch { return null; }
 }
 function acceptSession(session: Session | null, event?: string) {
-  if (event) authRevision++;
+  if (event) { authRevision++; lastAuthEvent = event; }
   const id = session ? sessionId(session.access_token) : null;
   const unchanged = scope && session && id
     ? scope.userId === session.user.id && scope.sessionId === id
@@ -84,7 +85,15 @@ async function currentScope(): Promise<Scope | null> {
       if (error) return null;
       acceptSession(data.session);
       if (startingScope && scope !== startingScope) return null;
-    } else return startingScope && scope === startingScope ? scope : null;
+    } else {
+      // The first SDK initialization event may race the matching getSession read.
+      // Admit only that single INITIAL_SESSION event and exact same owner/session.
+      // Real sign-in/out or multiple transitions still retire this gesture.
+      if (!startingScope && authRevision === revision + 1 && lastAuthEvent === 'INITIAL_SESSION' &&
+          !error && data.session && scope && scope.userId === data.session.user.id &&
+          scope.sessionId === sessionId(data.session.access_token)) return scope;
+      return startingScope && scope === startingScope ? scope : null;
+    }
     // Refresh may keep the same epoch; a gesture must never migrate to a new one.
   } catch { return null; }
   return scope;
@@ -239,3 +248,4 @@ export async function invokeSelectedNutritionCapture(expected:{userId:string;epo
 export function selectedNutritionScopeIsCurrent(expected:{userId:string;epoch:string}):boolean{
  return scope?.userId===expected.userId&&scope.epoch===expected.epoch;
 }
+

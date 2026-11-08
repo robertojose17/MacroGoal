@@ -1,0 +1,20 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const ts=require(process.env.TYPESCRIPT_MODULE||(process.env.BARCODE_RECOVERY_NODE_MODULES?process.env.BARCODE_RECOVERY_NODE_MODULES+'/typescript':'typescript'));
+const artifacts=process.env.NUTRITION_CLIENT_ARTIFACTS==='1';
+const source=fs.readFileSync(artifacts?path.join(__dirname,'usdaSelectionPersistence.initial-session-fix.ts'):path.resolve(__dirname,'../utils/usdaSelectionPersistence.ts'),'utf8');
+const sid='22222222-2222-4222-8222-222222222222',sid2='33333333-3333-4333-8333-333333333333';
+const session=(user='owner',id=sid)=>({user:{id:user},access_token:'fixture.'+Buffer.from(JSON.stringify({session_id:id})).toString('base64url')+'.fixture'});
+function harness({timing='during',events,returned=session(),error=null}={}){
+ let listener,started=false;let reads=0;
+ const emit=()=>{for(const [event,value] of events||[['INITIAL_SESSION',session()]])listener(event,value);};
+ const supabase={auth:{onAuthStateChange(fn){listener=fn;if(timing==='before')emit();return {data:{subscription:{unsubscribe(){}}}};},async getSession(){reads++;if(!started){started=true;if(timing==='during'){await Promise.resolve();emit();}}return {data:{session:returned},error};}},functions:{invoke(){throw Error('No provider calls in auth tests');}}};
+ const m={exports:{}};vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module:m,exports:m.exports,require:n=>n.includes('supabase/client')?{supabase}:{exactFdcId:v=>v},setTimeout,clearTimeout,console});
+ return {...m.exports,emit,event:(e,s)=>listener(e,s),get reads(){return reads;}};
+}
+test('FIRST scope admits exact matching INITIAL_SESSION during getSession instead of dropping initial search',async()=>{const h=harness();const first=await h.selectedNutritionScope();assert.equal(first.userId,'owner');const second=await h.selectedNutritionScope();assert.equal(first.epoch,second.epoch);assert.equal(h.reads,2);});
+test('INITIAL_SESSION before read and after read preserve the same owner epoch',async()=>{const before=harness({timing:'before'});assert.equal((await before.selectedNutritionScope()).userId,'owner');const after=harness({timing:'after'});const first=await after.selectedNutritionScope();after.emit();assert.equal((await after.selectedNutritionScope()).epoch,first.epoch);});
+test('initial snapshot with a different owner or different JWT session is never admitted',async()=>{for(const value of [session('other'),session('owner',sid2),null]){const h=harness({events:[['INITIAL_SESSION',value]]});assert.equal(await h.selectedNutritionScope(),null);}});
+test('real sign in, sign out and token refresh events during initial read do not get initialization exception',async()=>{for(const event of ['SIGNED_IN','SIGNED_OUT','TOKEN_REFRESHED']){const h=harness({events:[[event,session()]]});assert.equal(await h.selectedNutritionScope(),null,event);}});
+test('multiple transitions cannot disguise signout/signin as INITIAL_SESSION',async()=>{for(const events of [[['SIGNED_OUT',null],['INITIAL_SESSION',session()]],[['INITIAL_SESSION',session()],['SIGNED_IN',session('other')],['INITIAL_SESSION',session()]]])assert.equal(await harness({events}).selectedNutritionScope(),null);});
+test('auth read errors, absent session and malformed session remain unavailable',async()=>{for(const patch of [{error:Error('auth unavailable')},{returned:null},{returned:{user:{id:'owner'},access_token:'malformed'}}])assert.equal(await harness(patch).selectedNutritionScope(),null);});
+test('queued display updater cannot use a scope retired by later signout or account change',async()=>{for(const [event,value]of [['SIGNED_OUT',null],['SIGNED_IN',session('other')]]){const h=harness();const first=await h.selectedNutritionScope();assert.equal(h.selectedNutritionScopeIsCurrent(first),true);h.event(event,value);assert.equal(h.selectedNutritionScopeIsCurrent(first),false);}});
