@@ -173,10 +173,10 @@
   "runtime_hashes": {
     "supabase/functions/_shared/foodPortions.mjs": "4e35b3395b0f0ea5c1fe75f3736c276feeecbac250e3cb8f0bdfba36258d46af",
     "supabase/functions/_shared/nutritionProvider.mjs": "46e1b26ad520ba8a56267f5afef39254a4fd73be59d04cf527198b6136abeaa9",
-    "supabase/functions/_shared/nutritionRefresh.mjs": "a23d8cf47a584b612ab71c6299553b13a11547f62ebf5927bf200f8a598f7649",
+    "supabase/functions/_shared/nutritionRefresh.mjs": "ba05b7fcbc1528c1aa6b4ebe05fb70432a0e0749b9f59abf9feda0a969746b84",
     "supabase/functions/_shared/offMass.mjs": "73accc8abcbd48ddd621f6c669056e5f70c5ff6fbfe70e7c8d8c158946c79687",
     "supabase/functions/_shared/portionCache.mjs": "c98020b0cb3deba3e9eec2fd18d61728fbc76babb70075009bc656b874e7d397",
-    "supabase/functions/_shared/portionEndpoint.ts": "78ad01093c21d6ca819d88cfd4aedd2e351e407ec07fcb70ac7a297fbd418939",
+    "supabase/functions/_shared/portionEndpoint.ts": "3ecc3fea5a5772fb014e783f71c3adae4fc6ea202855ddcb5ba5af2b024b9c69",
     "supabase/functions/_shared/searchHydration.mjs": "76029d8f3a758bb399dcf19aea784759eb511dfa5a8fac5b841c9607740565f6",
     "supabase/functions/lookup-barcode/identity.mjs": "b70394495d826c51667923cb5d32598c9ae0caa2aa2ea4a4efeae3bb558d9863",
     "supabase/functions/lookup-barcode/index.ts": "d505f4eb52dbb498b3e3235942a08b257fa1db21aaa58a75ba1aaf547e21dd43",
@@ -185,8 +185,8 @@
     "release-candidates/food-catalog/sql/01-nutrition/enrichment.CANDIDATE.sql": "46eadc8e037461fabfaae5cafa8ebc50d96db92ea47fd8a0d8504dc65d5cace9",
     "release-candidates/food-catalog/sql/02-off-registry/off-mass.CANDIDATE.sql": "1746fd0cf38948b6115d99c4111a281b652a86229005be1ed8692e7299049329",
     "release-candidates/food-catalog/sql/03-search/search-snapshots.CANDIDATE.sql": "552370558e383fd4add91540404d7d81c64f91d3e942b0c91597a3f574c5181b",
-    "supabase/functions/_shared/selectedNutrition.mjs": "e6cacba824809af7bfede217cdfe40640e66cbadfd8af917577f0de05792a571",
-    "supabase/functions/_shared/selectedNutritionEndpoint.ts": "20f492e110483c43af12299786c8914b68e0850b288ccb577fca868c3e73cad6",
+    "supabase/functions/_shared/selectedNutrition.mjs": "e791272704022c7e2c2bf30bc5498c2506803b401d1cc2a43f1da07a3c659b57",
+    "supabase/functions/_shared/selectedNutritionEndpoint.ts": "1438e4ace36f0e40dbb6e36777a5dcedc106e4271e5987476cf4aae75cf5e76a",
     "supabase/functions/_shared/selectedNutritionHooks.ts": "aabd06a17f9acdbdfc964dfc049ae3ee8a99c316c19c9083160d6dc8541e9167",
     "supabase/functions/_shared/catalogPortionBatch.mjs": "cb07d7e67a284203224bae68016e543b4a7ef378eee7eefcdcb89e7f552aa491",
     "supabase/functions/_shared/catalogPortionEvidence.mjs": "066a26e8cd910bb8aef889cf462808d63a65beb67c8bbd329f5c251411d239d7"

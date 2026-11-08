@@ -75,7 +75,7 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
     const apiKey=Deno.env.get('USDA_API_KEY')||'DEMO_KEY';
     const response=await fetch('https://api.nal.usda.gov/fdc/v1/food/'+fdcId+'?api_key='+encodeURIComponent(apiKey),{signal});
     if(!response.ok)throw Error('USDA_PORTION_UNAVAILABLE');
-    food=await readProviderJSON(response,{signal});
+    food=await readProviderJSON(response,{signal,maxBytes:1048576});
    }
    if(String(food?.fdcId)!==fdcId)throw Error('USDA_IDENTITY_MISMATCH');
    if(uuidMode&&normalizedName(food?.description)!==normalizedName(binding.name))throw Error('USDA_DESCRIPTION_MISMATCH');
@@ -124,5 +124,6 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
  if(!uuidMode&&catalogId&&(!providerFetchAttempted||selectedProviderFood!==undefined))await refreshCachedSelection(admin,req,{foodId:catalogId,provider:'usda',sourceId:key,providerFood:selectedProviderFood,authenticated:true});
  return reply({fdc_id:key,portion_evidence:result.envelope,portion_persisted:result.persisted,food_item_id:catalogId,...(cachedOnly?{cache_only:true,cached:!!result.envelope,...(!result.envelope?{code:'cache_miss'}:{})}:{}),...(uuidMode?{food_description:binding.name,binding_verified:true}:{})});
 }
+
 
 

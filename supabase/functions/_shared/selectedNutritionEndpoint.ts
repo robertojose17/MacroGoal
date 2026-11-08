@@ -49,7 +49,7 @@ export async function handleSelectedNutrition(req:Request,admin:any,cors:Record<
   const url=provider==='usda'?'https://api.nal.usda.gov/fdc/v1/food/'+sourceId+'?api_key='+encodeURIComponent(Deno.env.get('USDA_API_KEY')||'DEMO_KEY'):'https://world.openfoodfacts.org/api/v2/product/'+sourceId+'.json';
   const response=await fetch(url,{signal:controller.signal,headers:provider==='openfoodfacts'?{'User-Agent':'MacroGoal/1.0 (macro-goal.app)'}:{}});
   if(!response.ok)return reply({status:'unavailable',reason:'provider_unavailable'},502);
-  const fetched=await readProviderJSON(response,{signal:controller.signal});
+  const fetched=await readProviderJSON(response,{signal:controller.signal,maxBytes:provider==='usda'?1048576:262144});
   if(provider==='openfoodfacts'&&(fetched.status!==1||!fetched.product))return reply({status:'unavailable',reason:'provider_not_found'});
   const raw=provider==='usda'?fetched:fetched.product;
   const evidence=selectedSourceEnvelope(provider,sourceId,raw);
@@ -63,3 +63,4 @@ export async function handleSelectedNutrition(req:Request,admin:any,cors:Record<
   return reply({status:'unavailable',complete:false,reason:['provider_body_too_large','source_payload_too_large','unsupported_nutrient_collection'].includes(reason)?'source_exceeds_capture_limit':'capture_failed'},503);
  } finally {clearTimeout(timer);controller.abort();}
 }
+

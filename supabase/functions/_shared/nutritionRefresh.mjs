@@ -5,7 +5,7 @@ import {createRefreshService} from './nutritionProvider.mjs';
  * @param {{signal?: AbortSignal, maxBytes?: number}} [options]
  */
 export async function readProviderJSON(response,{signal,maxBytes=262144}={}) {
- if(!Number.isSafeInteger(maxBytes)||maxBytes<1||maxBytes>262144)throw Error('invalid_body_limit');
+ if(!Number.isSafeInteger(maxBytes)||maxBytes<1||maxBytes>1048576)throw Error('invalid_body_limit');
  const advertised=Number(response.headers?.get('content-length'));
  if(Number.isFinite(advertised)&&advertised>maxBytes)throw Error('provider_body_too_large');
  const reader=response.body?.getReader();if(!reader)throw Error('provider_body_unavailable');
@@ -123,3 +123,4 @@ export async function refreshCachedSelection(admin,request,selection){
    {request,...selection},{waitUntil:typeof runtime?.waitUntil==='function'?runtime.waitUntil.bind(runtime):undefined});
  }catch{return {status:'capture_unavailable'};}
 }
+

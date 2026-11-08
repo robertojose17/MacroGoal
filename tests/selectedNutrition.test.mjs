@@ -9,7 +9,10 @@ test('complete raw source includes unmapped nutrition without fabricated zero',(
  assert.equal(e.nutrition.nutrients[0].amount,0);assert.equal(e.nutrition.nutrients[1].amount,null);
  assert.equal(e.nutrition.nutrients[1].status,'missing');assert.deepEqual(e.raw_payload,raw);
  assert.throws(()=>capture('usda','2',raw),/identity/);
- assert.throws(()=>capture('usda','1',{...raw,huge:'x'.repeat(300000)}),/too_large/);
+ const large={...raw,huge:'x'.repeat(300000)};
+ assert.throws(()=>capture('usda','1',large,undefined,'search_response'),/too_large/);
+ assert.deepEqual(capture('usda','1',large).raw_payload,large);
+ assert.throws(()=>capture('usda','1',{...raw,huge:'x'.repeat(1048576)}),/too_large/);
  assert.equal(capture('usda','1',raw,undefined,'search_response').complete,false);
  assert.equal(e.complete,true);
 });
@@ -25,3 +28,4 @@ test('OFF search ID fallback never overrides explicit conflicting code',()=>{
  assert.equal(capture('openfoodfacts','123',{_id:'123',nutriments:{}},undefined,'search_response').source_id,'123');
  assert.throws(()=>capture('openfoodfacts','123',{code:'456',_id:'123',nutriments:{}}),/identity/);
 });
+

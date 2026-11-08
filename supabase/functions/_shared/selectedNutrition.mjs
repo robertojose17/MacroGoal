@@ -29,8 +29,9 @@ export function selectedSourceEnvelope(provider,sourceId,raw,capturedAt=new Date
  if(!['usda','openfoodfacts'].includes(provider))throw Error('invalid_provider');
  if(String(provider==='usda'?raw.fdcId:(raw.code??raw._id))!==sourceId)throw Error('source_identity_mismatch');
  if(provider==='openfoodfacts'&&raw.code!=null&&raw._id!=null&&String(raw.code)!==String(raw._id))throw Error('source_identity_mismatch');
+ const largeUsdaDetail=provider==='usda'&&captureScope==='detail_response';
  const encoded=JSON.stringify(raw);
- if(postgresJsonbBytes(JSON.parse(encoded))>262144)throw Error('source_payload_too_large');
+ if(postgresJsonbBytes(JSON.parse(encoded))>(largeUsdaDetail?1048576:262144))throw Error('source_payload_too_large');
  const nutrients=[];
  if(provider==='usda') {
   if(!Array.isArray(raw.foodNutrients)||raw.foodNutrients.length>512)throw Error('unsupported_nutrient_collection');
@@ -58,6 +59,7 @@ export function selectedSourceEnvelope(provider,sourceId,raw,capturedAt=new Date
  const evidence={version:4,provider,source_id:sourceId,captured_at:new Date(capturedAt).toISOString(),
   source_url:provider==='usda'?'https://fdc.nal.usda.gov/food-details/'+sourceId:'https://world.openfoodfacts.org/product/'+sourceId,
   raw_payload:JSON.parse(encoded),nutrition:{basis:provider==='usda'?'per_100g':'provider_declared',nutrients},capture_scope:captureScope,complete:captureScope==='detail_response'};
- if(postgresJsonbBytes(evidence)>524288)throw Error('evidence_payload_too_large');
+ if(postgresJsonbBytes(evidence)>(largeUsdaDetail?2097152:524288))throw Error('evidence_payload_too_large');
  return evidence;
 }
+
