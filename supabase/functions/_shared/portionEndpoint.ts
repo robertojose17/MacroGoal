@@ -21,7 +21,8 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
  try{body=await req.json();}catch{return reply({error:'Invalid request'},400);}
  const isUuid=(v:unknown)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
  const uuidMode=body?.food_item_id!==undefined;
- if(body?.operation!=='usda_portions_v1'||Object.keys(body).some(k=>!['operation','fdc_id','food_item_id'].includes(k))||
+ const cachedOnly=body?.operation==='usda_portions_cached_v1';
+ if((body?.operation!=='usda_portions_v1'&&!cachedOnly)||(cachedOnly&&!uuidMode)||Object.keys(body).some(k=>!['operation','fdc_id','food_item_id'].includes(k))||
   (uuidMode?(!isUuid(body.food_item_id)||body.fdc_id!==undefined):(typeof body.fdc_id!=='string'||!/^\d{1,20}$/.test(body.fdc_id))))return reply({error:'Invalid request'},400);
  const requestedFoodId=uuidMode?body.food_item_id as string:null;
  const normalizedName=(value:unknown)=>typeof value==='string'?value.normalize('NFKC').trim().toLowerCase().replace(/\s+/g,' '):'';
@@ -59,6 +60,7 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
    write:cache.write
   },
   fetchExactFood:async(fdcId:string,signal:AbortSignal)=>{
+   if(cachedOnly)throw Error('cache_only_miss');
    providerFetchAttempted=true;
    const captureRequestId=crypto.randomUUID(),captureFoodId=catalogId;
    let admission:any=null;
@@ -118,6 +120,6 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
   }catch(error){return reply({error:'Portion identity changed',code:error instanceof Error?error.message:'binding_unavailable',food_item_id:requestedFoodId},409);}
  }
  if(!uuidMode&&catalogId&&(!providerFetchAttempted||selectedProviderFood!==undefined))await refreshCachedSelection(admin,req,{foodId:catalogId,provider:'usda',sourceId:key,providerFood:selectedProviderFood,authenticated:true});
- return reply({fdc_id:key,portion_evidence:result.envelope,portion_persisted:result.persisted,food_item_id:catalogId,...(uuidMode?{food_description:binding.name,binding_verified:true}:{})});
+ return reply({fdc_id:key,portion_evidence:result.envelope,portion_persisted:result.persisted,food_item_id:catalogId,...(cachedOnly?{cache_only:true,cached:!!result.envelope,...(!result.envelope?{code:'cache_miss'}:{})}:{}),...(uuidMode?{food_description:binding.name,binding_verified:true}:{})});
 }
 

@@ -228,7 +228,7 @@ Deno.serve(async (req: Request) => {
 
   // Only the explicit operation enters this terminal authenticated branch.
   let portionOperation=false;
-  try {portionOperation=(await req.clone().json())?.operation==='usda_portions_v1';}
+  try {portionOperation=['usda_portions_v1','usda_portions_cached_v1'].includes((await req.clone().json())?.operation);}
   catch {/* Preserve the original barcode JSON validation below. */}
   if(portionOperation){
     try{

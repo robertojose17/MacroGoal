@@ -1,4 +1,5 @@
 import {selectedSourceEnvelope} from './selectedNutrition.mjs';
+import {canonicalGTIN} from './offMass.mjs';
 import {readProviderJSON,createSelectionCapture} from './nutritionRefresh.mjs';
 
 const uuid=(v:unknown)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
@@ -30,13 +31,15 @@ export async function handleSelectedNutrition(req:Request,admin:any,cors:Record<
    provider=body.provider;sourceId=body.source_id;
   }
   if(!['usda','openfoodfacts'].includes(provider)||typeof sourceId!=='string'||!/^\d{1,20}$/.test(sourceId))return reply({status:'ineligible'},400);
+  const requestedSourceId=sourceId;
+  if(provider==='openfoodfacts')sourceId=canonicalGTIN(sourceId)??sourceId;
   const enrich=async(raw:unknown)=>{
    if(!foodId||controller.signal.aborted||raw===undefined)return false;
    const capture=createSelectionCapture({admin,enabled:true,networkEnabled:true,timeoutMs:1500});
    const result=await capture({request:req,foodId,provider,sourceId,providerFood:raw,authenticated:true});
    return result.status==='applied';
   };
-  const acknowledgment=(saved:any,status:string,applied:boolean)=>({status,snapshot_id:saved.snapshot_id,version:saved.version,revision:saved.revision,request_id:body.request_id,food_item_id:foodId,provider,source_id:sourceId,complete:true,capture_scope:'detail_response',canonical_applied:applied});
+  const acknowledgment=(saved:any,status:string,applied:boolean)=>({status,snapshot_id:saved.snapshot_id,version:saved.version,revision:saved.revision,request_id:body.request_id,food_item_id:foodId,provider,source_id:requestedSourceId,captured_source_id:sourceId,complete:true,capture_scope:'detail_response',canonical_applied:applied});
   const {data:admission,error:admissionError}=await admin.rpc('claim_selected_nutrition_v1',{
    p_user_id:auth.data.user.id,p_request_id:body.request_id,p_food_id:foodId,p_provider:provider,p_source_id:sourceId
   }).abortSignal(controller.signal);
