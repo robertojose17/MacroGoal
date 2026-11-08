@@ -39,7 +39,7 @@ test('actual search row adapter uses cached source medium and matching quick-add
   if(name.includes('supabase'))return {supabase:new Proxy({},{get(){throw Error('no database I/O in row adapter')}})};
   return {};
  }).buildResultItem;
- const row=build(p,'supabase');assert.equal(row.product.serving_quantity,118);assert.match(row.servingText,/1 medium \(118 g\)/);assert.equal(row.displayCalories,89*118/100);
+ const row=build(p,'supabase');assert.equal(row.product.serving_quantity,118);assert.equal(row.servingText,'1 medium (118g)');assert.equal(row.displayCalories,89*118/100);
  const absent=build({...p,_portion_evidence:null},'supabase');assert.equal(absent.product.serving_quantity,100);assert.match(absent.servingText,/100 g/);
  const provisional=build({...p,pending:true},'off');assert.equal(provisional.requiresConfirmation,true);assert.equal(provisional.servingText,'');assert.equal(provisional.hasNutrition,false);
  const corrected=build({...p,_serving_authority:'confirmed_correction',serving_quantity:16,serving_size:'1 piece (16 g)'},'supabase');assert.equal(corrected.product.serving_quantity,16);
