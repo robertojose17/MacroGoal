@@ -26,9 +26,10 @@ export async function readProviderJSON(response,{signal,maxBytes=262144}={}) {
  * Both switches are deliberately false by default. No background work/retries.
  * Call only after exact persisted food selection, never on autocomplete results.
  */
+/** @param {{admin:any,enabled?:boolean,networkEnabled?:boolean,fetchImpl?:typeof fetch,usdaKey?:string,requestId?:()=>string,now?:()=>number,timeoutMs?:number}} [options] */
 export function createSelectionCapture({admin,enabled=false,networkEnabled=false,fetchImpl=globalThis.fetch,usdaKey='DEMO_KEY',requestId=()=>crypto.randomUUID(),now=Date.now,timeoutMs=8000}={}) {
  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>8000)throw Error('invalid_timeout');
- return async function capture({request,foodId,provider,sourceId,providerFood,authenticated=false,returnFoodItem=false}={}) {
+ return async function capture(/** @type {{request?:Request,foodId?:string|null,provider?:string,sourceId?:string,providerFood?:unknown,authenticated?:boolean,returnFoodItem?:boolean}} */ {request,foodId,provider,sourceId,providerFood,authenticated=false,returnFoodItem=false}={}) {
   if(!enabled||!networkEnabled)return {status:'disabled'};
   if(!foodId||!['usda','openfoodfacts'].includes(provider)||!/^\d{1,20}$/.test(String(sourceId)))return {status:'ineligible'};
   const deadline=Date.now()+timeoutMs;

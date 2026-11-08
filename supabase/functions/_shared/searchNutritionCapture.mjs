@@ -23,6 +23,10 @@ export function createSearchNutritionBatch({now=()=>new Date().toISOString(),max
 /** Register before starting work. Search latency never waits on storage/network.
  * An unavailable background runtime is explicit, not a pretend durable success.
  */
+/** @param {any} admin
+ * @param {{snapshot:()=>{items:any[],skipped:number}}} batch
+ * @param {{waitUntil?:(promise:Promise<unknown>)=>void,requestId?:()=>string,timeoutMs?:number}} [options]
+ */
 export function scheduleSearchNutritionBatch(admin,batch,{waitUntil,requestId=()=>crypto.randomUUID(),timeoutMs=8000}={}) {
  const {items,skipped}=batch.snapshot();
  if(!items.length)return {status:'empty',queued:0,skipped};

@@ -260,7 +260,8 @@ export async function handleSearch(req: Request): Promise<Response> {
     },
   });
   // Preserve received nutrition without extra provider calls or query/user history.
-  const nutrition_capture=scheduleSearchNutritionBatch(supabase,nutritionBatch,{waitUntil:typeof globalThis.EdgeRuntime?.waitUntil==='function'?globalThis.EdgeRuntime.waitUntil.bind(globalThis.EdgeRuntime):undefined});
+  const nutritionRuntime=(globalThis as typeof globalThis & {EdgeRuntime?:{waitUntil?:(promise:Promise<unknown>)=>void}}).EdgeRuntime;
+  const nutrition_capture=scheduleSearchNutritionBatch(supabase,nutritionBatch,{waitUntil:typeof nutritionRuntime?.waitUntil==='function'?nutritionRuntime.waitUntil.bind(nutritionRuntime):undefined});
   // Old clients default absent nutrition to zero and cannot safely consume review-only rows.
   // Gate only responses that actually contain confirmation-required results.
   const responseRequiresConfirmation = result.products.some(product => product.requires_label_confirmation === true);
