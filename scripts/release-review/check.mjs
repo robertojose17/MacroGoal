@@ -61,7 +61,8 @@ if(group==='all'||group==='syntax'){
  if(errors)process.exit(1);
 }
 if(group==='all'||group==='client')run(client);
-if(group==='all'||group==='contracts')run(['tests/portion-cache-retention.test.mjs','tests/usda-large-detail.test.mjs','tests/selected-nutrition-usda-size.pglite.test.mjs','tests/catalog-portion-batch.test.mjs','tests/usda-egg-portions.test.mjs','tests/catalog-portion-sources.test.mjs','tests/catalog-portion-sources.pglite.test.mjs','tests/nutrition-capture-regressions.test.mjs','tests/release-review/backend/assembled-contracts.test.mjs','tests/manual-recovery-contract.test.mjs','tests/selectedNutrition.test.mjs','tests/selectedNutritionEndpoint.test.mjs','tests/selectedNutritionHooks.test.mjs','tests/portionNutrition.integration.test.mjs','tests/portionUuid.integration.test.mjs','tests/searchNutritionCapture.test.mjs','tests/selected-nutrition-sql.test.mjs','tests/selected-nutrition-pglite.test.mjs']);
+if(group==='all'||group==='contracts')run(['tests/catalog-portion-budget.test.mjs','tests/portion-cache-retention.test.mjs','tests/usda-large-detail.test.mjs','tests/selected-nutrition-usda-size.pglite.test.mjs','tests/catalog-portion-batch.test.mjs','tests/usda-egg-portions.test.mjs','tests/catalog-portion-sources.test.mjs','tests/catalog-portion-sources.pglite.test.mjs','tests/nutrition-capture-regressions.test.mjs','tests/release-review/backend/assembled-contracts.test.mjs','tests/manual-recovery-contract.test.mjs','tests/selectedNutrition.test.mjs','tests/selectedNutritionEndpoint.test.mjs','tests/selectedNutritionHooks.test.mjs','tests/portionNutrition.integration.test.mjs','tests/portionUuid.integration.test.mjs','tests/searchNutritionCapture.test.mjs','tests/selected-nutrition-sql.test.mjs','tests/selected-nutrition-pglite.test.mjs']);
+
 
 
 

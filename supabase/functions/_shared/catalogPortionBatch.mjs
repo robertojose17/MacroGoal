@@ -15,7 +15,7 @@ export async function attachCatalogPortionSources(products,admin,mapCurrent,mill
  if(!ids.length)return products;
  const controller=new AbortController();let timer;let rows=[];
  try{
-  rows=await Promise.race([(async()=>{const {data,error}=await admin.rpc('read_catalog_portion_sources_v1',{p_food_ids:ids}).abortSignal(controller.signal);return !error&&Array.isArray(data)&&data.length<=100?data:[];})(),new Promise(resolve=>{timer=setTimeout(()=>{controller.abort();resolve([]);},Math.min(400,Math.max(1,milliseconds)));})]);
+  rows=await Promise.race([(async()=>{const {data,error}=await admin.rpc('read_catalog_portion_sources_v1',{p_food_ids:ids}).abortSignal(controller.signal);return !error&&Array.isArray(data)&&data.length<=100?data:[];})(),new Promise(resolve=>{timer=setTimeout(()=>{controller.abort();resolve([]);},Math.min(800,Math.max(1,milliseconds)));})]);
  }catch{}finally{clearTimeout(timer);controller.abort();}
  const byId=new Map(),duplicates=new Set();
  for(const entry of rows){if(!plain(entry)||!ids.includes(entry.id))continue;if(byId.has(entry.id))duplicates.add(entry.id);byId.set(entry.id,entry);}

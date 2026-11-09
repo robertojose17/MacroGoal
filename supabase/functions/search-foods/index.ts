@@ -219,6 +219,7 @@ export async function handleSearch(req: Request): Promise<Response> {
   const uncertainProducts = new WeakSet<object>();
   let hydrationPartial = false;
   let requiresLabelConfirmation = false;
+  const searchStarted = Date.now();
   const result = await searchCatalog(query,limit,{
     skipFallback: () => requiresLabelConfirmation,
     db: async (normalized,signal,deadlineMs) => {
@@ -264,7 +265,8 @@ export async function handleSearch(req: Request): Promise<Response> {
   const nutritionRuntime=(globalThis as typeof globalThis & {EdgeRuntime?:{waitUntil?:(promise:Promise<unknown>)=>void}}).EdgeRuntime;
   const nutrition_capture=scheduleSearchNutritionBatch(supabase,nutritionBatch,{waitUntil:typeof nutritionRuntime?.waitUntil==='function'?nutritionRuntime.waitUntil.bind(nutritionRuntime):undefined});
   result.products = await attachCatalogPortionSources(result.products,supabase,
-    (row:Record<string,unknown>,protectedRow:boolean)=>mapDbRowToOff(row,query,protectedRow),300);
+    (row:Record<string,unknown>,protectedRow:boolean)=>mapDbRowToOff(row,query,protectedRow),
+    Math.min(800,Math.max(1,4200-(Date.now()-searchStarted))));
   // Old clients default absent nutrition to zero and cannot safely consume review-only rows.
   // Gate only responses that actually contain confirmation-required results.
   const responseRequiresConfirmation = result.products.some(product => product.requires_label_confirmation === true);

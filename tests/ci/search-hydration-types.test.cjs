@@ -17,7 +17,7 @@ test('search type annotation leaves the reviewed capture source emitted JavaScri
   assert.equal(text.split(annotation).length - 1, 1);
   assert.ok(text.includes(annotation + "import { hydrateSearchRows, hasCanonicalGramServing, normalizeSearchNutrition, searchNutritionIssue, serializeSearchProduct } from '../_shared/searchHydration.mjs';"));
   const original = text.replace(annotation, '');
-  assert.equal(sha256(original), 'e55c95615b5add59f13eb1c52ba16483dd93b25776fd4cf5bea7748b0991506f');
+  assert.equal(sha256(original), 'ba565996ca8a2543d4e18ca6e3283af34f50a10fbbb03e441cf3b6c0cea402a5');
   const compilerOptions = { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, removeComments: true };
   assert.equal(ts.transpileModule(text, { compilerOptions }).outputText, ts.transpileModule(original, { compilerOptions }).outputText);
   assert.equal(sha256(fs.readFileSync(path.join(root, 'supabase/functions/_shared/searchHydration.mjs'))), '76029d8f3a758bb399dcf19aea784759eb511dfa5a8fac5b841c9607740565f6');
@@ -68,4 +68,5 @@ const privateField: SearchSnapshotField = 'user_id';
     assert.deepEqual(errors, []);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
+
 

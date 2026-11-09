@@ -180,7 +180,7 @@
     "supabase/functions/_shared/searchHydration.mjs": "76029d8f3a758bb399dcf19aea784759eb511dfa5a8fac5b841c9607740565f6",
     "supabase/functions/lookup-barcode/identity.mjs": "b70394495d826c51667923cb5d32598c9ae0caa2aa2ea4a4efeae3bb558d9863",
     "supabase/functions/lookup-barcode/index.ts": "d505f4eb52dbb498b3e3235942a08b257fa1db21aaa58a75ba1aaf547e21dd43",
-    "supabase/functions/search-foods/index.ts": "20c48fa70bfb25d72193b0ad6168d5ad9ff5c76826b5c82e6c794c6c0acab091",
+    "supabase/functions/search-foods/index.ts": "bc42f64ee3282215a7057a54a79972937d16ac7ddbe2f01d2aa3c45a45116e65",
     "supabase/functions/search-foods/searchCore.ts": "69153d399564c543dbdcc20056fc2f4c752cac36ae1dd4029027993b769f5285",
     "release-candidates/food-catalog/sql/01-nutrition/enrichment.CANDIDATE.sql": "46eadc8e037461fabfaae5cafa8ebc50d96db92ea47fd8a0d8504dc65d5cace9",
     "release-candidates/food-catalog/sql/02-off-registry/off-mass.CANDIDATE.sql": "1746fd0cf38948b6115d99c4111a281b652a86229005be1ed8692e7299049329",
@@ -188,7 +188,7 @@
     "supabase/functions/_shared/selectedNutrition.mjs": "e791272704022c7e2c2bf30bc5498c2506803b401d1cc2a43f1da07a3c659b57",
     "supabase/functions/_shared/selectedNutritionEndpoint.ts": "1438e4ace36f0e40dbb6e36777a5dcedc106e4271e5987476cf4aae75cf5e76a",
     "supabase/functions/_shared/selectedNutritionHooks.ts": "aabd06a17f9acdbdfc964dfc049ae3ee8a99c316c19c9083160d6dc8541e9167",
-    "supabase/functions/_shared/catalogPortionBatch.mjs": "cb07d7e67a284203224bae68016e543b4a7ef378eee7eefcdcb89e7f552aa491",
+    "supabase/functions/_shared/catalogPortionBatch.mjs": "f4a451af21d9c90a29f49a62608bb088d436e0b0343955c1cdc261e9faeb8ab7",
     "supabase/functions/_shared/catalogPortionEvidence.mjs": "066a26e8cd910bb8aef889cf462808d63a65beb67c8bbd329f5c251411d239d7"
   },
   "client_source_paths": [
