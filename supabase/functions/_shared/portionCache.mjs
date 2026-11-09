@@ -74,7 +74,15 @@ export function servicePortionCache(admin) {
 
 /** Search never fetches provider details. One batch read, bounded independently. */
 export async function decorateCachedProducts(products, admin, milliseconds = 150) {
- const ids=[...new Set(products.map(p=>p._usda_fdc_id).filter(v=>/^\d{1,20}$/.test(String(v))))];
+ const identityName=value=>typeof value==='string'?value.normalize('NFKC').trim().toLowerCase().replace(/\s+/g,' '):'';
+ const now=Date.now();
+ const fresh=envelope=>{const at=Date.parse(envelope?.retrievedAt);return Number.isFinite(at)&&at<=now&&at>=now-30*24*60*60*1000;};
+ // These products are server-owned projections. An already validated atomic
+ // snapshot must not be erased by a later optional cache miss or timeout.
+ const retained=new Set(products.filter(p=>p?._serving_authority==='confirmed_correction'||
+  (readUsdaPortions(p?._portion_evidence,p?._usda_fdc_id).length>0&&fresh(p._portion_evidence)&&
+   identityName(p.product_name||p.generic_name)===identityName(p._portion_evidence.foodDescription))));
+ const ids=[...new Set(products.filter(p=>!retained.has(p)).map(p=>p._usda_fdc_id).filter(v=>/^\d{1,20}$/.test(String(v))))];
  if(!ids.length)return products;
  const controller=new AbortController(); let timer;
  const expired=new Promise(resolve=>{timer=setTimeout(()=>{controller.abort();resolve([]);},milliseconds);});
@@ -83,6 +91,7 @@ export async function decorateCachedProducts(products, admin, milliseconds = 150
   rows=await Promise.race([(async()=>{const {data,error}=await admin.rpc('read_usda_portions_v1',{p_fdc_ids:ids.slice(0,100)}).abortSignal(controller.signal);return !error&&Array.isArray(data)?data:[];})(),expired]);
  }catch{}finally{clearTimeout(timer);controller.abort();}
  const evidence=new Map(rows.map(r=>[r.fdc_id,r.payload]));
- return products.map(p=>applyUsdaPortion(p,evidence.get(p._usda_fdc_id)));
+ return products.map(p=>retained.has(p)?p:applyUsdaPortion(p,evidence.get(p._usda_fdc_id)));
 }
+
 

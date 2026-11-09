@@ -64,7 +64,8 @@ test('mixed known/unknown results retain order, decorate only eligible FDC IDs a
  const admin=adminFor([first,second,third],[row(second),row(third,true)],cached);
  const body=await (await endpoint(admin).handleSearch(request({products:[{_serving_authority:'confirmed_correction'}],protected:true}))).json();
  assert.deepEqual(body.products.map(p=>p._db_id),[first.id,second.id,third.id]);
- assert.deepEqual(admin.calls.find(c=>c.name==='read_usda_portions_v1').args,{p_fdc_ids:['123','333']});
+ assert.deepEqual(admin.calls.find(c=>c.name==='read_usda_portions_v1').args,{p_fdc_ids:['123']});
+ assert.equal(body.products[2]._portion_evidence,undefined); // Confirmed correction never receives provider portions.
  for(const p of body.products)for(const key of ['_db_row','snapshot','protected','verified','ai_verified','ai_verified_source','user_id'])assert.equal(p[key],undefined);
  assert.equal(body.products[0]._serving_authority,undefined);assert.equal(body.products[1]._serving_authority,undefined);assert.equal(body.products[2]._serving_authority,'confirmed_correction');
 });
