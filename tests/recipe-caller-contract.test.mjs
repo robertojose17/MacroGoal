@@ -1,0 +1,18 @@
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const ts = require('typescript');
+const stripTypeScriptTypes = source => ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+const source = stripTypeScriptTypes(readFileSync(new URL('../supabase/functions/recipe-finder/index.ts', import.meta.url), 'utf8')).replace(/^import .*;\s*$/mg, '');
+function harness(valid = false, cachedImage = true) { let handler; const authCalls = [], paidCalls = [], rpcCalls = []; const chain = { select() { return this; }, eq() { return this; }, single: async () => ({ data: { id: 'fixture', title: 'fixture', image_url: cachedImage ? 'https://example.test/stored.jpg' : null } }), order() { return this; }, range: async () => ({ data: [] }) }; const db = { auth: { getUser: async (t) => { authCalls.push(t); return { data: { user: valid ? { id: 'owner' } : null }, error: valid ? null : { message: 'invalid' } }; } }, from: () => chain, rpc: async (n) => { rpcCalls.push(n); return { data: [] }; } }; new Function('Deno', 'createClient', 'fetch', 'EdgeRuntime', source)({ env: { get: k => ({ SUPABASE_URL: 'https://example.test', SUPABASE_SERVICE_ROLE_KEY: 'service-fixture', OPENROUTER_API_KEY: 'openrouter-fixture' }[k]) }, serve: h => handler = h }, () => db, async (url) => { paidCalls.push(url); return Response.json({ choices: [{ message: { content: '{"recipes":[]}' } }] }); }, { waitUntil: () => { } }); return { handler, authCalls, paidCalls, rpcCalls }; }
+const request = (token) => new Request('https://example.test/', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: JSON.stringify({ type: 'suggestions', userGoals: { calories: 2000 } }) });
+for (const token of [null, 'anon-fixture', 'invalid-token', 'expired-token'])
+    test(`generation requires valid caller: ${token}`, async () => { const h = harness(); assert.equal((await h.handler(request(token))).status, 401); assert.equal(h.paidCalls.length, 0); });
+test('verified account allowed to generate', async () => { const h = harness(true); assert.equal((await h.handler(request('valid-token'))).status, 200); assert.equal(h.paidCalls.length, 1); assert.deepEqual(h.authCalls, ['valid-token']); });
+test('backend service token allowed', async () => { const h = harness(); assert.equal((await h.handler(request('service-fixture'))).status, 200); assert.equal(h.paidCalls.length, 1); assert.equal(h.authCalls.length, 0); });
+test('public cached image preserved', async () => { const h = harness(); assert.equal((await h.handler(new Request('https://example.test/?type=generate-image&id=fixture'))).status, 200); assert.equal(h.paidCalls.length, 0); });
+test('new image generation requires a verified caller', async () => { const h = harness(false, false); assert.equal((await h.handler(new Request('https://example.test/?type=generate-image&id=fixture'))).status, 401); assert.equal(h.paidCalls.length, 0); });
+test('scheduled maintenance route remains available to backend', async () => { const h = harness(); assert.equal((await h.handler(new Request('https://example.test/?type=weekly-audit', { headers: { Authorization: 'Bearer service-fixture' } }))).status, 200); assert.deepEqual(h.rpcCalls, ['get_unaudited_recipes']); });
+test('public browse unchanged', async () => { const h = harness(); assert.equal((await h.handler(new Request('https://example.test/', { method: 'POST', body: '{"type":"browse"}' }))).status, 200); assert.equal(h.paidCalls.length, 0); });
