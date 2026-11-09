@@ -168,6 +168,21 @@ async function runWeeklyAudit(offset = 0, limit = 63) {
   return { audited, regenerated };
 }
 
+async function verifiedRecipeCaller(req: Request): Promise<boolean> {
+  const match = /^Bearer\s+(\S+)$/i.exec(req.headers.get("Authorization") ?? "");
+  if (!match) return false;
+  const token = match[1];
+  if (SERVICE_ROLE && token === SERVICE_ROLE) return true;
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    return !error && !!data?.user?.id;
+  } catch { return false; }
+}
+
+function recipeUnauthorized() {
+  return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const started = performance.now();
@@ -180,6 +195,7 @@ Deno.serve(async (req) => {
       const { data: recipe } = await supabase.from("recipes").select("id, title, description, ingredients, instructions, image_url").eq("id", id).single();
       if (!recipe) return new Response(JSON.stringify({ image_url: null }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       if (recipe.image_url) return new Response(JSON.stringify({ image_url: recipe.image_url }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (!(await verifiedRecipeCaller(req))) return recipeUnauthorized();
       const imageUrl = await generateAIImage(recipe);
       return new Response(JSON.stringify({ image_url: imageUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -221,17 +237,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ── Extract user id from JWT if present (optional) ────────────────────────
-    const auth = req.headers.get("Authorization") ?? "";
-    const token = auth.replace("Bearer ", "");
-    let userId: string | null = null;
-    try {
-      if (token && token.split(".").length === 3) {
-        const payload = JSON.parse(atob(token.split(".")[1]));
-        if (payload.sub && payload.role === "authenticated") userId = payload.sub;
-      }
-    } catch {}
-    console.log("[recipe-finder] user:", userId ?? "anonymous");
     if (type === "search" && query?.trim()) {
       const cached = await searchLibrary(query);
       if (cached.length >= 3) {
@@ -239,6 +244,7 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ recipes: cached.map(mapRow), duration_ms: Math.round(performance.now() - started), from_cache: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
+    if (!(await verifiedRecipeCaller(req))) return recipeUnauthorized();
     let userMessage = "";
     if (type === "suggestions" && userGoals) {
       userMessage = `Generate 3 personalized recipe suggestions for a user with these daily macro goals: Calories: ${userGoals.calories} kcal (${userGoals.remainingCalories} remaining today), Protein: ${userGoals.protein}g, Carbs: ${userGoals.carbs}g, Fat: ${userGoals.fat}g. Current time: ${new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}. Find real recipes from AllRecipes, Serious Eats, Food Network, or Epicurious.`;
@@ -278,3 +284,4 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "Internal Server Error", detail: e.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
+
