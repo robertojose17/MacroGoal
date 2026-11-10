@@ -2585,6 +2585,8 @@
     "searchResults_other": "Resultados de búsqueda ({{count}})"
   },
   "goalWeightCard": {
+    "dailyBurn": "Gasto diario",
+    "dailyBurnUnavailable": "No disponible",
     "title": "Peso Meta",
     "setGoalPrompt": "Establece tu peso meta en Perfil para rastrear el progreso aquí.",
     "setGoalBtn": "Establecer Peso Meta",

@@ -175,6 +175,7 @@ export default function GoalWeightCard({
         <View style={styles.headerRow}>
           <View style={[styles.skeletonLabel, { backgroundColor: trackBg }]} />
           <View style={[styles.skeletonLabel, { backgroundColor: trackBg }]} />
+          <View style={[styles.skeletonLabel, { backgroundColor: trackBg }]} />
         </View>
         <ActivityIndicator size="small" color={textSecondary} style={{ marginTop: 8 }} />
       </View>
@@ -383,28 +384,44 @@ export default function GoalWeightCard({
               <Text style={[styles.lbsToGo, { color: textSecondary }]}>{t('goalWeightCard.lbsToGo', { lbs: lbsToGo })}</Text>
             )}
           </View>
-
-          {/* Est. Arrival + Loss Speed side by side */}
-          <View style={styles.estSection}>
-            <View style={styles.estCell}>
-              <Text style={[styles.estLabel, { color: textSecondary }]}>{t('goalWeightCard.estArrival')}</Text>
-              {estDateLabel ? (
-                <Text style={[styles.estDate, { color: textPrimary }]}>{estDateLabel}</Text>
-              ) : (
-                <Text style={[styles.estDate, { color: textSecondary }]}>{t('goalWeightCard.calculating')}</Text>
-              )}
-            </View>
-            <View style={[styles.estDivider, { backgroundColor: textSecondary }]} />
-            <View style={styles.estCell}>
-              <Text style={[styles.estLabel, { color: textSecondary }]}>{t('localization.shared.lossSpeed')}</Text>
-              <Text style={[styles.estDate, { color: textPrimary }]}>{lossSpeedLabel}</Text>
-            </View>
-          </View>
         </View>
 
         {/* Right column — mini chart */}
         <View style={styles.chartColumn}>
           <WeightProgressMiniChart userId={userId} isDark={isDark} height={CHART_HEIGHT} />
+        </View>
+      </View>
+
+      {/* Keep these metrics below both columns, matching the approved layout. */}
+      <View
+        testID="goal-weight-metrics"
+        style={[styles.estSection, { borderTopColor: cardBorderColor }]}
+      >
+        <View style={styles.estCell}>
+          <Text style={[styles.estLabel, { color: textSecondary }]}>{t('goalWeightCard.estArrival')}</Text>
+          {estDateLabel ? (
+            <Text style={[styles.estDate, { color: textPrimary }]}>{estDateLabel}</Text>
+          ) : (
+            <Text style={[styles.estDate, { color: textSecondary }]}>{t('goalWeightCard.calculating')}</Text>
+          )}
+        </View>
+        <View style={[styles.estDivider, { backgroundColor: cardBorderColor }]} />
+        <View style={styles.estCell}>
+          <Text style={[styles.estLabel, { color: textSecondary }]}>{t('localization.shared.lossSpeed')}</Text>
+          <Text style={[styles.estDate, { color: textPrimary }]}>{lossSpeedLabel}</Text>
+        </View>
+        <View style={[styles.estDivider, { backgroundColor: cardBorderColor }]} />
+        {/* No numeric TDEE until an authenticated, fresh source is verified.
+            Never substitute calorie targets, historical estimates, or mock values. */}
+        <View
+          testID="goal-weight-daily-burn"
+          style={styles.estCell}
+          accessible
+          accessibilityLabel={`${t('goalWeightCard.dailyBurn')}: ${t('goalWeightCard.dailyBurnUnavailable')}`}
+        >
+          <Text style={[styles.estLabel, { color: textSecondary }]}>{t('goalWeightCard.dailyBurn')}</Text>
+          <Text style={[styles.estDate, { color: textSecondary }]}>--</Text>
+          <Text style={[styles.estCaption, { color: textSecondary }]}>{t('goalWeightCard.dailyBurnUnavailable')}</Text>
         </View>
       </View>
     </View>
@@ -506,21 +523,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
   },
-  // Estimated arrival + loss speed row
+  // Full-width summary: arrival, loss speed, and daily burn.
   estSection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 2,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   estCell: {
     flex: 1,
-    gap: 2,
+    minWidth: 0,
+    gap: 3,
   },
   estDivider: {
     width: 1,
     alignSelf: 'stretch',
-    marginHorizontal: 8,
-    opacity: 0.2,
+    marginHorizontal: 10,
   },
   estLabel: {
     fontSize: 9,
@@ -529,8 +548,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   estDate: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
+  },
+  estCaption: {
+    fontSize: 11,
+    lineHeight: 15,
   },
   // No goal / no data states
   noGoal: { fontSize: 14, lineHeight: 20, marginVertical: 8 },

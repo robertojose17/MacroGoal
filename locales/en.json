@@ -2585,6 +2585,8 @@
     "searchResults_other": "Search results ({{count}})"
   },
   "goalWeightCard": {
+    "dailyBurn": "Daily Burn",
+    "dailyBurnUnavailable": "Not available",
     "title": "Goal Weight",
     "setGoalPrompt": "Set your goal weight in Profile to track progress here.",
     "setGoalBtn": "Set Goal Weight",
