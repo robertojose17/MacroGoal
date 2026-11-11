@@ -1,5 +1,7 @@
 # Premium checkpoint rollout candidate
 
+Host-screen extension (2026-11-11): RPC and shared receiver v23 deployed and verified. Client remains local and unpublished. See `HOST-SCREEN-DEPLOYED.md` for evidence and `HOST-SCREEN-ROLLOUT.md` for the remaining client release gate. Existing clients do not gain screen tracking from the server change alone.
+
 Deployment status (2026-11-01): the private migration and shared track-onboarding v20 endpoint are LIVE. See track-onboarding/DEPLOYED.md for exact deployed source paths, hashes, postflight and rollback. Client transport is wired only on the implementation branch for a future native release; main and published binaries are unchanged. The original candidate/approval discussion below is historical, not a statement that the production objects are absent. This directory is outside automatic migration/function paths; do not redeploy the divergent canonical legacy function over v20.
 
 ## Exact proposed scope
