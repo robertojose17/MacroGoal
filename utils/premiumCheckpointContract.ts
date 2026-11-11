@@ -7,8 +7,28 @@ export const PREMIUM_SOURCES = [
   'coach_meal_saved', 'coach_meal_preview', 'coach_conversation',
 ] as const;
 export type PremiumSource = typeof PREMIUM_SOURCES[number];
+// Closed labels only. Never store a URL, route parameter, query, or user-entered label.
+export const PREMIUM_HOST_SCREENS = ['home', 'dashboard', 'check_ins', 'profile', 'unknown'] as const;
+export type PremiumHostScreen = typeof PREMIUM_HOST_SCREENS[number];
+export function premiumHostScreen(value: unknown): PremiumHostScreen {
+  if (typeof value !== 'string') return 'unknown';
+  const route = value.split(/[?#]/, 1)[0];
+  if (!route.startsWith('/') || route.includes('//')) return 'unknown';
+  const path = route.replace(/\/$/, '') || '/';
+  switch (path) {
+    case '/': case '/(home)': case '/(tabs)': case '/(tabs)/(home)': return 'home';
+    case '/dashboard': case '/(tabs)/dashboard': return 'dashboard';
+    case '/check-ins': case '/(tabs)/check-ins': return 'check_ins';
+    case '/profile': case '/(tabs)/profile': return 'profile';
+    default: return 'unknown';
+  }
+}
+export function premiumScreenLabel(value: unknown): PremiumHostScreen {
+  return typeof value === 'string' && (PREMIUM_HOST_SCREENS as readonly string[]).includes(value)
+    ? value as PremiumHostScreen : 'unknown';
+}
 export const CHECKPOINT_ID_PATTERN = /^[A-Za-z0-9_-]{8,96}$/;
-export type PremiumFlow = Readonly<{ flowId: string; source: PremiumSource }>;
+export type PremiumFlow = Readonly<{ flowId: string; source: PremiumSource; screen?: PremiumHostScreen }>;
 export type DisplayedOffer = Readonly<{
   offeringId: string; packageId: string; productId: string;
   priceString: string; currencyCode: string; subscriptionPeriod: string | null;
@@ -52,13 +72,15 @@ export function premiumSource(value: unknown): PremiumSource {
     (PREMIUM_SOURCES as readonly string[]).includes(value)
     ? value as PremiumSource : 'unknown';
 }
-export function newPremiumFlow(source: PremiumSource): PremiumFlow {
-  return Object.freeze({ flowId: newCheckpointId(), source: premiumSource(source) });
+export function newPremiumFlow(source: PremiumSource, screen?: PremiumHostScreen): PremiumFlow {
+  return Object.freeze({ flowId: newCheckpointId(), source: premiumSource(source),
+    ...(screen !== undefined ? { screen: premiumScreenLabel(screen) } : {}) });
 }
 /** Capture once per screen instance; navigation params never include an actor. */
-export function capturePremiumFlow(source: unknown, flowId: unknown): PremiumFlow {
+export function capturePremiumFlow(source: unknown, flowId: unknown, screen?: unknown): PremiumFlow {
   return Object.freeze({
     source: premiumSource(source),
+    ...(screen !== undefined ? { screen: premiumScreenLabel(screen) } : {}),
     flowId: typeof flowId === 'string' && CHECKPOINT_ID_PATTERN.test(flowId)
       ? flowId : newCheckpointId(),
   });
@@ -67,6 +89,7 @@ export function premiumRoute(flow: PremiumFlow, autoStart = false) {
   return {
     pathname: '/subscription' as const,
     params: { source: flow.source, flowId: flow.flowId,
+      ...(flow.screen !== undefined ? { originScreen: flow.screen } : {}),
       ...(autoStart ? { autoStart: 'true' } : {}) },
   };
 }

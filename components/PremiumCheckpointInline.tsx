@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import { newPremiumFlow } from '@/utils/premiumCheckpointContract';
-import type { PremiumSource, PremiumFlow } from '@/utils/premiumCheckpointContract';
+import type { PremiumSource, PremiumFlow, PremiumHostScreen } from '@/utils/premiumCheckpointContract';
 import { usePremiumCheckpointVisibility } from '@/hooks/usePremiumCheckpointVisibility';
 
 function InlineObservation({ flow, children, enabled, consumed }: {
@@ -24,19 +24,26 @@ function InlineObservation({ flow, children, enabled, consumed }: {
   });
 }
 /** No additional native layout. Render the route using the supplied immutable flow. */
-export function PremiumCheckpointInline({ source, children, enabled = true }: {
+type InlineProps = {
   source: PremiumSource;
+  screen?: PremiumHostScreen;
   children: React.ReactElement<any> | ((flow: PremiumFlow) => React.ReactElement<any>);
   enabled?: boolean;
-}) {
-  const [flow, setFlow] = useState(() => newPremiumFlow(source));
+};
+export function PremiumCheckpointInline(props: InlineProps) {
+  // A persistent badge can move between tabs without unmounting. A new context
+  // synchronously remounts its flow, so no click or impression uses the old tab.
+  return <PremiumCheckpointInlineFlow key={`${props.source}:${props.screen ?? 'legacy'}`} {...props} />;
+}
+function PremiumCheckpointInlineFlow({ source, screen, children, enabled = true }: InlineProps) {
+  const [flow, setFlow] = useState(() => newPremiumFlow(source, screen));
   const [consumed, setConsumed] = useState(false);
   const focused = useIsFocused();
   const wasFocused = useRef(focused);
   useEffect(() => {
-    if (focused && !wasFocused.current && consumed) { setFlow(newPremiumFlow(source)); setConsumed(false); }
+    if (focused && !wasFocused.current && consumed) { setFlow(newPremiumFlow(source, screen)); setConsumed(false); }
     wasFocused.current = focused;
-  }, [focused, consumed, source]);
+  }, [focused, consumed, source, screen]);
   const child = typeof children === 'function' ? children(flow) : children;
   return <InlineObservation key={flow.flowId} flow={flow} enabled={enabled && !consumed}
     consumed={() => setConsumed(true)}>{child}</InlineObservation>;

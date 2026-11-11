@@ -126,8 +126,8 @@ export default function SubscriptionScreen() {
   const [activePlan, setActivePlan] = useState<'monthly' | 'yearly'>('yearly');
   const [selectedFeature, setSelectedFeature] = useState<FeatureKey | null>(null);
   const [showAllFeatures, setShowAllFeatures] = useState(false);
-  const { autoStart, source, flowId } = useLocalSearchParams<{ autoStart?: string; source?: string; flowId?: string }>();
-  const [checkpointFlow] = useState(() => capturePremiumFlow(source, flowId));
+  const { autoStart, source, flowId, originScreen } = useLocalSearchParams<{ autoStart?: string; source?: string; flowId?: string; originScreen?: string }>();
+  const [checkpointFlow] = useState(() => capturePremiumFlow(source, flowId, originScreen));
   const purchaseBusyRef = React.useRef(false);
   const restoreBusyRef = React.useRef(false);
   const configuredActorRef = React.useRef<string | null>(null);

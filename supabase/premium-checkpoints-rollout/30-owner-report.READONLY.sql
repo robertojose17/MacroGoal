@@ -49,7 +49,12 @@ WITH params AS (
  SELECT DISTINCT ON(transaction_key) transaction_key,vendor_id,verified_actor,product_id,transaction_id,store,environment,purchased_at
  FROM qualified ORDER BY transaction_key,created_at,vendor_id
 ), checkpoints AS (
- SELECT c.* FROM macrogoal_checkpoints_private.checkpoint_events c CROSS JOIN config p
+ SELECT c.*,
+  CASE WHEN c.payload#>>'{flow,screen}' IN ('home','dashboard','check_ins','profile','unknown')
+   THEN c.payload#>>'{flow,screen}' END AS screen,
+  (NOT ((c.payload->'flow') ? 'screen') OR
+   (jsonb_typeof(c.payload#>'{flow,screen}')='string' AND c.payload#>>'{flow,screen}' IN ('home','dashboard','check_ins','profile','unknown'))) AS screen_valid
+ FROM macrogoal_checkpoints_private.checkpoint_events c CROSS JOIN config p
  WHERE p.ready AND c.received_at>=p.capture_start AND c.received_at<p.cutoff
 ), results AS (
  SELECT c.* FROM checkpoints c WHERE c.name='purchase_result'
@@ -57,7 +62,7 @@ WITH params AS (
  AND c.payload#>>'{detail,outcome}' IN ('sdk_returned_entitlement','sdk_returned_no_entitlement')
  AND jsonb_typeof(c.payload#>'{detail,correlation}')='object'
 ), result_facts AS (
- SELECT r.user_id,r.event_id,r.flow_id,r.source,r.attempt_id,r.received_at AS result_received,r.payload,
+ SELECT r.user_id,r.event_id,r.flow_id,r.source,r.attempt_id,r.received_at AS result_received,r.payload,r.screen,r.screen_valid,
   f.*,count(*) OVER(PARTITION BY r.user_id,r.event_id) AS matching_keys,
   EXISTS(SELECT 1 FROM variants q JOIN key_conflicts k USING(transaction_key)
    WHERE lower(q.raw_actor)=r.user_id::text AND q.product_id=r.payload#>>'{detail,correlation,productId}'
@@ -67,9 +72,12 @@ WITH params AS (
 ), inspected AS (
  SELECT rf.*,at.attempt_count,at.attempt_received,
   (rf.payload#>>'{detail,correlation,store}' IS NULL OR rf.payload#>>'{detail,correlation,store}'=rf.store)
-  AND (rf.payload#>>'{detail,correlation,environment}' IS NULL OR rf.payload#>>'{detail,correlation,environment}'=rf.environment) AS dimensions_agree
+  AND (rf.payload#>>'{detail,correlation,environment}' IS NULL OR rf.payload#>>'{detail,correlation,environment}'=rf.environment)
+  AND (at.attempt_count=0 OR (rf.screen_valid AND at.attempt_screen_valid
+   AND (rf.screen IS NOT DISTINCT FROM at.attempt_screen))) AS dimensions_agree
  FROM result_facts rf CROSS JOIN LATERAL (
-  SELECT count(*) AS attempt_count,min(c.received_at) AS attempt_received FROM checkpoints c
+  SELECT count(*) AS attempt_count,min(c.received_at) AS attempt_received,
+   min(c.screen) AS attempt_screen,bool_and(c.screen_valid) AS attempt_screen_valid FROM checkpoints c
   WHERE c.user_id=rf.user_id AND c.flow_id=rf.flow_id AND c.source=rf.source AND c.attempt_id=rf.attempt_id
    AND c.name='purchase_attempt' AND c.payload#>>'{detail,attribution}'='consistent'
    AND c.payload#>>'{detail,offer,productId}'=rf.product_id
@@ -82,12 +90,14 @@ WITH params AS (
  SELECT DISTINCT transaction_key FROM inspected
  WHERE matching_keys>1 OR quarantined_match OR NOT dimensions_agree OR attempt_count>1
 ), claims AS (
- SELECT transaction_key,count(DISTINCT jsonb_build_array(user_id,flow_id,attempt_id)) AS attempts,min(source) AS source
+ SELECT transaction_key,count(DISTINCT jsonb_build_array(user_id,flow_id,attempt_id)) AS attempts,min(source) AS source,min(screen) AS screen,
+  count(DISTINCT jsonb_build_array(screen)) AS screen_variants
  FROM qualifying_claims GROUP BY transaction_key
 ), classified AS (
- SELECT f.*,CASE WHEN a.transaction_key IS NOT NULL OR c.attempts>1 THEN 'ambiguous'
+ SELECT f.*,CASE WHEN a.transaction_key IS NOT NULL OR c.attempts>1 OR c.screen_variants>1 THEN 'ambiguous'
   WHEN c.attempts=1 THEN 'matched' ELSE 'unattributed' END AS attribution,
- CASE WHEN a.transaction_key IS NULL AND c.attempts=1 THEN c.source END AS matched_source
+ CASE WHEN a.transaction_key IS NULL AND c.attempts=1 AND c.screen_variants=1 THEN c.source END AS matched_source,
+ CASE WHEN a.transaction_key IS NULL AND c.attempts=1 AND c.screen_variants=1 THEN c.screen END AS matched_screen
  FROM facts f LEFT JOIN claims c USING(transaction_key) LEFT JOIN ambiguous_sources a USING(transaction_key)
 ), window_payments AS (
  SELECT f.* FROM classified f CROSS JOIN config p WHERE f.purchased_at>=p.window_start AND f.purchased_at<p.cutoff
@@ -107,10 +117,26 @@ WITH params AS (
  (SELECT count(DISTINCT verified_actor) FROM window_payments f WHERE f.matched_source=s.source AND f.environment='PRODUCTION') AS matched_production_payers,
  (SELECT count(*) FROM window_payments f WHERE f.matched_source=s.source AND f.environment='SANDBOX') AS matched_sandbox_payments
  FROM sources s
+), entry_screens AS (
+ SELECT source,screen FROM window_checkpoints
+ UNION SELECT matched_source,matched_screen FROM window_payments WHERE matched_source IS NOT NULL
+), by_entry_screen AS (
+ SELECT s.source,s.screen,
+  CASE WHEN s.screen IS NULL THEN 'not_recorded' WHEN s.screen='unknown' THEN 'unknown' ELSE 'recorded' END AS screen_status,
+  CASE WHEN s.source='floating_badge' THEN 'Go Premium' ELSE s.source END || ' / ' ||
+   coalesce(s.screen,'screen_not_recorded') AS entry_label,
+  (SELECT count(DISTINCT jsonb_build_array(c.user_id,c.flow_id)) FROM window_checkpoints c
+   WHERE c.source=s.source AND c.screen IS NOT DISTINCT FROM s.screen AND c.name='entrypoint_clicked') AS entry_flows,
+  (SELECT count(*) FROM window_payments f WHERE f.matched_source=s.source
+   AND f.matched_screen IS NOT DISTINCT FROM s.screen AND f.environment='PRODUCTION') AS matched_production_payments,
+  (SELECT count(*) FROM window_payments f WHERE f.matched_source=s.source
+   AND f.matched_screen IS NOT DISTINCT FROM s.screen AND f.environment='SANDBOX') AS matched_sandbox_payments
+ FROM entry_screens s
 )
 SELECT jsonb_build_object(
  'configured',p.ready,'capture_start',p.capture_start,'window_start',p.window_start,'cutoff_exclusive',p.cutoff,
  'by_source',coalesce((SELECT jsonb_agg(to_jsonb(s) ORDER BY source) FROM by_source s),'[]'::jsonb),
+ 'by_entry_screen',coalesce((SELECT jsonb_agg(to_jsonb(s) ORDER BY source,screen NULLS FIRST) FROM by_entry_screen s),'[]'::jsonb),
  'coverage',jsonb_build_object(
   'provider_rows_inspected',(SELECT count(*) FROM provider_input),
   'conflicting_vendor_ids',(SELECT count(*) FROM vendor_conflicts),

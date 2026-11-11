@@ -1,4 +1,5 @@
 import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
+import { premiumHostScreen } from '@/utils/premiumCheckpointContract';
 import type { PremiumFlow } from '@/utils/premiumCheckpointContract';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 import React, { useState } from 'react';
@@ -39,7 +40,7 @@ export default function GoPremiumFloatingBadge() {
   return (
     <View style={[styles.container, { bottom: bottomOffset }]} pointerEvents="box-none">
       <View style={styles.pill}>
-        <PremiumCheckpointInline source="floating_badge">{premiumFlow => (<TouchableOpacity
+        <PremiumCheckpointInline source="floating_badge" screen={premiumHostScreen(pathname)}>{premiumFlow => (<TouchableOpacity
           style={styles.pillContent}
           onPress={() => handlePress(premiumFlow)}
           activeOpacity={0.85}
