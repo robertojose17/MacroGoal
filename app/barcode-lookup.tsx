@@ -10,6 +10,8 @@ import { toLocalDateString } from '@/utils/dateUtils';
 import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { recoveryRouteContext } from '@/utils/recoveryRouteContext';
 import { buildSyntheticOffData } from '@/utils/servingParser';
+import BarcodeSourceResult from '@/components/BarcodeSourceResult';
+import { barcodeSourcePreview, BarcodeSourceProduct } from '@/utils/barcodeSourcePreview';
 
 // CRITICAL: Timeout constant
 const LOOKUP_TIMEOUT_MS = 10000; // 10 seconds
@@ -42,6 +44,7 @@ export default function BarcodeLookupScreen() {
   const [loading, setLoading] = useState(!errorParam); // Only load if no error param
   const [error, setError] = useState<string | null>(errorParam || null);
   const [notFound, setNotFound] = useState(false);
+  const [sourceProduct, setSourceProduct] = useState<BarcodeSourceProduct | null>(null);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -93,6 +96,7 @@ export default function BarcodeLookupScreen() {
     setLoading(true);
     setError(null);
     setNotFound(false);
+    setSourceProduct(null);
 
     // Create timeout promise
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -167,6 +171,12 @@ export default function BarcodeLookupScreen() {
       // Present malformed flags are ambiguous contract data, not permission to use a proposal.
       const invalidConfirmationFlag = Object.prototype.hasOwnProperty.call(result, 'requires_label_confirmation')
         && typeof result.requires_label_confirmation !== 'boolean';
+      const sourcePreview = barcodeSourcePreview(result, barcode);
+      if (!invalidConfirmationFlag && sourcePreview) {
+        setSourceProduct(sourcePreview);
+        setLoading(false);
+        return;
+      }
       if (result.requires_label_confirmation === true || invalidConfirmationFlag) {
         router.replace({pathname:'/food-photo-capture',params:{
           ...recoveryRouteContext(params),barcode,type:'new_product',meal:mealType,date,mode,
@@ -261,6 +271,13 @@ export default function BarcodeLookupScreen() {
       },
     });
   };
+
+  // Found source data remains readable without forcing photo capture or a diary write.
+  if (sourceProduct) return <BarcodeSourceResult product={sourceProduct}
+    onClose={() => router.back()}
+    onCompleteLabel={() => router.replace({pathname:'/food-photo-capture',params:{
+      ...recoveryRouteContext(params),barcode,type:'new_product',meal:mealType,date,mode,
+    }})}/>;
 
   // Loading state
   if (loading) {
