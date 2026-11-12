@@ -1,3 +1,4 @@
+import {captureOff100gV4} from './off100gV4.mjs';
 /** LOCAL REVIEW ONLY. Original legacy OFF serving projection, never density inference. */
 export function canonicalGTIN(code) {
  if(typeof code!=='string'||!/^\d{12,13}$/.test(code))return null;
@@ -67,11 +68,15 @@ export function captureOffMass(product,{expectedId,capturedAt=new Date().toISOSt
  if(typeof capturedAt!=='string'||!Number.isFinite(Date.parse(capturedAt)))throw Error('invalid_capture_time');
  return {version:3,provider:'openfoodfacts',source_id:product.code,captured_at:new Date(capturedAt).toISOString(),snapshot};
 }
+/** Versioned source capture: never relabel source nutrition or weaken v3 proof. */
+export function captureOffMassSupported(product,options={}) {
+ return product?.nutrition_data_per==='100g'?captureOff100gV4(product,options):captureOffMass(product,options);
+}
 /** No fallback insert after an attempted/uncertain RPC. The caller returns review UI. */
 export async function createOffMass({admin,request,product,expectedId,requestId,authenticated=false,enabled=false,timeoutMs=3000,now=Date.now}) {
  if(!enabled)return {status:'disabled'};
  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>8000)return {status:'invalid_budget'};
- let evidence;try{evidence=captureOffMass(product,{expectedId,capturedAt:new Date(now()).toISOString()});}catch{return {status:'unsupported_mass_capture'};}
+ let evidence;try{evidence=captureOffMassSupported(product,{expectedId,capturedAt:new Date(now()).toISOString()});}catch{return {status:'unsupported_mass_capture'};}
  const deadline=Date.now()+timeoutMs;
  const bounded=async fn=>{const controller=new AbortController();let timer;const remaining=deadline-Date.now();if(remaining<=0)throw Error('timeout');try{return await Promise.race([Promise.resolve().then(()=>fn(controller.signal)),new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(Error('timeout'));},remaining);})])}finally{clearTimeout(timer)}};
  if(!authenticated){
@@ -85,3 +90,4 @@ export async function createOffMass({admin,request,product,expectedId,requestId,
   return out.data;
  }catch{return {status:'create_outcome_uncertain'};}
 }
+
