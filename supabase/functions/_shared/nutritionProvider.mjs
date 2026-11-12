@@ -1,4 +1,4 @@
-import {captureOffMass} from './offMass.mjs';
+import {captureOffMassSupported} from './offMass.mjs';
 /** LOCAL REVIEW CANDIDATE. Pure capture; no provider SDKs or implicit network. */
 const DAY = 86400000;
 const LOGICAL_UNITS = Object.freeze({calcium:'mg',iron:'mg',magnesium:'mg',phosphorus:'mg',potassium:'mg',sodium:'mg',zinc:'mg',copper:'mg',manganese:'mg',selenium:'mcg',vitamin_c:'mg',thiamin:'mg',riboflavin:'mg',niacin:'mg',vitamin_b6:'mg',folate:'mcg',vitamin_b12:'mcg',vitamin_a_rae:'mcg',vitamin_e:'mg',vitamin_d:'mcg',vitamin_k:'mcg'});
@@ -131,7 +131,7 @@ export function createRefreshService({fetchProvider,claimRefresh,refreshEvidence
    if(claim?.status!=='claimed')return {status:['fresh','busy','revision_conflict','identity_conflict','already_completed'].includes(claim?.status)?claim.status:'claim_rejected'};
    let raw;
    try{raw=await within(signal=>fetchProvider({provider:food.provider,source_id:food.source_id,signal}));}catch(error){return {status:error?.message==='deadline_exceeded'?'provider_timeout':'provider_failed'};}
-   let evidence;try{evidence=(food.provider==='usda'?captureUSDA:food.mass_bound===true?captureOffMass:captureOFF)(raw,{capturedAt:new Date(now()).toISOString(),expectedId:food.source_id,verifiedBasis});}catch{return {status:'invalid_provider_evidence'};}
+   let evidence;try{evidence=(food.provider==='usda'?captureUSDA:food.mass_bound===true?captureOffMassSupported:captureOFF)(raw,{capturedAt:new Date(now()).toISOString(),expectedId:food.source_id,verifiedBasis});}catch{return {status:'invalid_provider_evidence'};}
    try{
     const result=await within(signal=>refreshEvidence({p_food_id:food.id,p_expected_revision:food.revision,p_request_id:requestId,p_evidence:((({canonical_candidates,...stored})=>stored)(evidence))},{signal}));
     if(!['applied','evidence_only','conflict','duplicate'].includes(result?.status))return {status:'rpc_rejected'};
@@ -157,3 +157,4 @@ export function usdaSearchNutriments(food) {
  }
  return result;
 }
+
