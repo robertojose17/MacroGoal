@@ -5,6 +5,13 @@ const CORE=['energy-kcal','proteins','carbohydrates','fat'];
 const object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const valid=v=>typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=1e9;
 const close=(a,b)=>Math.abs(a-b)<=Math.max(1e-8,Math.abs(a)*1e-6);
+export function servingClose(expected, supplied) {
+ if (close(expected,supplied)) return true;
+ if (!(expected>0&&supplied>0)) return false;
+ const power=10**(2-Math.floor(Math.log10(expected)));
+ return supplied===Number(supplied.toPrecision(3))
+  && Math.abs(expected-supplied)<=0.5/power+Math.max(1e-12,Math.abs(expected)*1e-12);
+}
 const fail=code=>{throw Error(code)};
 export function gtin(code){
  if(typeof code!=='string'||!/^\d{12,13}$/.test(code))return null;
@@ -65,7 +72,7 @@ export function validateOff100gV4(e,expectedId=e?.source_id){
    else {if(!['g','mg','mcg'].includes(u))fail('unsupported_source_unit');factor={g:1,mg:.001,mcg:.000001}[u];}
   }
   if(Object.hasOwn(n,k+'_value')){if(unit==null||!valid(n[k+'_value'])||!close(v,n[k+'_value']*factor))fail('contradictory_original_amount');}
-  if(Object.hasOwn(n,k+'_serving')&&(!valid(n[k+'_serving'])||!close(v*grams/100,n[k+'_serving'])))fail('contradictory_serving');
+  if(Object.hasOwn(n,k+'_serving')&&(!valid(n[k+'_serving'])||!servingClose(v*grams/100,n[k+'_serving'])))fail('contradictory_serving');
   nutrients.push({provider_key:k+'_100g',amount:v,status:'valid',unit:ENERGY.includes(k)?(k==='energy-kcal'?'kcal':'kJ'):'g'});
  }
  // Secondary energy is evidence, not a replacement for unqualified declared kcal.
