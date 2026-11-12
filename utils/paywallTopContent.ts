@@ -1,7 +1,7 @@
 import { premiumSource } from './premiumCheckpointContract';
 import type { PremiumSource } from './premiumCheckpointContract';
 
-type Theme = 'estimator' | 'recipes' | 'planning' | 'templates' | 'club' | 'coachMeals' | 'general';
+type Theme = 'onboarding' | 'estimator' | 'recipes' | 'planning' | 'templates' | 'club' | 'coachMeals' | 'general';
 type Benefit = Readonly<{ title: string; desc: string }>;
 type Copy = Readonly<{
   line1: string; line2: string; subtitle: string;
@@ -12,7 +12,7 @@ type Copy = Readonly<{
 // Presentation only: no routing, entitlement, purchase or analytics side effects.
 export const PAYWALL_TOP_THEMES: Readonly<Record<PremiumSource, Theme>> = {
   "unknown": "general",
-  "onboarding_complete": "general",
+  "onboarding_complete": "onboarding",
   "settings_upgrade": "general",
   "home_recipe_limit": "recipes",
   "home_ai_plan": "planning",
@@ -34,6 +34,25 @@ export const PAYWALL_TOP_THEMES: Readonly<Record<PremiumSource, Theme>> = {
 // Benefit-led copy hypotheses; conversion gains have not been established.
 const COPY: Readonly<Record<'en' | 'es', Record<Theme, Copy>>> = {
   "en": {
+    "onboarding": {
+      "line1": "Your Personalized Plan",
+      "line2": "Starts Here",
+      "subtitle": "Everything you need to turn your goals into a plan you can follow, with less guesswork along the way.",
+      "benefits": [
+            {
+                  "title": "Know What to Eat",
+                  "desc": "Meal plans and recipes built around your goals and preferences."
+            },
+            {
+                  "title": "Make Your Plan Easier to Follow",
+                  "desc": "A grocery list to help you put your meals into action."
+            },
+            {
+                  "title": "Get Guidance Along the Way",
+                  "desc": "Your AI Coach is there to answer questions and help you stay on track."
+            }
+      ]
+},
     "estimator": {
       "line1": "Log your meal.",
       "line2": "Skip the ingredient hunt.",
@@ -169,6 +188,25 @@ const COPY: Readonly<Record<'en' | 'es', Record<Theme, Copy>>> = {
     }
   },
   "es": {
+    "onboarding": {
+      "line1": "Tu plan personalizado",
+      "line2": "empieza aquí",
+      "subtitle": "Todo lo que necesitas para convertir tus metas en un plan que puedas seguir, con menos dudas en el camino.",
+      "benefits": [
+            {
+                  "title": "Ten claro qué comer",
+                  "desc": "Planes de comidas y recetas adaptados a tus metas y preferencias."
+            },
+            {
+                  "title": "Haz que tu plan sea más fácil de seguir",
+                  "desc": "Una lista de compras para ayudarte a llevar tus comidas a la práctica."
+            },
+            {
+                  "title": "Recibe orientación en el camino",
+                  "desc": "Tu coach de IA está ahí para responder tus preguntas y ayudarte a mantener el rumbo."
+            }
+      ]
+},
     "estimator": {
       "line1": "Registra tu comida",
       "line2": "sin buscar cada ingrediente.",
@@ -311,3 +349,4 @@ export function getPaywallTop(source: unknown, language?: string): Copy {
   const locale = /^es(?:[-_]|$)/i.test(language ?? '') ? 'es' : 'en';
   return COPY[locale][theme];
 }
+

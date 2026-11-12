@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useFirstAppNotificationPrompt } from '@/hooks/useFirstAppNotificationPrompt';
 import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +10,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { AdBannerFooter } from '@/components/AdBannerFooter';
 
 export default function TabLayout() {
+  useFirstAppNotificationPrompt();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { t } = useTranslation();
@@ -111,3 +113,4 @@ export default function TabLayout() {
     </View>
   );
 }
+

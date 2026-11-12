@@ -222,14 +222,14 @@ export default function SubscriptionScreen() {
   // annual card, and leave any other available plan for an explicit selection.
   useEffect(() => {
     if (
-      autoStart !== 'true' || loading || premiumLoading || errorMessage || isPremium ||
+      source === 'onboarding_complete' || autoStart !== 'true' || loading || premiumLoading || errorMessage || isPremium ||
       !resolvedYearlyPkg || autoStartFiredRef.current
     ) return;
     autoStartFiredRef.current = true;
     setActivePlan('yearly');
     console.log('[Subscription] Auto-starting yearly purchase from onboarding:', resolvedYearlyPkg.identifier);
     handlePurchase(resolvedYearlyPkg, 'auto_start');
-  }, [autoStart, loading, premiumLoading, errorMessage, isPremium, resolvedYearlyPkg]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoStart, source, loading, premiumLoading, errorMessage, isPremium, resolvedYearlyPkg]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle purchase
   const handlePurchase = async (pkg: PurchasesPackage, trigger: 'manual' | 'auto_start' = 'manual') => {
@@ -1795,3 +1795,4 @@ const styles = StyleSheet.create({
   },
 
 });
+
