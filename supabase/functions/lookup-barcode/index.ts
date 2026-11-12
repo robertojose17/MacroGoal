@@ -1,3 +1,4 @@
+import {offSourceDisplay} from '../_shared/offSourceDisplay.mjs';
 import { createOffMass } from '../_shared/offMass.mjs';
 import {captureSelectedNutrition,readProviderJSON,refreshCachedSelection} from '../_shared/nutritionRefresh.mjs';
 import {decorateCatalogScanItem} from '../_shared/catalogPortionBatch.mjs';
@@ -335,9 +336,11 @@ Deno.serve(async (req: Request) => {
     return reviewResponse({found:true,item:{name:typeof offProduct.product_name==='string'?offProduct.product_name:'',
       brand:typeof offProduct.brands==='string'?offProduct.brands:'',barcode:String(offProduct.code??barcode),
       ai_verified:false,requires_label_confirmation:true},source:'openfoodfacts_unverified',
-      persisted:false,requires_label_confirmation:true,capture_status:mass.status});
+      persisted:false,requires_label_confirmation:true,capture_status:mass.status,
+      provider_product:offSourceDisplay(offProduct)});
   }
 
 });
+
 
 
