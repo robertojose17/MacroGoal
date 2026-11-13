@@ -4,7 +4,7 @@ import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { BlockedAccountsSettingsEntry } from '@/features/blockedAccounts/BlockedAccountsSettingsEntry';
 import { getAppLocale, translatePreference } from '@/lib/localization';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, RefreshControl, ActivityIndicator, Modal, TextInput, Linking, LayoutAnimation, Switch, Image, ImageSourcePropType } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,9 +12,13 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
+import type { Database } from '@/lib/supabase/types';
+import { useAcceptedGoalEditor, AcceptedGoalReadSuperseded, type GoalEditorSnapshot } from '@/hooks/useAcceptedGoalEditor';
+import { useDynamicTdeeProgram } from '@/hooks/useDynamicTdeeProgram';
 import { clearOnboardingSession } from '@/utils/onboardingAnalytics';
 import { usePremium } from '@/hooks/usePremium';
 import { cmToFeetInches, kgToLbs, getLossRateDisplayText, feetInchesToCm, lbsToKg, calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
+import { captureJourneyDateBounds, type JourneyDateBounds } from '@/utils/journeyDateBounds';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { Sex, ActivityLevel, GoalType } from '@/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -55,12 +59,27 @@ export default function SettingsScreen() {
 
   const [user, setUser] = useState<any>(null);
   const [goal, setGoal] = useState<any>(null);
+  const editor = useAcceptedGoalEditor(false);
+  const { refresh: refreshAcceptedEditor, capture: captureAcceptedEditor } = editor;
+  const observation = useDynamicTdeeProgram(editor.snapshot?.profile.id);
+  const modalSnapshot = useRef<GoalEditorSnapshot | null>(null), restartSnapshot = useRef<GoalEditorSnapshot | null>(null);
+  const restartBounds = useRef<JourneyDateBounds | null>(null);
+  const restartTimezone = useRef<string | null>(null);
+  const modalCurrent = useRef<() => boolean>(() => false), restartCurrent = useRef<() => boolean>(() => false);
+  const screenActive = useRef(false), loadEpoch = useRef(0);
+  useFocusEffect(useCallback(() => {
+    screenActive.current = true; loadEpoch.current += 1;
+    return () => { screenActive.current = false; loadEpoch.current += 1; modalCurrent.current = () => false; restartCurrent.current = () => false; };
+  }, []));
+  useEffect(() => { if (editor.snapshot) { setUser(editor.snapshot.profile); setGoal(editor.snapshot.goal); } else { setUser(null); setGoal(null); setIsAdmin(false); setCoachActions([]); setLastAdjustMacrosAction(null); } }, [editor.snapshot]);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   // Coach history state
-  const [coachActions, setCoachActions] = useState<any[]>([]);
-  const [lastAdjustMacrosAction, setLastAdjustMacrosAction] = useState<any>(null);
+  type CoachAction = Database['public']['Tables']['coach_action_log']['Row'];
+  const [coachActions, setCoachActions] = useState<CoachAction[]>([]);
+  const [lastAdjustMacrosAction, setLastAdjustMacrosAction] = useState<CoachAction | null>(null);
 
   // Accordion state — collapsed by default
   const [openSection, setOpenSection] = useState<AccordionSection>(null);
@@ -229,80 +248,32 @@ export default function SettingsScreen() {
     }
   };
 
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async () => {
+    if (!screenActive.current) return;
+    const revision = ++loadEpoch.current;
+    const active = () => screenActive.current && loadEpoch.current === revision;
+    setLoading(true);
     try {
-      setLoading(true);
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) {
-        console.log('[Profile] No authenticated user found');
-        setLoading(false);
-        return;
-      }
-
-      console.log('[Profile] Loading profile for user:', authUser.id);
-
-      const [userResult, goalResult, coachActionsResult] = await Promise.all([
-        supabase.from('users').select('*').eq('id', authUser.id).maybeSingle(),
-        supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).order('start_date', { ascending: false }).limit(1),
-        supabase.from('coach_action_log').select('id, action_type, summary, previous_value, new_value, created_at').eq('user_id', authUser.id).order('created_at', { ascending: false }).limit(20),
-      ]);
-
-      // Check admin status
-      const adminVal = userResult.data?.is_admin === true;
-      console.log('[Profile] is_admin:', adminVal);
-      setIsAdmin(adminVal);
-
-      if (coachActionsResult.error) {
-        console.error('[Profile] Error loading coach actions:', coachActionsResult.error);
-      } else {
-        const actions = coachActionsResult.data || [];
-        console.log('[Profile] Coach actions loaded:', actions.length, 'actions');
-        setCoachActions(actions);
-        const lastMacroAction = actions.find((a: any) => a.action_type === 'adjust_macros') || null;
-        setLastAdjustMacrosAction(lastMacroAction);
-      }
-
-      if (userResult.error) {
-        console.error('[Profile] Error loading user data:', userResult.error);
-      } else if (userResult.data) {
-        console.log('[Profile] User data loaded:', userResult.data);
-        setUser({ ...authUser, ...userResult.data });
-        // Sync auto_share_achievements toggle (default true if null)
-        setAutoShare(userResult.data.auto_share_achievements !== false);
-        if (userResult.data.onboarding_completed && !userResult.data.goal_weight) {
-          console.log('[Profile] Goal weight is missing, showing prompt');
-          setShowGoalWeightPrompt(true);
-        }
-      } else {
-        console.log('[Profile] No user data found in database');
-        setUser(authUser);
-      }
-
-      if (goalResult.error) {
-        console.error('[Profile] Error loading goal:', goalResult.error);
-        setGoal(null);
-      } else if (goalResult.data && goalResult.data.length > 0) {
-        const activeGoal = goalResult.data[0];
-        console.log('[Profile] Active goal loaded:', activeGoal);
-        setGoal(activeGoal);
-      } else {
-        console.log('[Profile] No active goal found for user');
-        setGoal(null);
-      }
-    } catch (error) {
-      console.error('[Profile] Error in loadUserData:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+      const verified = await refreshAcceptedEditor();
+      const current = captureAcceptedEditor();
+      if (!active() || !current()) return;
+      setUser(verified.profile); setGoal(verified.goal);
+      setIsAdmin(verified.profile.is_admin === true);
+      setAutoShare(verified.profile.auto_share_achievements !== false);
+      const result = await supabase.from('coach_action_log').select('*').eq('user_id', verified.profile.id).order('proposed_at', { ascending: false }).limit(20);
+      if (!active() || !current()) return;
+      const actions = result.error ? [] : result.data ?? [];
+      setCoachActions(actions); setLastAdjustMacrosAction(actions.find(action => action.action_type === 'adjust_macros') ?? null);
+    } catch (error) { if (active() && !(error instanceof AcceptedGoalReadSuperseded)) { setUser(null); setGoal(null); setIsAdmin(false); setCoachActions([]); setLastAdjustMacrosAction(null); } }
+    finally { if (active()) { setLoading(false); setRefreshing(false); } }
+  }, [refreshAcceptedEditor, captureAcceptedEditor]);
 
   useFocusEffect(
     useCallback(() => {
       console.log('[Profile] Screen focused, loading data');
       loadUserData();
       refreshPremiumStatus();
-    }, [refreshPremiumStatus])
+    }, [refreshPremiumStatus, loadUserData])
   );
 
   // Sync food preferences from user data whenever user changes
@@ -445,8 +416,14 @@ export default function SettingsScreen() {
   };
 
   const openEditModal = (field: EditField) => {
-    console.log('[Profile] Opening edit modal for field:', field);
-    const units = user?.preferred_units || 'metric';
+    if (field === 'lossRate') { router.push('/edit-goals'); return; }
+    if (!editor.snapshot || editor.pending || editor.busy || saving) return;
+    modalSnapshot.current = { profile: { ...editor.snapshot.profile }, goal: { ...editor.snapshot.goal } };
+    modalCurrent.current = editor.capture();
+    const user = modalSnapshot.current.profile;
+    const goal = modalSnapshot.current.goal;
+    const units = user.preferred_units;
+    if (['height', 'weight', 'goalWeight'].includes(field ?? '') && units !== 'metric' && units !== 'imperial') { Alert.alert('Review units', 'Select verified measurement units first.'); return; }
 
     switch (field) {
       case 'name':
@@ -454,18 +431,18 @@ export default function SettingsScreen() {
         break;
       case 'height':
         if (units === 'imperial') {
-          const { feet, inches } = cmToFeetInches(user.height || 170);
+          const { feet, inches } = cmToFeetInches(user.height ?? NaN);
           setEditValue(feet.toString());
           setEditValue2(inches.toString());
         } else {
-          setEditValue((user.height || 170).toString());
+          setEditValue((user.height ?? NaN).toString());
         }
         break;
       case 'weight':
         if (units === 'imperial') {
-          setEditValue(Math.round(kgToLbs(user.current_weight || 70)).toString());
+          setEditValue(Math.round(kgToLbs(user.current_weight ?? NaN)).toString());
         } else {
-          setEditValue((user.current_weight || 70).toString());
+          setEditValue((user.current_weight ?? NaN).toString());
         }
         break;
       case 'goalWeight':
@@ -476,328 +453,109 @@ export default function SettingsScreen() {
         }
         break;
       case 'age':
-        const age = calculateAge(user.date_of_birth);
+        const age = user.date_of_birth ? calculateAge(user.date_of_birth) : null;
         setEditValue(age ? age.toString() : '');
         break;
-      case 'lossRate': {
-        const lbsVal = goal?.loss_rate_lbs_per_week || 1.0;
-        const displayVal = units === 'metric'
-          ? (Math.round(lbsVal * 0.453592 * 100) / 100).toString()
-          : lbsVal.toString();
-        setEditValue(displayVal);
-        break;
-      }
+
     }
 
     setEditingField(field);
   };
 
-  const closeEditModal = () => {
-    setEditingField(null);
-    setEditValue('');
-    setEditValue2('');
+  const recalculateGoals = (_profile: unknown, _goal: unknown) => { Alert.alert('Review accepted targets', 'Changes require a new review and confirmation in Edit Goals.', [{ text: 'Open Edit Goals', onPress: () => router.push('/edit-goals') }, { text: 'Cancel', style: 'cancel' }]); };
+  // The modal owns its original profile/goal CAS and units until dismissed.
+  const closeEditModal = () => { modalCurrent.current = () => false; setEditingField(null); setEditValue(''); setEditValue2(''); };
+  const saveProfilePatch = async (patch: Database['public']['Tables']['users']['Update'], snapshot: GoalEditorSnapshot, current: () => boolean) => {
+    if (!current() || editor.busy || editor.pending) throw new Error('Resolve the pending goal request first.');
+    const auth = await supabase.auth.getUser();
+    if (auth.error || auth.data.user?.id !== snapshot.profile.id || !current()) throw new Error('Account changed');
+    let query = supabase.from('users').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', snapshot.profile.id);
+    query = snapshot.profile.updated_at === null ? query.is('updated_at', null) : query.eq('updated_at', snapshot.profile.updated_at);
+    const result = await query.select('*').maybeSingle();
+    if (result.error || !result.data || !current()) throw new Error('Profile changed or result could not be verified. Reopen and review.');
+    const fresh = await editor.refresh();
+    if (!current()) throw new Error('Screen changed');
+    setUser(fresh.profile); setGoal(fresh.goal);
+    Alert.alert('Profile saved', 'Accepted targets were not recalculated. Open Edit Goals to review any target changes.');
   };
-
-  const recalculateGoals = async (updatedUser: any, updatedGoal: any) => {
-    try {
-      console.log('[Profile] Recalculating goals with updated data...');
-
-      const age = calculateAge(updatedUser.date_of_birth);
-      if (!age || !updatedUser.height || !updatedUser.current_weight || !updatedUser.sex || !updatedUser.activity_level) {
-        console.log('[Profile] Missing required data for calculation');
-        return;
-      }
-
-      const bmr = calculateBMR(updatedUser.current_weight, updatedUser.height, age, updatedUser.sex);
-      const tdee = calculateTDEE(bmr, updatedUser.activity_level);
-      const targetCalories = calculateTargetCalories(
-        tdee,
-        updatedGoal.goal_type,
-        updatedGoal.goal_type === 'lose' ? updatedGoal.loss_rate_lbs_per_week : undefined
-      );
-
-      const macros = calculateMacrosWithPreset(targetCalories, updatedUser.current_weight, updatedGoal.macro_preset || 'lean_body');
-
-      console.log('[Profile] New calculations:', { bmr, tdee, targetCalories, macros });
-
-      await supabase
-        .from('goals')
-        .update({ is_active: false })
-        .eq('user_id', updatedUser.id)
-        .eq('is_active', true);
-
-      const newGoalData: any = {
-        user_id: updatedUser.id,
-        goal_type: updatedGoal.goal_type,
-        goal_intensity: updatedGoal.goal_intensity || 1,
-        daily_calories: targetCalories,
-        protein_g: macros.protein,
-        carbs_g: macros.carbs,
-        fats_g: macros.fats,
-        fiber_g: macros.fiber,
-        is_active: true,
-        start_date: updatedGoal.start_date || null,
-      };
-
-      if (updatedGoal.goal_type === 'lose') {
-        newGoalData.loss_rate_lbs_per_week = updatedGoal.loss_rate_lbs_per_week;
-      }
-
-      const { error: goalError } = await supabase
-        .from('goals')
-        .insert(newGoalData);
-
-      if (goalError) throw goalError;
-
-      console.log('[Profile] Goals recalculated and updated');
-
-      await loadUserData();
-    } catch (error) {
-      console.error('[Profile] Error recalculating goals:', error);
-      throw error;
-    }
-  };
-
-  /**
-   * Save a field directly with explicit values — bypasses stale state.
-   * Use this when calling from Alert callbacks where setState hasn't flushed yet.
-   */
   const saveFieldDirectly = async (field: EditField, value: string) => {
-    if (!user || !field) return;
-    console.log('[Profile] saveFieldDirectly:', field, value);
-
+    const snapshot = editor.snapshot, current = editor.capture();
+    if (!snapshot || saving || editor.busy || editor.pending) return;
     setSaving(true);
     try {
-      let updateData: any = {};
-      let needsRecalculation = false;
-
-      switch (field) {
-        case 'sex':
-          updateData.sex = value as Sex;
-          needsRecalculation = true;
-          break;
-        case 'activity':
-          updateData.activity_level = value as ActivityLevel;
-          needsRecalculation = true;
-          break;
-        default:
-          return;
-      }
-
-      updateData.updated_at = new Date().toISOString();
-
-      console.log('[Profile] Saving to Supabase:', updateData);
-      const { error } = await supabase
-        .from('users')
-        .update(updateData)
-        .eq('id', user.id);
-
-      if (error) throw error;
-
-      // Optimistic update — apply immediately so UI reflects the change
-      const updatedUser = { ...user, ...updateData };
-      setUser(updatedUser);
-
-      console.log('[Profile] User data updated:', updateData);
-
-      if (needsRecalculation && goal) {
-        await recalculateGoals(updatedUser, goal);
-      } else {
+      if (field === 'activity') {
+        if (!['sedentary', 'light', 'moderate', 'active', 'very_active'].includes(value)) throw new Error('Invalid activity');
+        await editor.run('save', { userId: snapshot.profile.id, expectedProfileUpdatedAt: snapshot.profile.updated_at, expectedGoal: snapshot.goal, operation: 'manual_goal', goal: { daily_calories: snapshot.goal.daily_calories }, profile: { activity_level: value }, isCurrent: current });
         await loadUserData();
-      }
-    } catch (error: any) {
-      console.error('[Profile] Error in saveFieldDirectly:', error);
-      Alert.alert(t('common.error'), t('profile.failedToSaveChanges'));
-    } finally {
-      setSaving(false);
-    }
+      } else if (field === 'sex' && (value === 'male' || value === 'female')) await saveProfilePatch({ sex: value }, snapshot, current);
+    } catch (error) { if (current()) Alert.alert('Unable to save', error instanceof Error ? error.message : 'Review your profile'); }
+    finally { setSaving(false); }
   };
-
   const saveEditedField = async () => {
-    if (!user || !editingField) return;
-    console.log('[Profile] Save button pressed for field:', editingField);
-
+    const snapshot = modalSnapshot.current, current = modalCurrent.current;
+    if (!snapshot || !editingField || saving || editor.busy || editor.pending || !current()) return;
     setSaving(true);
     try {
-      const units = user.preferred_units || 'metric';
-      let updateData: any = {};
-      let needsRecalculation = false;
-
-      switch (editingField) {
-        case 'name':
-          updateData.name = editValue.trim();
-          break;
-
-        case 'height':
-          let heightCm: number;
-          if (units === 'imperial') {
-            const feet = parseInt(editValue) || 0;
-            const inches = parseInt(editValue2) || 0;
-            heightCm = feetInchesToCm(feet, inches);
-          } else {
-            heightCm = parseFloat(editValue) || 0;
-          }
-          updateData.height = heightCm;
-          needsRecalculation = true;
-          break;
-
-        case 'weight':
-          let weightKg: number;
-          if (units === 'imperial') {
-            weightKg = lbsToKg(parseFloat(editValue) || 0);
-          } else {
-            weightKg = parseFloat(editValue) || 0;
-          }
-          updateData.current_weight = weightKg;
-          needsRecalculation = true;
-          break;
-
-        case 'goalWeight':
-          let goalWeightKg: number | null = null;
-          if (editValue) {
-            if (units === 'imperial') {
-              goalWeightKg = lbsToKg(parseFloat(editValue));
-            } else {
-              goalWeightKg = parseFloat(editValue);
-            }
-          }
-          updateData.goal_weight = goalWeightKg;
-          setShowGoalWeightPrompt(false);
-          break;
-
-        case 'age':
-          const newAge = parseInt(editValue) || 0;
-          const today = new Date();
-          const birthYear = today.getFullYear() - newAge;
-          const dob = `${birthYear}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-          updateData.date_of_birth = dob;
-          needsRecalculation = true;
-          break;
-
-        case 'sex':
-          updateData.sex = editValue as Sex;
-          needsRecalculation = true;
-          break;
-
-        case 'activity':
-          updateData.activity_level = editValue as ActivityLevel;
-          needsRecalculation = true;
-          break;
-
-        case 'lossRate':
-          if (goal) {
-            const parsedVal = parseFloat(editValue) || (units === 'metric' ? 0.5 : 1.0);
-            const newLossRate = units === 'metric'
-              ? parsedVal / 0.453592  // convert kg/week back to lbs/week for storage
-              : parsedVal;
-            const updatedGoal = { ...goal, loss_rate_lbs_per_week: newLossRate };
-            const updatedUser = { ...user, ...updateData };
-            await recalculateGoals(updatedUser, updatedGoal);
-            closeEditModal();
-            setSaving(false);
-            return;
-          }
-          break;
-      }
-
-      if (Object.keys(updateData).length > 0) {
-        updateData.updated_at = new Date().toISOString();
-
-        console.log('[Profile] Saving to Supabase:', updateData);
-        const { error } = await supabase
-          .from('users')
-          .update(updateData)
-          .eq('id', user.id);
-
-        if (error) throw error;
-
-        // Optimistic update — apply immediately so the first save always reflects correctly
-        const updatedUser = { ...user, ...updateData };
-        setUser(updatedUser);
-
-        console.log('[Profile] User data updated:', updateData);
-
-        if (needsRecalculation && goal) {
-          await recalculateGoals(updatedUser, goal);
-        } else {
-          await loadUserData();
-        }
-      }
-
-      closeEditModal();
-    } catch (error: any) {
-      console.error('[Profile] Error saving field:', error);
-      Alert.alert(t('common.error'), t('profile.failedToSaveChanges'));
-    } finally {
-      setSaving(false);
-    }
+      const units = snapshot.profile.preferred_units;
+      const parsed = editValue.trim() === '' ? NaN : Number(editValue);
+      const patch: Database['public']['Tables']['users']['Update'] = {};
+      if (editingField === 'name') {
+        if (!editValue.trim()) throw new Error('Enter a name'); patch.name = editValue.trim();
+      } else if (editingField === 'height') {
+        const inches = editValue2.trim() === '' ? NaN : Number(editValue2);
+        if (!Number.isFinite(parsed) || parsed <= 0 || (units === 'imperial' && (!Number.isInteger(parsed) || !Number.isFinite(inches) || inches < 0 || inches >= 12))) throw new Error('Enter the complete height');
+        patch.height = units === 'imperial' ? feetInchesToCm(parsed, inches) : parsed;
+      } else if (editingField === 'weight') {
+        if (!Number.isFinite(parsed) || parsed <= 0) throw new Error('Enter a valid weight'); patch.current_weight = units === 'imperial' ? lbsToKg(parsed) : parsed;
+      } else if (editingField === 'age') {
+        throw new Error('Age alone cannot establish an exact date of birth. Review your birth date before saving.');
+      } else if (editingField === 'goalWeight' || editingField === 'lossRate') {
+        if (!Number.isFinite(parsed) || parsed <= 0) throw new Error('Enter a valid positive value');
+        const target = units === 'imperial' ? lbsToKg(parsed) : parsed;
+        const rate = units === 'metric' ? parsed / 0.453592 : parsed;
+        await editor.run('save', { userId: snapshot.profile.id, expectedProfileUpdatedAt: snapshot.profile.updated_at, expectedGoal: snapshot.goal, operation: 'manual_goal', profile: {}, isCurrent: current,
+          goal: editingField === 'goalWeight' ? { target_weight: target } : { loss_rate_lbs_per_week: rate },
+        });
+        await loadUserData(); setShowGoalWeightPrompt(false); closeEditModal(); return;
+      } else throw new Error('Reopen the relevant editor');
+      await saveProfilePatch(patch, snapshot, current); closeEditModal();
+    } catch (error) { if (current()) Alert.alert('Unable to save', error instanceof Error ? error.message : 'Review your profile'); }
+    finally { setSaving(false); }
   };
-
-  const handleStartDateChange = async (event: any, date?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-    }
-
-    if (date && goal) {
-      setSelectedDate(date);
-
-      if (Platform.OS === 'ios') {
-        return;
-      }
-
-      await saveStartDate(date);
-    }
-  };
-
   const saveStartDate = async (date: Date) => {
+    const snapshot = restartSnapshot.current, current = restartCurrent.current;
+    if (!snapshot || !current() || saving || editor.pending || editor.busy) return;
+    if (restartTimezone.current !== Intl.DateTimeFormat().resolvedOptions().timeZone) { Alert.alert('Review timezone', 'The device timezone changed. Close and reopen the date editor.'); return; }
+    const bounds = restartBounds.current;
+    if (!bounds || bounds.timezone !== snapshot.profile.timezone) { Alert.alert('Review timezone', 'Close and reopen the date editor with a verified account timezone.'); return; }
+    const startDate = toLocalDateString(date), { today, created } = bounds;
+    if (!Number.isFinite(date.getTime()) || !created || startDate < created || startDate > today) { Alert.alert('Review date', 'Choose a date between account creation and today.'); return; }
+    setSaving(true);
     try {
-      setSaving(true);
-      const dateString = toLocalDateString(date);
-
-      console.log('[Profile] Saving Journey Start Date:', dateString);
-
-      const { error } = await supabase
-        .from('goals')
-        .update({ start_date: dateString, updated_at: new Date().toISOString() })
-        .eq('id', goal.id);
-
-      if (error) throw error;
-
-      console.log('[Profile] Journey Start Date saved successfully:', dateString);
-
-      await loadUserData();
-
-      if (Platform.OS === 'ios') {
-        setShowDatePicker(false);
-      }
-
-      Alert.alert(t('common.success'), t('profile.journeyStartUpdated'));
-    } catch (error: any) {
-      console.error('[Profile] Error saving start date:', error);
-      Alert.alert(t('common.error'), t('profile.failedToSaveStartDate'));
-    } finally {
-      setSaving(false);
-    }
+      const weight = snapshot.profile.journey_start_weight, currentWeight = snapshot.profile.current_weight, activity = snapshot.profile.activity_level;
+      if (weight === null || currentWeight === null || activity === null || (startDate === today && weight !== currentWeight)) throw new Error('Review the recorded initial and current weights before restarting. No weight will be invented or replaced.');
+      await editor.run('restart', { userId: snapshot.profile.id, expectedProfileUpdatedAt: snapshot.profile.updated_at, expectedGoal: snapshot.goal,
+        startDate, startWeightKg: weight, currentWeightKg: currentWeight, activityLevel: activity, isCurrent: current });
+      await loadUserData(); setShowDatePicker(false);
+      if (current()) Alert.alert('Journey date updated', 'Accepted targets and history are preserved. No check-in was added.');
+    } catch (error) { if (current()) Alert.alert('Unable to restart', error instanceof Error ? error.message : 'Review the journey'); }
+    finally { setSaving(false); }
   };
-
+  const handleStartDateChange = async (event: { type: string }, date?: Date) => {
+    if (event.type === 'dismissed') { restartCurrent.current = () => false; setShowDatePicker(false); return; }
+    if (!date) return; setSelectedDate(date);
+    if (Platform.OS !== 'ios') { setShowDatePicker(false); await saveStartDate(date); }
+  };
   const openStartDatePicker = () => {
-    console.log('[Profile] Journey Start Date picker opened');
-    if (!goal) {
-      Alert.alert(t('profile.noGoalAlert'), t('profile.noGoalAlertMessage'));
-      return;
-    }
-
-    if (goal.start_date) {
-      const storedDate = new Date(goal.start_date + 'T00:00:00');
-      setSelectedDate(storedDate);
-    } else if (user?.created_at) {
-      const createdDate = new Date(user.created_at);
-      createdDate.setHours(0, 0, 0, 0);
-      setSelectedDate(createdDate);
-    } else {
-      setSelectedDate(new Date());
-    }
-    setShowDatePicker(true);
+    const snapshot = editor.snapshot;
+    if (!snapshot || editor.busy || editor.pending || saving) { Alert.alert('Review required', 'Verify the current profile and resolve any pending request first.'); return; }
+    try { restartBounds.current = captureJourneyDateBounds(snapshot.profile); }
+    catch (error) { Alert.alert('Review account dates', error instanceof Error ? error.message : 'Account timezone unavailable'); return; }
+    restartSnapshot.current = { profile: { ...snapshot.profile }, goal: { ...snapshot.goal } };
+    restartCurrent.current = editor.capture();
+    restartTimezone.current = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!snapshot.goal.start_date) { Alert.alert('Review required', 'No verified journey start date is available.'); return; }
+    setSelectedDate(new Date(snapshot.goal.start_date + 'T12:00:00')); setShowDatePicker(true);
   };
 
   const handleGoalWeightPromptSave = async () => {
@@ -859,7 +617,7 @@ export default function SettingsScreen() {
   }
 
   const units = user.preferred_units || 'metric';
-  const age = calculateAge(user.date_of_birth);
+  const age = user.date_of_birth ? calculateAge(user.date_of_birth) : null;
 
   const subscriptionStatusText = isPremium ? t('profile.premium') : t('profile.free');
   console.log('[Profile] Displaying subscription status:', subscriptionStatusText, '(isPremium:', isPremium, ')');
@@ -886,21 +644,13 @@ export default function SettingsScreen() {
 
   type MacroPreset = 'balanced' | 'high_protein' | 'low_carb' | 'lean_body' | 'custom';
 
-  const detectMacroPreset = (g: any): MacroPreset => {
-    if (!g || !g.daily_calories) return 'lean_body';
-    const totalCals = g.daily_calories;
-    const proteinPercent = Math.round((g.protein_g * 4 / totalCals) * 100);
-    const carbsPercent = Math.round((g.carbs_g * 4 / totalCals) * 100);
-    const fatsPercent = Math.round((g.fats_g * 9 / totalCals) * 100);
-    if (Math.abs(proteinPercent - 30) <= 3 && Math.abs(carbsPercent - 40) <= 3 && Math.abs(fatsPercent - 30) <= 3) return 'balanced';
-    if (Math.abs(proteinPercent - 40) <= 3 && Math.abs(carbsPercent - 35) <= 3 && Math.abs(fatsPercent - 25) <= 3) return 'high_protein';
-    if (Math.abs(proteinPercent - 35) <= 3 && Math.abs(carbsPercent - 25) <= 3 && Math.abs(fatsPercent - 40) <= 3) return 'low_carb';
-    if (proteinPercent >= 35) return 'lean_body';
-    return 'custom';
+  const detectMacroPreset = (g: Database['public']['Tables']['goals']['Row'] | null): MacroPreset | null => {
+    const preset = g?.macro_preset;
+    return preset === 'balanced' || preset === 'high_protein' || preset === 'low_carb' || preset === 'lean_body' || preset === 'custom' ? preset : null;
   };
 
   const currentMacroPreset = detectMacroPreset(goal);
-  const macroPresetDisplayValue = currentMacroPreset === 'lean_body' ? t('profile.leanBodyFormula')
+  const macroPresetDisplayValue = currentMacroPreset === null ? '--' : currentMacroPreset === 'lean_body' ? t('profile.leanBodyFormula')
     : currentMacroPreset === 'balanced' ? t('profile.balanced').split(' ')[0]
     : currentMacroPreset === 'high_protein' ? t('profile.highProtein').split(' ').slice(0, 2).join(' ')
     : currentMacroPreset === 'low_carb' ? t('profile.lowCarb').split(' ').slice(0, 2).join(' ')
@@ -909,15 +659,17 @@ export default function SettingsScreen() {
   const isProfileOpen = openSection === 'profile';
   const isGoalOpen = openSection === 'goal';
 
+  const coachValue = lastAdjustMacrosAction?.new_value;
+  const coachTargets = coachValue && typeof coachValue === 'object' && !Array.isArray(coachValue) ? coachValue : null;
   // Coach badge helpers
   const isCoachModifiedCalories = lastAdjustMacrosAction && goal &&
-    lastAdjustMacrosAction.new_value?.daily_calories === goal.daily_calories;
+    coachTargets?.daily_calories === goal.daily_calories;
   const isCoachModifiedProtein = lastAdjustMacrosAction && goal &&
-    lastAdjustMacrosAction.new_value?.protein_g === goal.protein_g;
+    coachTargets?.protein_g === goal.protein_g;
   const isCoachModifiedCarbs = lastAdjustMacrosAction && goal &&
-    lastAdjustMacrosAction.new_value?.carbs_g === goal.carbs_g;
+    coachTargets?.carbs_g === goal.carbs_g;
   const isCoachModifiedFats = lastAdjustMacrosAction && goal &&
-    lastAdjustMacrosAction.new_value?.fats_g === goal.fats_g;
+    coachTargets?.fats_g === goal.fats_g;
 
   const formatCoachActionDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -929,7 +681,7 @@ export default function SettingsScreen() {
     return date.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
   };
 
-  const getCoachActionIcon = (actionType: string): { ios: string; android: string } => {
+  const getCoachActionIcon = (actionType: string): { ios: React.ComponentProps<typeof IconSymbol>['ios_icon_name']; android: React.ComponentProps<typeof IconSymbol>['android_material_icon_name'] } => {
     if (actionType === 'adjust_macros') return { ios: 'target', android: 'gps_fixed' };
     if (actionType === 'update_goal_weight') return { ios: 'scalemass.fill', android: 'monitor_weight' };
     if (actionType === 'update_step_goal') return { ios: 'figure.walk', android: 'directions_walk' };
@@ -939,7 +691,7 @@ export default function SettingsScreen() {
   const handleCoachBadgePress = (fieldLabel: string) => {
     if (!lastAdjustMacrosAction) return;
     console.log('[Profile] Coach badge tapped for field:', fieldLabel);
-    const dateStr = new Date(lastAdjustMacrosAction.created_at).toLocaleDateString(getAppLocale(), { month: 'long', day: 'numeric', year: 'numeric' });
+    const dateStr = new Date(lastAdjustMacrosAction.confirmed_at ?? lastAdjustMacrosAction.proposed_at).toLocaleDateString(getAppLocale(), { month: 'long', day: 'numeric', year: 'numeric' });
     Alert.alert(
       t('profile.setByCoach'),
       t('profile.setByCoachMessage', { date: dateStr })
@@ -1350,7 +1102,7 @@ export default function SettingsScreen() {
                               onPress: () => {
                                 console.log('[Profile] Goal type changed to lose');
                                 if (goal) {
-                                  recalculateGoals(user, { ...goal, goal_type: 'lose', loss_rate_lbs_per_week: goal?.loss_rate_lbs_per_week || 1.0 });
+                                  recalculateGoals(user, { ...goal, goal_type: 'lose', loss_rate_lbs_per_week: goal?.loss_rate_lbs_per_week ?? NaN });
                                 }
                               },
                             },
@@ -1563,6 +1315,10 @@ export default function SettingsScreen() {
                       </Text>
                     </TouchableOpacity>
 
+                    {!!editor.error && <Text accessibilityRole="alert">{editor.error}</Text>}
+                    {editor.canRetrySave && <TouchableOpacity disabled={editor.busy || saving} onPress={() => { void editor.run('save').catch(() => {}); }}><Text>Retry the same goal save</Text></TouchableOpacity>}
+                    {editor.canRetryRestart && <TouchableOpacity disabled={editor.busy || saving} onPress={() => { void editor.run('restart').catch(() => {}); }}><Text>Retry the same journey restart</Text></TouchableOpacity>}
+                    <TouchableOpacity disabled={editor.busy || saving} onPress={() => { closeEditModal(); setShowDatePicker(false); restartCurrent.current = () => false; void editor.review().catch(() => {}); }}><Text>Review current profile and targets</Text></TouchableOpacity>
                     {/* ── Adaptive TDEE Divider ── */}
                     <View style={[styles.adaptiveDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '30' }]} />
 
@@ -1574,36 +1330,28 @@ export default function SettingsScreen() {
                         </View>
                         <View style={styles.adaptiveTextStack}>
                           <Text style={[styles.adaptiveLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                            {t('adaptiveTdee.smartAdjustment')}
+                            {'TDEE observation'}
                           </Text>
                           <Text style={[styles.adaptiveSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                            {t('adaptiveTdee.smartAdjustmentSubtitle')}
+                            {'Observes data only. It does not change accepted targets or enable recommendations.'}
                           </Text>
                         </View>
                       </View>
                       <Switch
-                        value={user?.adaptive_tdee_enabled !== false}
+                        value={observation.program?.enabled === true}
+                        disabled={observation.loading || !observation.program}
                         onValueChange={async (val) => {
-                          console.log('[Profile] Smart Calorie Adjustment toggled:', val);
-                          try {
-                            const { error } = await supabase
-                              .from('users')
-                              .update({ adaptive_tdee_enabled: val, updated_at: new Date().toISOString() })
-                              .eq('id', user.id);
-                            if (error) throw error;
-                            setUser((prev: any) => ({ ...prev, adaptive_tdee_enabled: val }));
-                          } catch (err: any) {
-                            console.error('[Profile] Error saving adaptive_tdee_enabled:', err);
-                            Alert.alert(t('common.error'), t('errors.failedToSave'));
-                          }
+                          if (!observation.program) return;
+                          try { await observation.updateSettings(val, observation.program.reviewDay); }
+                          catch (error) { Alert.alert('Observation unavailable', error instanceof Error ? error.message : 'Unable to verify settings'); }
                         }}
                         trackColor={{ false: isDark ? colors.borderDark : colors.border, true: colors.primary + '80' }}
-                        thumbColor={user?.adaptive_tdee_enabled !== false ? colors.primary : (isDark ? colors.textSecondaryDark : colors.disabled)}
+                        thumbColor={observation.program?.enabled === true ? colors.primary : (isDark ? colors.textSecondaryDark : colors.disabled)}
                       />
                     </View>
 
                     {/* ── B. Adjustment Day Selector (only when enabled) ── */}
-                    {user?.adaptive_tdee_enabled !== false && (
+                    {observation.program?.enabled === true && (
                       <TouchableOpacity
                         style={styles.adaptiveRow}
                         onPress={() => {
@@ -1617,7 +1365,7 @@ export default function SettingsScreen() {
                             <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={16} color={colors.primary} />
                           </View>
                           <Text style={[styles.adaptiveLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                            {t('adaptiveTdee.adjustmentDay')}
+                            {(i18n.language.startsWith('es') ? 'Día de revisión de datos' : 'Data review day')}
                           </Text>
                         </View>
                         <View style={styles.adaptiveRowRight}>
@@ -1630,7 +1378,7 @@ export default function SettingsScreen() {
                               t('adaptiveTdee.thursday'),
                               t('adaptiveTdee.friday'),
                               t('adaptiveTdee.saturday'),
-                            ][user?.adjustment_day ?? 0]}
+                            ][observation.program?.reviewDay ?? 0]}
                           </Text>
                           <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="arrow-forward" size={16} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
                         </View>
@@ -1759,7 +1507,7 @@ export default function SettingsScreen() {
             ) : (
               coachActions.map((action, index) => {
                 const actionIcon = getCoachActionIcon(action.action_type);
-                const actionDate = formatCoachActionDate(action.created_at);
+                const actionDate = formatCoachActionDate(action.proposed_at);
                 const isLast = index === coachActions.length - 1;
                 return (
                   <View key={action.id}>
@@ -1769,7 +1517,7 @@ export default function SettingsScreen() {
                       </View>
                       <View style={styles.coachActionContent}>
                         <Text style={[styles.coachActionSummary, { color: isDark ? colors.textDark : colors.text }]}>
-                          {action.summary}
+                          {action.reason ?? action.action_type}
                         </Text>
                         <Text style={[styles.coachActionDate, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                           {actionDate}
@@ -2286,19 +2034,19 @@ export default function SettingsScreen() {
             visible={showDatePicker}
             transparent
             animationType="slide"
-            onRequestClose={() => setShowDatePicker(false)}
+            onRequestClose={() => { restartCurrent.current = () => false; setShowDatePicker(false); }}
           >
             <TouchableOpacity
               style={styles.modalOverlay}
               activeOpacity={1}
-              onPress={() => setShowDatePicker(false)}
+              onPress={() => { restartCurrent.current = () => false; setShowDatePicker(false); }}
             >
               <TouchableOpacity
                 style={[styles.datePickerModal, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
                 activeOpacity={1}
               >
                 <View style={styles.datePickerHeader}>
-                  <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <TouchableOpacity onPress={() => { restartCurrent.current = () => false; setShowDatePicker(false); }}>
                     <Text style={[styles.datePickerButton, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                       {t('common.cancel')}
                     </Text>
@@ -2329,7 +2077,6 @@ export default function SettingsScreen() {
           </Modal>
         ) : (
           <DateTimePicker
-                  locale={Platform.OS === 'ios' ? getAppLocale() : undefined}
             value={selectedDate}
             mode="date"
             display="default"
@@ -2355,7 +2102,7 @@ export default function SettingsScreen() {
             activeOpacity={1}
           >
             <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              {t('adaptiveTdee.selectAdjustmentDay')}
+              {(i18n.language.startsWith('es') ? 'Día de revisión de datos' : 'Data review day')}
             </Text>
             {[
               t('adaptiveTdee.sunday'),
@@ -2366,7 +2113,7 @@ export default function SettingsScreen() {
               t('adaptiveTdee.friday'),
               t('adaptiveTdee.saturday'),
             ].map((dayName, index) => {
-              const isSelected = (user?.adjustment_day ?? 0) === index;
+              const isSelected = (observation.program?.reviewDay ?? 0) === index;
               return (
                 <TouchableOpacity
                   key={index}
@@ -2376,19 +2123,9 @@ export default function SettingsScreen() {
                     isSelected && { backgroundColor: colors.primary + '15' },
                   ]}
                   onPress={async () => {
-                    console.log('[Profile] Adjustment day selected:', dayName, '(index:', index, ')');
-                    setShowAdjustmentDayModal(false);
-                    try {
-                      const { error } = await supabase
-                        .from('users')
-                        .update({ adjustment_day: index, updated_at: new Date().toISOString() })
-                        .eq('id', user.id);
-                      if (error) throw error;
-                      setUser((prev: any) => ({ ...prev, adjustment_day: index }));
-                    } catch (err: any) {
-                      console.error('[Profile] Error saving adjustment_day:', err);
-                      Alert.alert(t('common.error'), t('errors.failedToSave'));
-                    }
+                    if (!observation.program) return;
+                    try { await observation.updateSettings(observation.program.enabled, index); setShowAdjustmentDayModal(false); }
+                    catch (error) { Alert.alert('Observation unavailable', error instanceof Error ? error.message : 'Unable to verify settings'); }
                   }}
                   activeOpacity={0.7}
                 >

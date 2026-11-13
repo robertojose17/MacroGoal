@@ -65,6 +65,26 @@ const catalogIdentity=createCoachCatalogIdentity({store:AsyncStorage,owner:trans
 const mealExperience = createMealServices({ searchIngredients:createCoachIngredientSearch(supabase,transport.owner),catalogIdentity, transport: mealTransport, owner: transport.owner, today: toLocalDateString, store: AsyncStorage,
   persistPrivateDetailsLink,resolvePrivateDetails,reportPrivateDetailsOutcome,
   subscribeInvalidation(owner, invalidate) { const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => { if (event === 'SIGNED_OUT' || session?.user?.id !== owner) invalidate(); }); return () => subscription.unsubscribe(); },
-  async write(body) { const { data,error } = await supabase.rpc('log_food', body); if (error) throw error; return data; },
+  async write(body) {
+    // Verified SQL defaults: optional identity/portion fields default to NULL,
+    // but nutrient defaults are zero. Never turn unknown nutrition into zero.
+    const nutrient = (value: unknown): number => {
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) throw Error('incomplete_diary_nutrition');
+      return value;
+    };
+    const { data,error } = await supabase.rpc('log_food', {
+      ...body,
+      p_food_id: body.p_food_id ?? undefined,
+      p_food_item_id: body.p_food_item_id ?? undefined,
+      p_food_name: body.p_food_name ?? undefined,
+      p_food_brand: body.p_food_brand ?? undefined,
+      p_grams: body.p_grams ?? undefined,
+      p_serving_description: body.p_serving_description ?? undefined,
+      p_calories: nutrient(body.p_calories), p_protein: nutrient(body.p_protein),
+      p_carbs: nutrient(body.p_carbs), p_fats: nutrient(body.p_fats), p_fiber: nutrient(body.p_fiber),
+    });
+    if (error) throw error;
+    return data;
+  },
 });
 export const coachDailyServices = { ...dailyServices, ...(COACH_GUIDED_CONTRACT_READY ? guidedServices : {}), ...(COACH_MEAL_V2_READY ? { experience: mealExperience } : {}) };

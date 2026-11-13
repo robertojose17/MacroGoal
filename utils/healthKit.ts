@@ -23,8 +23,6 @@ import { readAndroidSteps } from './healthConnectSteps.mjs';
 // Set to null to re-enable real health data (requires a native build).
 const MOCK_METRICS: DailyHealthMetrics | null = null;
 
-// Keep legacy MOCK_STEPS alias for backward compat (used by getStepsForDate)
-const MOCK_STEPS: number | null = MOCK_METRICS?.steps ?? null;
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -372,6 +370,7 @@ async function ios_getStandHoursForDate(date: Date): Promise<MetricResult> {
     const samples = await queryCategorySamples(
       'HKCategoryTypeIdentifierAppleStandHour',
       {
+        limit: 0, // HealthKit query API: zero means all samples in the bounded date range.
         filter: { date: { startDate: start, endDate: end } },
       }
     );
@@ -583,9 +582,10 @@ export async function getTodaySteps(): Promise<StepsResult> {
  * Read step count for a specific date (useful for backfilling missions).
  */
 export async function getStepsForDate(date: Date): Promise<StepsResult> {
-  if (MOCK_STEPS !== null) {
-    console.log('[healthKit] MOCK MODE — returning', MOCK_STEPS, 'steps for', date.toISOString());
-    return { available: true, permission: 'granted', steps: MOCK_STEPS };
+  const mockSteps = MOCK_METRICS?.steps ?? null;
+  if (mockSteps !== null) {
+    console.log('[healthKit] MOCK MODE — returning', mockSteps, 'steps for', date.toISOString());
+    return { available: true, permission: 'granted', steps: mockSteps };
   }
   console.log('[healthKit] getStepsForDate:', date.toISOString());
   if (Platform.OS === 'ios') return ios_getStepsForDate(date);

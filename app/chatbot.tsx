@@ -1411,7 +1411,6 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
               p_date: date,
               p_meal_type: mealType,
               p_food_id: foodData.id,
-              p_food_item_id: null,
               p_quantity: 1,
               p_calories: ingredient.calories,
               p_protein: ingredient.protein,
@@ -1429,7 +1428,7 @@ Do NOT include citation markers, reference numbers, or footnotes such as [1], [2
               continue;
             }
 
-            console.log('[Chatbot] ✅ log_food RPC success for ingredient:', ingredient.name, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
+            console.log('[Chatbot] ✅ log_food RPC success for ingredient:', ingredient.name, 'meal_id:', rpcData && typeof rpcData === 'object' && !Array.isArray(rpcData) ? rpcData.meal_id : undefined, 'meal_item_id:', rpcData && typeof rpcData === 'object' && !Array.isArray(rpcData) ? rpcData.meal_item_id : undefined);
             // AI-estimated foods are user_created — do not affect catalog popularity
             console.log('[Chatbot] Skipping logFoodUsage for AI-estimated ingredient:', ingredient.name);
 

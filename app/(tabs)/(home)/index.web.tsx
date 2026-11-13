@@ -609,7 +609,7 @@ export default function HomeScreen() {
 
 function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
   const percentage = Math.min((eaten / goal) * 100, 100);
-  const percentageStr = `${percentage}%`;
+  const percentageStr: `${number}%` = `${percentage}%`;
 
   return (
     <View style={styles.macroSummaryRowCompact}>

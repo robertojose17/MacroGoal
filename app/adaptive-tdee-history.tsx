@@ -33,7 +33,7 @@ interface TdeeEstimate {
   data_days_count: number | null;
   adjustment_applied: boolean | null;
   skip_reason: string | null;
-  created_at: string;
+  created_at: string | null;
 }
 
 interface GoalData {

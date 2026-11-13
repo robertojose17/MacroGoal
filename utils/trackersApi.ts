@@ -1,3 +1,5 @@
+import type { Database, Json } from '@/lib/supabase/types';
+import { jsonRecord } from './jsonValue';
 import { supabase, SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 
@@ -5,7 +7,7 @@ export interface Tracker {
   id: string;
   user_id: string;
   name: string;
-  emoji: string;
+  emoji: string | null;
   tracker_type: 'binary' | 'count' | 'numeric' | 'duration';
   unit: string | null;
   goal_value: number | null;
@@ -13,7 +15,14 @@ export interface Tracker {
   is_default: boolean;
   sort_order: number;
   created_at: string;
-  translations?: Record<string, any>;
+  translations?: { [key: string]: Json | undefined };
+}
+
+function trackerFromRow(row: Database['public']['Tables']['trackers']['Row']): Tracker {
+  const type = row.tracker_type, frequency = row.frequency;
+  if (type !== 'binary' && type !== 'count' && type !== 'numeric' && type !== 'duration') throw new Error('invalid_tracker_type');
+  if (frequency !== 'daily' && frequency !== 'weekly') throw new Error('invalid_tracker_frequency');
+  return { ...row, tracker_type: type, frequency, translations: jsonRecord(row.translations) };
 }
 
 export interface TrackerEntry {
@@ -80,28 +89,23 @@ export async function listTrackers(): Promise<Tracker[]> {
       throw new Error(createError.message);
     }
     console.log('[TrackersApi] Seeded', created?.length, 'default trackers');
-    return created ?? [];
+    return (created ?? []).map(trackerFromRow);
   }
 
-  // Fix existing weight tracker records that have the wrong unit (kg instead of lb)
-  const weightTracker = trackers.find(t => t.name.toLowerCase() === 'weight');
-  if (weightTracker && weightTracker.unit !== 'lb') {
-    console.log('[TrackersApi] Weight tracker has wrong unit:', weightTracker.unit, '— updating to lb');
-    await supabase.from('trackers').update({ unit: 'lb' }).eq('id', weightTracker.id);
-    weightTracker.unit = 'lb'; // update in memory too
-  }
-
+  // Reading a tracker must not relabel historical measurements or change its unit.
   console.log('[TrackersApi] Loaded', trackers.length, 'trackers');
-  return trackers;
+  return trackers.map(trackerFromRow);
 }
 
 export async function createTracker(data: Partial<Tracker>): Promise<Tracker> {
   console.log('[TrackersApi] createTracker()', data);
   const userId = await getCurrentUserId();
+  const name = data.name, type = data.tracker_type;
+  if (typeof name !== 'string' || !name.trim() || !type || !['binary', 'count', 'numeric', 'duration'].includes(type)) throw new Error('Tracker name and type are required');
 
   const { data: result, error } = await supabase
     .from('trackers')
-    .insert({ ...data, user_id: userId })
+    .insert({ ...data, name, tracker_type: type, translations: data.translations === undefined ? undefined : jsonRecord(data.translations), user_id: userId })
     .select()
     .single();
 
@@ -110,7 +114,7 @@ export async function createTracker(data: Partial<Tracker>): Promise<Tracker> {
     throw new Error(error.message);
   }
   console.log('[TrackersApi] Created tracker:', result.id);
-  return result;
+  return trackerFromRow(result);
 }
 
 export async function updateTracker(id: string, data: Partial<Tracker>): Promise<Tracker> {
@@ -129,15 +133,17 @@ export async function updateTracker(id: string, data: Partial<Tracker>): Promise
     console.error('[TrackersApi] updateTracker error:', error.message);
     throw new Error(error.message);
   }
-  return result;
+  return trackerFromRow(result);
 }
 
 export async function updateTrackerGoal(trackerId: string, goalValue: number | null): Promise<void> {
   console.log('[TrackersApi] updateTrackerGoal()', trackerId, goalValue);
+  if (goalValue !== null && (!Number.isFinite(goalValue) || goalValue < 0)) throw new Error('Invalid tracker goal');
+  const userId = await getCurrentUserId();
   const { error } = await supabase
     .from('trackers')
-    .update({ goal_value: goalValue, updated_at: new Date().toISOString() })
-    .eq('id', trackerId);
+    .update({ goal_value: goalValue })
+    .eq('id', trackerId).eq('user_id', userId);
   if (error) {
     console.error('[trackersApi] updateTrackerGoal error:', error);
     throw new Error(error.message);
@@ -386,8 +392,9 @@ export async function getStats(trackerId: string): Promise<TrackerStats> {
 
   // Days goal met
   let daysGoalMet = 0;
-  if (tracker?.goal_value != null) {
-    daysGoalMet = entries.filter((e: { value: number }) => e.value >= tracker.goal_value).length;
+  const goalValue = tracker?.goal_value;
+  if (goalValue != null) {
+    daysGoalMet = entries.filter((e: { value: number }) => e.value >= goalValue).length;
   }
 
   // This week / last week

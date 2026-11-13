@@ -15,7 +15,7 @@ export interface ZoomablePhotoProps {
   style?: StyleProp<ViewStyle>;
 }
 
-export function ZoomablePhoto({ uri, style }: ZoomablePhotoProps): JSX.Element {
+export function ZoomablePhoto({ uri, style }: ZoomablePhotoProps): React.JSX.Element {
   // ── Animated values ──────────────────────────────────────────────────────
   const scale = useRef(new Animated.Value(1)).current;
   const translateX = useRef(new Animated.Value(0)).current;

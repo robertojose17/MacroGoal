@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase/client';
 export interface TemplatePlan {
   id: string;
   name: string;
-  description: string;
+  description: string | null;
   emoji: string;
   goal_type: 'cut' | 'bulk' | 'maintain' | string;
   diet_type: string;

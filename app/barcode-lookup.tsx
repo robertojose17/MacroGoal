@@ -1,3 +1,4 @@
+import { barcodeSourcePreview } from '@/utils/barcodeSourcePreview';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, ActivityIndicator, Alert } from 'react-native';
@@ -167,6 +168,14 @@ export default function BarcodeLookupScreen() {
       // Present malformed flags are ambiguous contract data, not permission to use a proposal.
       const invalidConfirmationFlag = Object.prototype.hasOwnProperty.call(result, 'requires_label_confirmation')
         && typeof result.requires_label_confirmation !== 'boolean';
+      const sourceProduct = !invalidConfirmationFlag ? barcodeSourcePreview(result, barcode) : null;
+      if (sourceProduct) {
+        router.push({pathname:'/food-details',params:{
+          ...recoveryRouteContext(params),offData:JSON.stringify({...sourceProduct,_off_source_readonly:true}),
+          meal:mealType,date,mode,source:'barcode',food_item_id:'',
+        }});
+        return;
+      }
       if (result.requires_label_confirmation === true || invalidConfirmationFlag) {
         router.replace({pathname:'/food-photo-capture',params:{
           ...recoveryRouteContext(params),barcode,type:'new_product',meal:mealType,date,mode,

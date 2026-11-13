@@ -1,3 +1,4 @@
+import { knownNonnegative } from '@/utils/savedMealDraftContract';
 
 import React, { useState, useCallback } from 'react';
 import {
@@ -191,17 +192,18 @@ export default function RecipeCreateScreen() {
       return;
     }
     const kcalNum = parseFloat(qaKcal);
-    if (!qaKcal.trim() || isNaN(kcalNum) || kcalNum <= 0) {
+    if (!qaKcal.trim() || isNaN(kcalNum) || kcalNum < 0) {
       Alert.alert(t('recipeCreate.required'), t('recipeCreate.enterCalories'));
       return;
     }
+    if (![qaGrams, qaKcal, qaProtein, qaCarbs, qaFat].every(value => value.trim() !== '' && knownNonnegative(Number(value)))) { Alert.alert(t('common.error'), 'Enter known amounts for every nutrient, including explicit zero when appropriate.'); return; }
     const ing: Ingredient = {
       name: trimmedName,
-      grams: parseFloat(qaGrams) || 0,
+      grams: Number(qaGrams),
       kcal: kcalNum,
-      protein: parseFloat(qaProtein) || 0,
-      carbs: parseFloat(qaCarbs) || 0,
-      fat: parseFloat(qaFat) || 0,
+      protein: Number(qaProtein),
+      carbs: Number(qaCarbs),
+      fat: Number(qaFat),
     };
     console.log('[RecipeCreate] Quick Add ingredient submitted:', ing.name, 'kcal:', ing.kcal);
     setIngredients(prev => [...prev, ing]);
@@ -227,6 +229,7 @@ export default function RecipeCreateScreen() {
       return;
     }
 
+    if (!ingredients.every(i => [i.grams, i.kcal, i.protein, i.carbs, i.fat].every(knownNonnegative))) { Alert.alert(t('common.error'), 'Review all ingredient nutrition before saving.'); return; }
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -242,18 +245,18 @@ export default function RecipeCreateScreen() {
 
       const ingredientsPayload = ingredients.map(i => ({
         name: i.name,
-        amount: `${i.grams}g`,
+        amount: `${i.grams}g`, grams: i.grams, kcal: i.kcal, protein: i.protein, carbs: i.carbs, fat: i.fat,
       }));
 
       const payload = {
         name: name.trim(),
-        description: description.trim() || null,
+        description: description.trim(),
         meal_type: mealType,
         cuisine: cuisine.trim() || 'Other',
-        calories: Math.round(totalKcal) || null,
-        protein: Math.round(totalProtein) || null,
-        carbs: Math.round(totalCarbs) || null,
-        fat: Math.round(totalFat) || null,
+        calories: Math.round(totalKcal),
+        protein: Math.round(totalProtein),
+        carbs: Math.round(totalCarbs),
+        fat: Math.round(totalFat),
         ingredients: ingredientsPayload.length > 0 ? ingredientsPayload : null,
         instructions: instructions.trim() || null,
         thumbnail_url: thumbnailUrl,

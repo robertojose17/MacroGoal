@@ -1,15 +1,16 @@
 import { getAppLocale } from '@/lib/localization';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, Alert, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Sex, GoalType, ActivityLevel } from '@/types';
+import { useAcceptedGoalEditor } from '@/hooks/useAcceptedGoalEditor';
 import { supabase } from '@/lib/supabase/client';
+import type { Database } from '@/lib/supabase/types';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
-import { resetWeightMilestones } from '@/utils/autoShareAchievements';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useTranslation } from 'react-i18next';
 
@@ -21,15 +22,15 @@ export default function EditGoalsScreen() {
   const isDark = colorScheme === 'dark';
   const { t } = useTranslation();
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const editor = useAcceptedGoalEditor();
+  const { loading, busy: saving, snapshot: loadedSnapshot, isCurrent: actorCurrent } = editor;
+  const [formError, setFormError] = useState('');
 
   // Coach banner state
-  const [lastCoachMacroAction, setLastCoachMacroAction] = useState<any>(null);
+  const [lastCoachMacroAction, setLastCoachMacroAction] = useState<Database['public']['Tables']['coach_actions']['Row'] | null>(null);
   const [isCoachModified, setIsCoachModified] = useState(false);
 
   // User data
-  const [userId, setUserId] = useState<string>('');
   const [sex, setSex] = useState<Sex>('male');
   const [age, setAge] = useState(0);
   const [heightCm, setHeightCm] = useState(0);
@@ -38,7 +39,6 @@ export default function EditGoalsScreen() {
   
   // Goal data
   const [goalType, setGoalType] = useState<GoalType>('lose');
-  const [existingStartDate, setExistingStartDate] = useState<string | null>(null);
   const [lossRateLbsPerWeek, setLossRateLbsPerWeek] = useState<number>(1.0);
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
   
@@ -49,129 +49,52 @@ export default function EditGoalsScreen() {
   const [customFatsPercent, setCustomFatsPercent] = useState('30');
   const [macroError, setMacroError] = useState('');
 
-  const loadCurrentGoals = useCallback(async () => {
-    try {
-      setLoading(true);
-      console.log('[EditGoals] Loading current goals and user data...');
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        Alert.alert(t('common.error'), t('common.loggedIn'));
-        router.back();
-        return;
-      }
-
-      setUserId(user.id);
-
-      // Load user profile
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (userError) throw userError;
-
-      if (userData) {
-        console.log('[EditGoals] User data loaded:', userData);
-        setSex(userData.sex || 'male');
-        setHeightCm(userData.height || 170);
-        setWeightKg(userData.current_weight || 70);
-        setUnits(userData.preferred_units || 'metric');
-        setActivityLevel(userData.activity_level || 'moderate');
-
-        // Calculate age from date_of_birth
-        if (userData.date_of_birth) {
-          const birthDate = new Date(userData.date_of_birth);
-          const today = new Date();
-          let calculatedAge = today.getFullYear() - birthDate.getFullYear();
-          const monthDiff = today.getMonth() - birthDate.getMonth();
-          if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-            calculatedAge--;
-          }
-          setAge(calculatedAge);
-        }
-      }
-
-      // Load active goal and last coach macro action in parallel
-      const [goalResult, coachResult] = await Promise.all([
-        supabase.from('goals').select('*').eq('user_id', user.id).eq('is_active', true).maybeSingle(),
-        supabase.from('coach_actions').select('id, action_type, new_value, created_at').eq('user_id', user.id).eq('action_type', 'adjust_macros').order('created_at', { ascending: false }).limit(1),
-      ]);
-
-      const goalError = goalResult.error;
-      const goalData = goalResult.data;
-
-      if (goalError) throw goalError;
-
-      if (coachResult.data && coachResult.data.length > 0) {
-        const coachAction = coachResult.data[0];
-        console.log('[EditGoals] Last coach macro action loaded:', coachAction);
-        setLastCoachMacroAction(coachAction);
-      }
-
-      if (goalData) {
-        console.log('[EditGoals] Goal data loaded:', goalData);
-        setGoalType(goalData.goal_type);
-        setExistingStartDate(goalData.start_date || null);
-        if (goalData.loss_rate_lbs_per_week) {
-          setLossRateLbsPerWeek(goalData.loss_rate_lbs_per_week);
-        }
-
-        // Read macro_preset directly from the goals row
-        const savedPreset: MacroPreset = goalData.macro_preset || 'lean_body';
-        console.log('[EditGoals] macro_preset from DB:', savedPreset);
-
-        if (savedPreset === 'custom') {
-          // Derive percentages from stored macro grams for display
-          const totalCals = goalData.daily_calories;
-          const proteinPercent = Math.round((goalData.protein_g * 4 / totalCals) * 100);
-          const carbsPercent = Math.round((goalData.carbs_g * 4 / totalCals) * 100);
-          const fatsPercent = Math.round((goalData.fats_g * 9 / totalCals) * 100);
-          setMacroPreset('custom');
-          setCustomProteinPercent(proteinPercent.toString());
-          setCustomCarbsPercent(carbsPercent.toString());
-          setCustomFatsPercent(fatsPercent.toString());
-        } else {
-          setMacroPreset(savedPreset);
-        }
-
-        // Check if current goals match the last coach macro action
-        if (coachResult.data && coachResult.data.length > 0) {
-          const coachAction = coachResult.data[0];
-          const nv = coachAction.new_value;
-          const coachMatch = nv &&
-            nv.daily_calories === goalData.daily_calories &&
-            nv.protein_g === goalData.protein_g &&
-            nv.carbs_g === goalData.carbs_g &&
-            nv.fats_g === goalData.fats_g;
-          console.log('[EditGoals] Goals match last coach action:', coachMatch);
-          setIsCoachModified(!!coachMatch);
-        }
-      }
-    } catch (error: any) {
-      console.error('[EditGoals] Error loading data:', error);
-      Alert.alert(t('common.error'), t('editGoals.failedToLoad'));
-    } finally {
-      setLoading(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
-
   useEffect(() => {
-    loadCurrentGoals();
-  }, [loadCurrentGoals]);
+    const snapshot = loadedSnapshot;
+    setFormError(''); setIsCoachModified(false); setLastCoachMacroAction(null);
+    if (!snapshot) return;
+    const { profile: userData, goal: goalData } = snapshot;
+    const activity = userData.activity_level;
+    const preset = goalData.macro_preset;
+    const dob = userData.date_of_birth ? new Date(userData.date_of_birth + 'T12:00:00') : null;
+    const today = new Date();
+    let calculatedAge = dob ? today.getFullYear() - dob.getFullYear() : NaN;
+    if (dob && (today.getMonth() < dob.getMonth() || (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate()))) calculatedAge--;
+    if ((userData.sex !== 'male' && userData.sex !== 'female') || !userData.height || !userData.current_weight ||
+      !Number.isFinite(calculatedAge) || calculatedAge < 18 || calculatedAge > 100 ||
+      (activity !== 'sedentary' && activity !== 'light' && activity !== 'moderate' && activity !== 'active' && activity !== 'very_active') ||
+      (preset !== 'custom' && preset !== 'balanced' && preset !== 'high_protein' && preset !== 'low_carb' && preset !== 'lean_body') ||
+      (goalData.goal_type !== 'lose' && goalData.goal_type !== 'gain' && goalData.goal_type !== 'maintain') ||
+      (userData.preferred_units !== 'metric' && userData.preferred_units !== 'imperial') || goalData.daily_calories <= 0) {
+      setFormError('A verified adult profile and complete accepted goal are required. Review your profile first.'); return;
+    }
+    setSex(userData.sex); setHeightCm(userData.height); setWeightKg(userData.current_weight); setAge(calculatedAge);
+    setUnits(userData.preferred_units); setActivityLevel(activity); setGoalType(goalData.goal_type); setMacroPreset(preset);
+    setLossRateLbsPerWeek(goalData.loss_rate_lbs_per_week ?? NaN);
+    setCustomProteinPercent(String(Math.round(goalData.protein_g * 4 / goalData.daily_calories * 100)));
+    setCustomCarbsPercent(String(Math.round(goalData.carbs_g * 4 / goalData.daily_calories * 100)));
+    setCustomFatsPercent(String(Math.round(goalData.fats_g * 9 / goalData.daily_calories * 100)));
+    let cancelled = false;
+    void supabase.from('coach_actions').select('*').eq('user_id', userData.id).eq('action_type', 'adjust_macros').order('created_at', { ascending: false }).limit(1).then(({ data, error }) => {
+      if (cancelled || error || !actorCurrent(userData.id)) return;
+      const action = data?.[0], value = action?.new_value;
+      if (action && value && typeof value === 'object' && !Array.isArray(value)) {
+        setLastCoachMacroAction(action);
+        setIsCoachModified(value.daily_calories === goalData.daily_calories && value.protein_g === goalData.protein_g && value.carbs_g === goalData.carbs_g && value.fats_g === goalData.fats_g);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [loadedSnapshot, actorCurrent]);
 
   const validateMacros = (): boolean => {
     if (macroPreset !== 'custom') return true;
 
-    const protein = parseFloat(customProteinPercent) || 0;
-    const carbs = parseFloat(customCarbsPercent) || 0;
-    const fats = parseFloat(customFatsPercent) || 0;
+    const protein = customProteinPercent.trim() === '' ? NaN : Number(customProteinPercent);
+    const carbs = customCarbsPercent.trim() === '' ? NaN : Number(customCarbsPercent);
+    const fats = customFatsPercent.trim() === '' ? NaN : Number(customFatsPercent);
     const total = protein + carbs + fats;
 
-    if (Math.abs(total - 100) > 0.5) {
+    if (![protein, carbs, fats].every(n => Number.isFinite(n) && n >= 0 && n <= 100) || Math.abs(total - 100) > 0.5) {
       setMacroError(t('editGoals.macrosTotalError', { total: total.toFixed(1) }));
       return false;
     }
@@ -186,7 +109,8 @@ export default function EditGoalsScreen() {
       return;
     }
 
-    setSaving(true);
+    const snapshot = editor.snapshot;
+    if (!snapshot || editor.pending || editor.busy || formError) return;
 
     try {
       console.log('[EditGoals] Calculating new goals...');
@@ -227,51 +151,18 @@ export default function EditGoalsScreen() {
         preset: macroPreset,
       });
 
-      // Deactivate current goals
-      await supabase
-        .from('goals')
-        .update({ is_active: false })
-        .eq('user_id', userId)
-        .eq('is_active', true);
-
-      // Create new goal
-      const goalData: any = {
-        user_id: userId,
-        goal_type: goalType,
-        goal_intensity: 1,
-        daily_calories: targetCalories,
-        protein_g: macros.protein,
-        carbs_g: macros.carbs,
-        fats_g: macros.fats,
-        fiber_g: macros.fiber,
-        macro_preset: macroPreset,
-        is_active: true,
-        start_date: existingStartDate || null,
-      };
-
-      if (goalType === 'lose') {
-        goalData.loss_rate_lbs_per_week = lossRateLbsPerWeek;
-      }
-
-      const { error: goalError } = await supabase
-        .from('goals')
-        .insert(goalData);
-
-      if (goalError) throw goalError;
-
-      // Update user activity level if changed
-      await supabase
-        .from('users')
-        .update({
-          activity_level: activityLevel,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', userId);
-
-      console.log('[EditGoals] ✅ Goals updated successfully');
-
-      // Reset weight milestones so they can be re-earned on the new goal
-      resetWeightMilestones().catch(console.warn);
+      const target = snapshot.goal.target_weight;
+      if ((goalType === 'lose' && (target == null || target >= weightKg)) || (goalType === 'gain' && (target == null || target <= weightKg))) throw new Error('Review the target weight before changing goal direction.');
+      if (goalType === 'lose' && (!Number.isFinite(lossRateLbsPerWeek) || lossRateLbsPerWeek <= 0 || lossRateLbsPerWeek > 2)) throw new Error('Review the loss rate.');
+      await editor.run('save', {
+        userId: snapshot.profile.id, expectedProfileUpdatedAt: snapshot.profile.updated_at,
+        expectedGoal: snapshot.goal, operation: 'manual_goal', profile: { activity_level: activityLevel },
+        isCurrent: () => editor.isCurrent(snapshot.profile.id),
+        goal: { goal_type: goalType, daily_calories: targetCalories, protein_g: macros.protein,
+          carbs_g: macros.carbs, fats_g: macros.fats, fiber_g: macros.fiber, macro_preset: macroPreset,
+          ...(goalType === 'lose' ? { loss_rate_lbs_per_week: lossRateLbsPerWeek } : {}),
+        },
+      });
 
       // Show success message
       Alert.alert(
@@ -287,10 +178,17 @@ export default function EditGoalsScreen() {
     } catch (error: any) {
       console.error('[EditGoals] Error:', error);
       Alert.alert(t('common.error'), error.message || t('editGoals.failedToSave'));
-    } finally {
-      setSaving(false);
     }
   };
+
+  if (!loading && (!editor.snapshot || formError)) {
+    return <SafeAreaView style={{ flex: 1, padding: 24 }}>
+      <Text accessibilityRole="alert">{editor.error || formError || 'No verified active goal is available.'}</Text>
+      {editor.canRetrySave && <TouchableOpacity disabled={saving} onPress={() => { void editor.run('save').catch(() => {}); }}><Text>Retry the same save</Text></TouchableOpacity>}
+      <TouchableOpacity disabled={saving} onPress={() => { void editor.review().catch(() => {}); }}><Text>Review current goals</Text></TouchableOpacity>
+      <TouchableOpacity onPress={() => router.back()}><Text>Back</Text></TouchableOpacity>
+    </SafeAreaView>;
+  }
 
   if (loading) {
     return (
@@ -339,12 +237,15 @@ export default function EditGoalsScreen() {
               <Text style={styles.coachBannerIcon}>{'⚠️'}</Text>
               <Text style={[styles.coachBannerText, { color: isDark ? '#CE93D8' : '#4A148C' }]}>
                 {t('localization.screens.coachAdjusted')}
-                {new Date(lastCoachMacroAction.created_at).toLocaleDateString(getAppLocale(), { month: 'long', day: 'numeric', year: 'numeric' })}
+                {new Date(lastCoachMacroAction.created_at ?? '').toLocaleDateString(getAppLocale(), { month: 'long', day: 'numeric', year: 'numeric' })}
                 {t('localization.screens.coachOverride')}
               </Text>
             </View>
           )}
 
+          {!!(editor.error || formError) && <Text accessibilityRole="alert">{editor.error || formError}</Text>}
+          {editor.canRetrySave && <TouchableOpacity disabled={saving} onPress={() => { void editor.run('save').catch(() => {}); }}><Text>Retry the same save</Text></TouchableOpacity>}
+          <TouchableOpacity disabled={saving} onPress={() => { void editor.review().catch(() => {}); }}><Text>Review current goals</Text></TouchableOpacity>
           {/* Goal Type */}
           <View style={styles.section}>
             <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>{t('editGoals.goalLabel')}</Text>
@@ -592,7 +493,7 @@ export default function EditGoalsScreen() {
           <TouchableOpacity
             style={[styles.button, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
             onPress={handleSave}
-            disabled={saving}
+            disabled={saving || editor.pending || !editor.snapshot || !!formError}
           >
             {saving ? (
               <ActivityIndicator color="#FFFFFF" />

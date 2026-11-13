@@ -1,3 +1,4 @@
+import { prepareSavedMealDraftItems } from '@/utils/savedMealDraftContract';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -243,24 +244,18 @@ export default function MyMealsDetailsScreen() {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
             console.log('[MyMealsDetails] Flushing', draft.length, 'draft items into saved_meal_items for mealId:', mealId);
-            const itemsToInsert = draft.map(item => ({
-              saved_meal_id: mealId,
-              food_id: item.food_id || null,
-              food_item_id: item.food_item_id || null,
-              food_name: item.food_name,
-              food_brand: item.food_brand || null,
-              serving_amount: item.serving_amount,
-              serving_unit: item.serving_unit,
-              servings_count: item.servings_count,
-              calories: item.calories,
-              protein: item.protein,
-              carbs: item.carbs,
-              fat: item.fats,
-              fiber: item.fiber,
-            }));
+            let itemsToInsert;
+            try { itemsToInsert = prepareSavedMealDraftItems(draft).map(item => ({ ...item, saved_meal_id: mealId })); }
+            catch (failure) { Alert.alert(t('common.error'), failure instanceof Error ? failure.message : 'Review your draft.'); await loadSavedMeal(); return; }
+
+            const parent = await supabase.from(TABLE_SAVED_MEALS).select('id').eq('id', mealId).eq('user_id', user.id).maybeSingle();
+            const actor = await supabase.auth.getUser();
+            if (parent.error || !parent.data || actor.error || actor.data.user?.id !== user.id) { Alert.alert(t('common.error'), 'Account or saved meal changed. Draft preserved.'); return; }
             const { error } = await supabase.from(TABLE_SAVED_MEAL_ITEMS).insert(itemsToInsert);
             if (error) {
               console.error('[MyMealsDetails] Error flushing draft items:', error);
+              Alert.alert(t('common.error'), 'Unable to verify saved foods. Your draft was preserved.');
+              await loadSavedMeal(); return;
             } else {
               console.log('[MyMealsDetails] Draft items flushed successfully');
             }
@@ -271,7 +266,7 @@ export default function MyMealsDetailsScreen() {
       };
       void flushDraftAndLoad();
       return () => { loadGeneration.current++; };
-    }, [loadSavedMeal, mealId, coachReview, authRevision])
+    }, [loadSavedMeal, mealId, coachReview, authRevision, t])
   );
 
   const calculateTotals = () => {
@@ -443,6 +438,9 @@ export default function MyMealsDetailsScreen() {
         write: async item => {
         const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
           ...item,
+          p_food_id: item.p_food_id ?? undefined,
+          p_food_item_id: item.p_food_item_id ?? undefined,
+          p_food_brand: item.p_food_brand ?? undefined,
           p_user_id: user.id,
           p_date: date,
           p_meal_type: mealType,

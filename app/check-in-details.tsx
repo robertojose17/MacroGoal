@@ -28,7 +28,7 @@ interface CheckIn {
   weight: number | null;
   steps: number | null;
   steps_goal: number | null;
-  went_to_gym: boolean;
+  went_to_gym: boolean | null;
   photo_url: string | null;
   notes: string | null;
 }
@@ -63,6 +63,7 @@ export default function CheckInDetailsScreen() {
       }
 
       const authUser = authResult.data.user;
+      if (authResult.error || !authUser || checkInResult.data.user_id !== authUser.id) throw new Error('Check-in owner unavailable');
       if (authUser) {
         const { data: userData } = await supabase
           .from('users')

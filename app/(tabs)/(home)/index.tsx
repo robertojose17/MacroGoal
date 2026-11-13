@@ -1,3 +1,5 @@
+import { readActiveGoal, type ActiveGoal } from '@/utils/activeGoal';
+import { subscribeGoalChanged } from '@/utils/goalChangeEvents';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { getAppLocale } from '@/lib/localization';
 
@@ -283,6 +285,7 @@ export default function HomeScreen() {
   const referralChecked = useRef(false);
 
   const [activeTab, setActiveTab] = useState<'tracking' | 'planning' | 'recipes'>('tracking');
+  const isSelectedTab = (tab: 'tracking' | 'planning' | 'recipes') => activeTab === tab;
 
   // ── Streak Rescue ──
   const {
@@ -299,7 +302,9 @@ export default function HomeScreen() {
   const [adaptiveBannerDismissed, setAdaptiveBannerDismissed] = useState(false);
 
   // ── Tracking state ──
-  const [goal, setGoal] = useState<any>(null);
+  const [goal, setGoal] = useState<ActiveGoal | null>(null);
+  const goalLoadRevision = useRef(0);
+  const goalOwner = useRef<string | null>(null);
   const [meals, setMeals] = useState<MealData[]>([
     { type: 'breakfast', label: 'Breakfast', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
     { type: 'lunch', label: 'Lunch', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
@@ -375,10 +380,14 @@ export default function HomeScreen() {
 
   // ── Load tracking data ──
   const loadData = useCallback(async () => {
+    const revision = ++goalLoadRevision.current;
+    setGoal(null);
     try {
       setLoading(true);
       setError(null);
       const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (revision !== goalLoadRevision.current) return;
+      goalOwner.current = user?.id ?? null;
       if (userError) {
         console.error('[Home] Error getting user:', userError);
         setError('home.failedToAuthenticate');
@@ -394,23 +403,10 @@ export default function HomeScreen() {
 
       console.log('[Home] Loading data for user:', user.id);
 
-      const { data: goalData, error: goalError } = await supabase
-        .from('goals')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (goalError) {
-        console.error('[Home] Error loading goal:', goalError);
-        setGoal({ daily_calories: 2000, protein_g: 150, carbs_g: 200, fats_g: 65, fiber_g: 30 });
-      } else if (goalData) {
-        console.log('[Home] Goal loaded:', goalData);
-        setGoal(goalData);
-      } else {
-        console.log('[Home] No active goal found, using defaults');
-        setGoal({ daily_calories: 2000, protein_g: 150, carbs_g: 200, fats_g: 65, fiber_g: 30 });
-      }
+      const goalData = await readActiveGoal(user.id).catch(() => null);
+      const ownerCheck = await supabase.auth.getSession();
+      if (revision !== goalLoadRevision.current || ownerCheck.error || ownerCheck.data.session?.user.id !== user.id) return;
+      setGoal(goalData);
 
       const dateString = toLocalDateString(selectedDate);
       console.log('[Home] Loading meals for date:', dateString);
@@ -452,6 +448,7 @@ export default function HomeScreen() {
         .eq('user_id', user.id)
         .eq('date', dateString);
 
+      if (revision !== goalLoadRevision.current) return;
       if (mealsError) {
         console.error('[Home] Error loading meals:', mealsError);
         setError('home.failedToLoadMeals');
@@ -515,14 +512,31 @@ export default function HomeScreen() {
         setTotalMacros({ protein: totalP, carbs: totalC, fats: totalF, fiber: totalFib });
       }
     } catch (err: any) {
+      if (revision !== goalLoadRevision.current) return;
+      setGoal(null);
       console.error('[Home] Error in loadData:', err);
       setError('home.unexpectedError');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (revision === goalLoadRevision.current) { setLoading(false); setRefreshing(false); }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
+
+  useEffect(() => {
+    const invalidate = () => { goalLoadRevision.current++; setGoal(null); recipesInitialized.current = false; };
+    const unsubscribe = subscribeGoalChanged(owner => {
+      if (owner && owner !== goalOwner.current) return;
+      invalidate(); void loadData();
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const owner = session?.user.id ?? null;
+      if (owner === goalOwner.current) return;
+      goalOwner.current = owner; invalidate();
+      if (owner) void loadData();
+    });
+    return () => { unsubscribe(); subscription.unsubscribe(); invalidate(); };
+  }, [loadData]);
+
 
   // ── Load plans ──
   const loadPlans = useCallback(async () => {
@@ -873,34 +887,9 @@ export default function HomeScreen() {
     recipesInitialized.current = true;
     console.log('[Home] initRecipesFood — loading saved recipes, trending, and browse feed');
     await Promise.all([loadSavedRecipes(), loadPopularRecipesFood(), initBrowse()]);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      let goals = { calories: 2000, protein: 150, carbs: 200, fat: 65, remainingCalories: 2000 };
-      if (user) {
-        const [goalRes, mealsRes] = await Promise.all([
-          supabase.from('goals').select('daily_calories, protein_g, carbs_g, fat_g').eq('user_id', user.id).eq('is_active', true).maybeSingle(),
-          supabase.from('meals').select('meal_items(calories)').eq('user_id', user.id).eq('date', new Date().toISOString().split('T')[0]),
-        ]);
-        const g = goalRes.data;
-        if (g) {
-          let consumed = 0;
-          (mealsRes.data || []).forEach((m: any) => {
-            (m.meal_items || []).forEach((item: any) => { consumed += Number(item.calories) || 0; });
-          });
-          goals = {
-            calories: Number(g.daily_calories) || 2000,
-            protein: Number(g.protein_g) || 150,
-            carbs: Number(g.carbs_g) || 200,
-            fat: Number(g.fat_g) || 65,
-            remainingCalories: Math.max(0, (Number(g.daily_calories) || 2000) - consumed),
-          };
-        }
-      }
-      await loadDailySuggestions(goals);
-    } catch (e) {
-      console.warn('[Home] initRecipesFood error:', e);
-    }
-  }, [loadSavedRecipes, loadPopularRecipesFood, initBrowse, loadDailySuggestions]);
+    // Personalized generation requires explicit action and a verified accepted-goal snapshot.
+
+  }, [loadSavedRecipes, loadPopularRecipesFood, initBrowse]);
 
   const handleRecipeSearchChange = useCallback((text: string) => {
     setRecipeQuery(text);
@@ -1192,19 +1181,19 @@ export default function HomeScreen() {
 
       <View style={[styles.caloriesCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
         <View style={styles.caloriesContent}>
-          <ProgressCircle
+          {goal ? <ProgressCircle
             current={totalCalories}
-            target={goal?.daily_calories || 2000}
+            target={goal.daily_calories}
             size={140}
             strokeWidth={12}
             color={colors.calories}
             label="kcal"
-          />
+          /> : <Text accessibilityRole="text">{t('home.goal')}: —</Text>}
           <View style={styles.macroSummaryCompact}>
-            <MacroSummaryRowCompact label={t('common.protein')} eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
-            <MacroSummaryRowCompact label={t('common.carbs')} eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
-            <MacroSummaryRowCompact label={t('common.fats')} eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
-            <MacroSummaryRowCompact label={t('common.fiber')} eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
+            <MacroSummaryRowCompact label={t('common.protein')} eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g ?? null} color={colors.protein} isDark={isDark} />
+            <MacroSummaryRowCompact label={t('common.carbs')} eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g ?? null} color={colors.carbs} isDark={isDark} />
+            <MacroSummaryRowCompact label={t('common.fats')} eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g ?? null} color={colors.fats} isDark={isDark} />
+            <MacroSummaryRowCompact label={t('common.fiber')} eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g ?? null} color={colors.fiber} isDark={isDark} />
           </View>
         </View>
       </View>
@@ -1433,10 +1422,10 @@ export default function HomeScreen() {
               {t('home.goal')}
             </Text>
             <View style={styles.weekAvgPills}>
-              <WeekAvgPill value={goal?.daily_calories || 2000} unit="kcal" color={colors.calories} isDark={isDark} />
-              <WeekAvgPill value={goal?.protein_g || 150} unit="P" color={colors.protein} isDark={isDark} />
-              <WeekAvgPill value={goal?.carbs_g || 200} unit="C" color={colors.carbs} isDark={isDark} />
-              <WeekAvgPill value={goal?.fats_g || 65} unit="F" color={colors.fats} isDark={isDark} />
+              <WeekAvgPill value={goal?.daily_calories ?? null} unit="kcal" color={colors.calories} isDark={isDark} />
+              <WeekAvgPill value={goal?.protein_g ?? null} unit="P" color={colors.protein} isDark={isDark} />
+              <WeekAvgPill value={goal?.carbs_g ?? null} unit="C" color={colors.carbs} isDark={isDark} />
+              <WeekAvgPill value={goal?.fats_g ?? null} unit="F" color={colors.fats} isDark={isDark} />
             </View>
           </View>
 
@@ -1792,20 +1781,20 @@ export default function HomeScreen() {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.segmentButton, activeTab === 'planning' && { backgroundColor: colors.primary }]}
+              style={[styles.segmentButton, isSelectedTab('planning') && { backgroundColor: colors.primary }]}
               onPress={() => handleTabPress('planning')}
               activeOpacity={0.8}
             >
-              <Text style={[styles.segmentButtonText, { color: activeTab === 'planning' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+              <Text style={[styles.segmentButtonText, { color: isSelectedTab('planning') ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
                 {t('home.planning')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.segmentButton, activeTab === 'recipes' && { backgroundColor: colors.primary }]}
+              style={[styles.segmentButton, isSelectedTab('recipes') && { backgroundColor: colors.primary }]}
               onPress={() => handleTabPress('recipes')}
               activeOpacity={0.8}
             >
-              <Text style={[styles.segmentButtonText, { color: activeTab === 'recipes' ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
+              <Text style={[styles.segmentButtonText, { color: isSelectedTab('recipes') ? '#fff' : (isDark ? colors.textSecondaryDark : colors.textSecondary) }]}>
                 {t('localization.completion.recipes')}
               </Text>
             </TouchableOpacity>
@@ -1828,7 +1817,7 @@ export default function HomeScreen() {
       )}
 
       {/* Date navigation — only visible in Tracking mode */}
-      {activeTab === 'tracking' && activeTab !== 'recipes' && (
+      {activeTab === 'tracking' && (
         <View style={[styles.stickyHeader, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderBottomColor: isDark ? colors.borderDark : colors.border }]}>
           <TouchableOpacity
             onPress={goToPreviousDay}
@@ -2201,7 +2190,7 @@ const recipeTabStyles = StyleSheet.create({
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
-  const percentage = Math.min((eaten / goal) * 100, 100);
+  const percentage = typeof goal === 'number' && goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
   return (
     <View style={styles.macroSummaryRowCompact}>
       <Text style={[styles.macroSummaryLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -2212,7 +2201,7 @@ function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
           <View style={[styles.macroSummaryBarFill, { width: `${percentage}%`, backgroundColor: color }]} />
         </View>
         <Text style={[styles.macroSummaryProgressCompact, { color: isDark ? colors.textDark : colors.text }]}>
-          {eaten} / {goal}g
+          {eaten} / {goal ?? '—'}g
         </Text>
       </View>
     </View>
@@ -2229,12 +2218,12 @@ function AvgMacroCell({ label, value, unit, color, isDark }: { label: string; va
   );
 }
 
-function WeekAvgPill({ value, unit, color, isDark: _isDark }: { value: number; unit: string; color: string; isDark: boolean }) {
+function WeekAvgPill({ value, unit, color, isDark: _isDark }: { value: number | null; unit: string; color: string; isDark: boolean }) {
   const pillBg = color + '22';
   return (
     <View style={[styles.weekAvgPill, { backgroundColor: pillBg }]}>
       <Text style={[styles.weekAvgPillText, { color }]}>
-        {value}
+        {value ?? '—'}
         <Text style={styles.weekAvgPillUnit}> {unit}</Text>
       </Text>
     </View>

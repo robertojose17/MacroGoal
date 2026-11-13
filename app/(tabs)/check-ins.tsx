@@ -88,6 +88,7 @@ import type { OutboundRow } from '@/features/communityPrivacyV2Community/communi
 import { calcDailyScore } from '@/utils/consistencyMath';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { createPost, savePost, unsavePost, addComment, fetchComments, updateComment, deleteComment, toggleLike } from '@/utils/socialApi';
+import type { Database, Json } from '@/lib/supabase/types';
 import type { SocialPost, Comment } from '@/utils/socialApi';
 import { syncPremiumMembership } from '@/utils/premiumSync';
 
@@ -104,9 +105,10 @@ type PostCategory = 'general' | 'small_win' | 'meal_idea' | 'question' | 'progre
 type PostSection = 'feed' | 'club';
 type ComposerType = 'post' | 'meal' | 'progress';
 
+
 interface PostAuthor {
   id: string;
-  username: string;
+  username: string | null;
   full_name: string | null;
   avatar_url: string | null;
   user_type: string | null;
@@ -117,16 +119,16 @@ interface CommunityPost {
   user_id: string;
   section: PostSection;
   category: PostCategory;
-  content: string;
+  content: string | null;
   image_url: string | null;
   food_name: string | null;
   food_calories: number | null;
-  is_pinned: boolean;
-  is_founder_post: boolean;
+  is_pinned: boolean | null;
+  is_founder_post: boolean | null;
   likes_count: number;
   comments_count: number;
-  saves_count?: number;
-  created_at: string;
+  saves_count?: number | null;
+  created_at: string | null;
   author: PostAuthor | null;
   liked_by_me: boolean;
   saved_by_me?: boolean;
@@ -170,20 +172,20 @@ interface CommunityPost {
 
 interface TopComment {
   id: string;
-  content: string;
+  content: string | null;
   author: PostAuthor | null;
 }
 
 interface SearchUserResult {
   id: string;
-  username: string;
+  username: string | null;
   full_name: string | null;
   avatar_url: string | null;
 }
 
 interface FollowingUser {
   id: string;
-  username: string;
+  username: string | null;
   name: string | null;
   avatar_url: string | null;
 }
@@ -229,10 +231,40 @@ interface RecipeResult {
   is_saved?: boolean;
 }
 
+function parseSavedRecipe(value: Json): RecipeResult | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.id !== 'string' || typeof value.name !== 'string') return null;
+  const recipe: RecipeResult = {id: value.id, name: value.name};
+  for (const key of ['description', 'image_url', 'source_name', 'source_url'] as const) {
+    const field = value[key];
+    if (field !== undefined && field !== null && typeof field !== 'string') return null;
+    recipe[key] = field;
+  }
+  for (const key of ['prep_time_minutes', 'servings', 'calories_per_serving', 'protein_per_serving', 'carbs_per_serving', 'fat_per_serving', 'fiber_per_serving'] as const) {
+    const field = value[key];
+    if (field !== undefined && field !== null && (typeof field !== 'number' || !Number.isFinite(field))) return null;
+    recipe[key] = field;
+  }
+  for (const key of ['ingredients', 'instructions', 'tags'] as const) {
+    const field = value[key];
+    if (field == null) { recipe[key] = field; continue; }
+    if (!Array.isArray(field) || !field.every(item => typeof item === 'string')) return null;
+    recipe[key] = field;
+  }
+  if (Array.isArray(value.reviews)) recipe.reviews = value.reviews;
+  if (typeof value.is_saved === 'boolean') recipe.is_saved = value.is_saved;
+  return recipe;
+}
+function parseProgressStats(value: Json | null): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+function parseDayFlags(value: Json | null): boolean[] | null {
+  return Array.isArray(value) && value.every(item => typeof item === 'boolean') ? value : null;
+}
+
 interface SavedRecipeRow {
   id: string;
   recipe_data: RecipeResult;
-  created_at: string;
+  created_at: string | null;
 }
 
 type CheckInPhoto = {
@@ -259,11 +291,11 @@ function formatPercent(value: number): string {
   return (value / 100).toLocaleString(getAppLocale(), { style: 'percent', maximumFractionDigits: 1 });
 }
 
-function getRelativeTime(dateStr: string): string {
-  return formatCommunityRelativeTime(dateStr, getAppLocale());
+function getRelativeTime(dateStr: string | null): string {
+  return dateStr ? formatCommunityRelativeTime(dateStr, getAppLocale()) : '';
 }
 
-function getInitials(name: string | null, username: string): string {
+function getInitials(name: string | null, username: string | null): string {
   if (name && name.trim()) {
     const parts = name.trim().split(' ');
     if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
@@ -273,11 +305,11 @@ function getInitials(name: string | null, username: string): string {
   return '?';
 }
 
-function getAvatarColor(username: string): string {
+function getAvatarColor(username: string | null): string {
   const palette = ['#5B9AA8', '#5CB97B', '#FF8A5B', '#8B5CF6', '#3B82F6', '#EF4444', '#F59E0B'];
   let hash = 0;
-  for (let i = 0; i < username.length; i++) {
-    hash = username.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < (username?.length ?? 0); i++) {
+    hash = (username?.charCodeAt(i) ?? 0) + ((hash << 5) - hash);
   }
   return palette[Math.abs(hash) % palette.length];
 }
@@ -311,7 +343,7 @@ const CATEGORY_LABELS: Record<PostCategory, string> = {
 interface AvatarProps {
   url: string | null;
   name: string | null;
-  username: string;
+  username: string | null;
   size?: number;
 }
 
@@ -1413,7 +1445,7 @@ function PostCard({
       ) : null}
 
       {/* ── Timestamp ── */}
-      <Text accessibilityLabel={communityRelativeTimeAccessibilityLabel(post.created_at, getAppLocale())} style={{ fontSize: 11, color: secondaryColor, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12 }}>
+      <Text accessibilityLabel={post.created_at ? communityRelativeTimeAccessibilityLabel(post.created_at, getAppLocale()) : undefined} style={{ fontSize: 11, color: secondaryColor, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12 }}>
         {relTime}
       </Text>
 
@@ -1888,7 +1920,10 @@ function ComposerSheet({
         console.error('[Community] loadSavedRecipes error:', error.message);
       } else {
         console.log('[Community] Saved recipes loaded:', data?.length ?? 0);
-        setSavedRecipes((data as SavedRecipeRow[]) ?? []);
+        setSavedRecipes((data ?? []).flatMap(row => {
+          const recipe = parseSavedRecipe(row.recipe_data);
+          return recipe ? [{...row, recipe_data: recipe}] : [];
+        }));
       }
     } catch (e) {
       console.error('[Community] loadSavedRecipes exception:', e);
@@ -1909,9 +1944,8 @@ function ComposerSheet({
       const mondayStr = toLocalDateString(monday);
       const todayStr = toLocalDateString(today);
 
-      const [xpRes, checkInsRes, mealsRes] = await Promise.all([
+      const [xpRes, mealsRes] = await Promise.all([
         supabase.from('user_xp').select('current_streak, longest_streak').eq('user_id', currentUserId).maybeSingle(),
-        supabase.from('check_ins').select('weight, weight_unit, created_at').eq('user_id', currentUserId).order('created_at', { ascending: false }).limit(1),
         supabase.from('meals').select('date').eq('user_id', currentUserId).gte('date', mondayStr).lte('date', todayStr),
       ]);
 
@@ -1926,7 +1960,7 @@ function ComposerSheet({
             .order('created_at', { ascending: false })
             .limit(30);
           if (recentCheckIns.data && recentCheckIns.data.length > 0) {
-            const dates = recentCheckIns.data.map((r: { created_at: string }) => toLocalDateString(new Date(r.created_at)));
+            const dates = recentCheckIns.data.flatMap(r => r.created_at && Number.isFinite(Date.parse(r.created_at)) ? [toLocalDateString(new Date(r.created_at))] : []);
             const uniqueDates = Array.from(new Set(dates)).sort().reverse();
             let computedStreak = 0;
             const todayDateStr = toLocalDateString(new Date());
@@ -1948,7 +1982,6 @@ function ComposerSheet({
       }
       const finalStreak = streak ?? 0;
 
-      const latestCheckIn = checkInsRes.data?.[0];
       const trackedDays = new Set((mealsRes.data || []).map((m: { date: string }) => m.date)).size;
       const daysElapsed = daysFromMonday + 1;
       const consistencyScore = Math.round((trackedDays / daysElapsed) * 100);
@@ -2007,23 +2040,7 @@ function ComposerSheet({
         console.log('[Community] Weight goal pct error (non-fatal):', weightGoalErr);
       }
 
-      // Today's steps — try health_metrics table; show even if 0
-      try {
-        const stepsRes = await supabase
-          .from('health_metrics')
-          .select('steps, steps_goal')
-          .eq('user_id', currentUserId)
-          .eq('date', todayStr)
-          .maybeSingle();
-        const steps = stepsRes.data?.steps;
-        const stepsGoal = stepsRes.data?.steps_goal ?? 10000;
-        if (steps != null) {
-          console.log('[Community] Steps today:', steps, 'goal:', stepsGoal);
-          stats.push({ key: 'steps_today', label: 'localization.checkins.todaySteps', emoji: '👟', value: steps, selected: false, meta: { steps_goal: stepsGoal } });
-        }
-      } catch (stepsErr) {
-        console.log('[Community] Steps data not available (non-fatal):', stepsErr);
-      }
+      // Optional steps unavailable: no health_metrics relation exists in production.
 
       // Today's gym check-in — check trackers table for gym-type tracker with entry today
       try {
@@ -2971,7 +2988,7 @@ function AutoShareSettingsModal({ visible, onClose, isDark, currentUserId }: Aut
     }
   };
 
-  const saveSettings = async (updates: Record<string, unknown>) => {
+  const saveSettings = async (updates: Pick<Database['public']['Tables']['users']['Update'], 'auto_share_achievements' | 'auto_share_streaks' | 'auto_share_weekly_recap' | 'auto_share_weight_milestones' | 'auto_share_audience'>) => {
     console.log('[Community] Saving auto-share settings:', updates);
     setSaving(true);
     try {
@@ -3192,8 +3209,8 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
   // ── Leaderboard state ──
   interface LeaderboardEntry {
     userId: string;
-    name: string;
-    username: string;
+    name: string | null;
+    username: string | null;
     avatarUrl: string | null;
     score: number;
     rank: number;
@@ -3360,8 +3377,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
             setActiveUserCount(data?.active_user_count ?? 0);
             setCounterLoading(false);
           }
-        })
-        .catch(() => {
+        }, () => {
           if (!cancelled) setCounterLoading(false);
         });
       return () => { cancelled = true; };
@@ -3434,14 +3450,16 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
       const likedIds = requireCommunityLikedIds(likesRes);
       const savedIds = new Set((savesRes.data || []).map((row: { post_id: string }) => row.post_id));
 
-      const posts: CommunityPost[] = (postsRes.data || []).map((p: Record<string, unknown>) => ({
-        ...(p as CommunityPost),
+      const posts: CommunityPost[] = (postsRes.data || []).map(p => ({
+        ...p,
+        progress_stats: parseProgressStats(p.progress_stats),
+        weekly_recap_day_flags: parseDayFlags(p.weekly_recap_day_flags),
         section: 'feed' as PostSection,
         category: 'general' as PostCategory,
         food_name: null,
         food_calories: null,
-        liked_by_me: likedIds.has(p.id as string),
-        saved_by_me: savedIds.has(p.id as string),
+        liked_by_me: likedIds.has(p.id),
+        saved_by_me: savedIds.has(p.id),
       }));
       setFeedPosts(prev => read.current() ? posts : prev);
     } catch (e) {
@@ -3497,11 +3515,17 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
           commentsByPost[c.post_id] = { id: c.id, content: c.content, author: c.author };
         }
       }
-      const posts: CommunityPost[] = (postsRes.data || []).map((p: Record<string, unknown>) => ({
-        ...(p as CommunityPost),
-        liked_by_me: likedIds.has(p.id as string),
-        saved_by_me: savedIds.has(p.id as string),
-        top_comment: commentsByPost[p.id as string] || null,
+      const posts: CommunityPost[] = (postsRes.data || []).map(p => ({
+        ...p,
+        progress_stats: parseProgressStats(p.progress_stats),
+        weekly_recap_day_flags: parseDayFlags(p.weekly_recap_day_flags),
+        liked_by_me: likedIds.has(p.id),
+        saved_by_me: savedIds.has(p.id),
+        section: 'club',
+        category: 'general',
+        food_name: null,
+        food_calories: null,
+        top_comment: commentsByPost[p.id] || null,
       }));
       setClubPosts(prev => read.current() ? posts : prev);
     } catch (e) {
@@ -3668,7 +3692,11 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
       ]);
 
       if (commitRes.data && commitRes.data.length > 0) {
-        const c = commitRes.data[0] as Commitment;
+        const row = commitRes.data[0];
+        if (row.status !== 'active' && row.status !== 'pending' && row.status !== 'completed') throw new Error('Invalid commitment status');
+        const c: Commitment = {...row, status: row.status,
+          partner: row.partner ? {...row.partner, name: row.partner.full_name} : null,
+          requester: row.requester ? {...row.requester, name: row.requester.full_name} : null};
         setCommitment(c);
         console.log('[Community] Commitment found:', c.id, 'status:', c.status);
         const partnerId = c.user_id === uid ? c.partner_id : c.user_id;
@@ -3781,8 +3809,9 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
             supabase.from('goals').select('daily_calories, protein_g').eq('user_id', u.id).eq('is_active', true).maybeSingle(),
           ]);
 
-          const calorieTarget = goalsRes.data?.daily_calories ?? 2000;
-          const proteinTarget = goalsRes.data?.protein_g ?? 150;
+          const calorieTarget = goalsRes.data?.daily_calories;
+          const proteinTarget = goalsRes.data?.protein_g;
+          if (mealsRes.error || goalsRes.error || typeof calorieTarget !== 'number' || !Number.isFinite(calorieTarget) || calorieTarget <= 0 || typeof proteinTarget !== 'number' || !Number.isFinite(proteinTarget) || proteinTarget < 0) return null;
 
           const byDate: Record<string, { calories: number; protein: number }> = {};
           mealsRes.data?.forEach((meal: any) => {
@@ -3812,11 +3841,11 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
           const noActivity = Object.keys(byDate).length === 0;
           return { userId: u.id, name: u.name, username: u.username, avatarUrl: u.avatarUrl, score: avgScore, isMe: u.isMe, noActivity };
         } catch {
-          return { userId: u.id, name: u.name, username: u.username, avatarUrl: u.avatarUrl, score: 0, isMe: u.isMe, noActivity: true };
+          return null;
         }
       }));
 
-      const sorted = [...scores].sort((a, b) => b.score - a.score);
+      const sorted = scores.filter(entry => entry !== null).sort((a, b) => b.score - a.score);
       let rank = 1;
       const ranked: LeaderboardEntry[] = sorted.map((entry, idx) => {
         if (idx > 0 && entry.score < sorted[idx - 1].score) rank = idx + 1;
@@ -4120,7 +4149,7 @@ function CommunityScreenContent({ suppressAutomaticSharing = false }: { suppress
       console.log('[Community] Follow result, error:', error?.message ?? 'none');
       setFollowingIds((prev) => new Set([...prev, userId]));
       const found = searchResults.find((u) => u.id === userId);
-      if (found) setFollowing((prev) => [...prev, found]);
+      if (found) setFollowing((prev) => [...prev, {...found, name: found.full_name}]);
     }
   };
 

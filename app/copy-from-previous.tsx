@@ -1,3 +1,4 @@
+import { knownNonnegative } from '@/utils/savedMealDraftContract';
 import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -354,6 +355,8 @@ export default function CopyFromPreviousScreen() {
         });
       });
 
+      const selected = Object.values(entriesByMealType).flat();
+      if (!selected.every(entry => [entry.quantity, entry.calories, entry.protein, entry.carbs, entry.fats, entry.fiber].every(knownNonnegative) && entry.quantity > 0)) throw new Error('Some selected foods have unknown nutrition or quantity. Nothing was copied.');
       // For each meal type, log each entry via RPC
       for (const mealType of Object.keys(entriesByMealType) as MealType[]) {
         const entries = entriesByMealType[mealType];
@@ -363,20 +366,22 @@ export default function CopyFromPreviousScreen() {
 
         for (const entry of entries) {
           console.log('[CopyFromPrevious] Calling log_food RPC for entry:', entry.foods?.name, 'mealType:', mealType);
-          const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
+          const current = await supabase.auth.getUser();
+          if (current.error || current.data.user?.id !== user.id) throw new Error('Account changed. Review already copied items before continuing.');
+          const { error: rpcError } = await supabase.rpc('log_food', {
             p_user_id: user.id,
             p_date: targetDate,
             p_meal_type: mealType,
-            p_food_id: entry.food_id || null,
-            p_food_item_id: entry.food_item_id ?? null,
-            p_quantity: Number(entry.quantity) || 1,
-            p_calories: Number(entry.calories) || 0,
-            p_protein: Number(entry.protein) || 0,
-            p_carbs: Number(entry.carbs) || 0,
-            p_fats: Number(entry.fats) || 0,
-            p_fiber: Number(entry.fiber) || 0,
-            p_serving_description: entry.serving_description ?? null,
-            p_grams: entry.grams ?? null,
+            p_food_id: entry.food_id || undefined,
+            p_food_item_id: entry.food_item_id ?? undefined,
+            p_quantity: entry.quantity,
+            p_calories: entry.calories,
+            p_protein: entry.protein,
+            p_carbs: entry.carbs,
+            p_fats: entry.fats,
+            p_fiber: entry.fiber,
+            p_serving_description: entry.serving_description ?? undefined,
+            p_grams: entry.grams ?? undefined,
             p_logged_at: new Date().toISOString(),
           });
 
@@ -385,7 +390,7 @@ export default function CopyFromPreviousScreen() {
             throw rpcError;
           }
 
-          console.log('[CopyFromPrevious] log_food RPC success for', entry.foods?.name, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
+          console.log('[CopyFromPrevious] log_food RPC completed');
         }
 
         console.log('[CopyFromPrevious] Logged', entries.length, 'items for', mealType);

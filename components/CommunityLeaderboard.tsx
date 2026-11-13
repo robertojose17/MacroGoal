@@ -8,6 +8,7 @@ import {
   Modal,
   TouchableOpacity,
   Platform,
+  type DimensionValue,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -24,7 +25,7 @@ function formatShortDate(date: Date): string {
   return date.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' });
 }
 
-function SkeletonLine({ width, height = 13, isDark }: { width: number | string; height?: number; isDark: boolean }) {
+function SkeletonLine({ width, height = 13, isDark }: { width: DimensionValue; height?: number; isDark: boolean }) {
   const opacity = useRef(new Animated.Value(0.3)).current;
   useEffect(() => {
     Animated.loop(

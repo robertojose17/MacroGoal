@@ -24,6 +24,9 @@
       },
       "android": {
         "resourceClass": "medium"
+      },
+      "env": {
+        "EXPO_PUBLIC_TDEE_MODE": "observation-v1"
       }
     }
   },

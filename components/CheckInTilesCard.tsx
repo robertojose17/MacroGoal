@@ -26,7 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { borderRadius, colors, spacing } from '@/styles/commonStyles';
 import { toLocalDateString } from '@/utils/dateUtils';
-import { logEntry, listTrackers } from '@/utils/trackersApi';
+import { logEntry, listEntries, listTrackers } from '@/utils/trackersApi';
 import { promptForProgressPhoto } from '@/utils/checkInPhotoUpload';
 import { supabase } from '@/lib/supabase/client';
 import { useSteps } from '@/hooks/useSteps';

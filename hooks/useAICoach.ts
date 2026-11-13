@@ -92,6 +92,10 @@ export type Message = {
   content: string;
   timestamp: number;
   isStreaming?: boolean;
+  isTyping?: boolean;
+  isPremiumGate?: boolean;
+  showUpgradeButton?: boolean;
+  mealAddChoices?: {handoff: ScopedMealConversation;flowId:string;optionId:string;name:string;cardTimestamp:number;optionIndex:number}[];
   actionProposal?: ActionProposal;
   actionStatus?: 'pending' | 'confirming' | 'confirmed' | 'declined';
   suggestions?: string[];

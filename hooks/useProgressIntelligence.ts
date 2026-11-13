@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '@/lib/supabase/client';
+import { useObservationResource } from './useObservationResource';
+import { nullableNumber, record } from '@/utils/dynamicTdeeObservation';
+import { emitGoalChanged } from '@/utils/goalChangeEvents';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ interface JourneyProgress {
 interface TDEEInfo {
   value: number | null;
   source: 'observed' | 'formula' | 'none';
-  confidence: 'high' | 'medium' | 'low';
+  confidence: 'high' | 'medium' | 'low' | null;
 }
 
 export interface ProgressState {
@@ -51,129 +52,47 @@ export interface ProgressState {
   loggedDaysLast14: number;
 }
 
-// ── In-memory cache (5-minute TTL) ───────────────────────────────────────────
-
-const PIE_ENDPOINT = 'https://esgptfiofoaeguslgvcq.supabase.co/functions/v1/progress-intelligence';
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-interface CacheEntry {
-  state: ProgressState;
-  fetchedAt: number;
+function weight(value: unknown): number | null {
+  const parsed = nullableNumber(value);
+  if (parsed !== null && parsed <= 0) throw Error('invalid_observation');
+  return parsed;
 }
-
-const cache = new Map<string, CacheEntry>();
-
-function getCached(userId: string): ProgressState | null {
-  const entry = cache.get(userId);
-  if (!entry) return null;
-  if (Date.now() - entry.fetchedAt > CACHE_TTL_MS) {
-    cache.delete(userId);
-    return null;
-  }
-  return entry.state;
+function fraction(value: unknown): number | null {
+  const number = nullableNumber(value);
+  if (number !== null && (number < 0 || number > 1)) throw Error('invalid_observation');
+  return number;
 }
-
-function setCached(userId: string, state: ProgressState): void {
-  cache.set(userId, { state, fetchedAt: Date.now() });
+function requiredFraction(value: unknown): number {
+  const parsed = fraction(value); if (parsed === null) throw Error('invalid_observation'); return parsed;
 }
-
-export function invalidatePIECache(userId: string): void {
-  cache.delete(userId);
-  console.log('[useProgressIntelligence] Cache invalidated for userId:', userId);
+function count(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) throw Error('invalid_observation');
+  return value;
 }
-
-// ── Hook ──────────────────────────────────────────────────────────────────────
-
-interface UseProgressIntelligenceResult {
-  state: ProgressState | null;
-  loading: boolean;
-  error: string | null;
-  refresh: () => void;
+export function parseObservedProgress(value: unknown): ProgressState {
+  const v = record(value), safety = record(v.safety), tdee = record(v.tdee), projection = record(v.projection);
+  if (v.observationOnly !== true || v.observationVersion !== 'observed-progress-v1' || v.interpretationAvailable !== false ||
+      v.proposal !== null || safety.enabled !== false || safety.eligibility !== 'unverified' ||
+      tdee.confidence !== null || tdee.value !== null || tdee.source !== 'none' || projection.projectedGoalDate !== null ||
+      projection.projectedGoalDateRange !== null || projection.projectionConfidence !== null || projection.projectionBasis !== 'none') throw Error('invalid_observation');
+  const pace = record(v.weightPace), adherence = record(v.adherence), journey = record(v.journeyProgress);
+  if (pace.confidence !== null && pace.confidence !== 'high' && pace.confidence !== 'medium') throw Error('invalid_observation');
+  const reliability = v.loggingReliability;
+  if (reliability !== 'insufficient' && reliability !== 'low' && reliability !== 'medium' && reliability !== 'high') throw Error('invalid_observation');
+  if (v.progressStatus !== 'INSUFFICIENT_DATA' || !Array.isArray(v.dataQualityFlags) || !v.dataQualityFlags.every((flag: unknown) => typeof flag === 'string')) throw Error('invalid_observation');
+  const flags: string[] = []; for (const flag of v.dataQualityFlags) if (typeof flag === 'string') flags.push(flag);
+  return { currentWeightLbs:weight(v.currentWeightLbs), trendWeightLbs:weight(v.trendWeightLbs),
+    weightPace:{lbsPerWeek:nullableNumber(pace.lbsPerWeek),confidence:pace.confidence}, progressStatus:v.progressStatus,
+    loggingReliability:reliability, adherence:{score:fraction(adherence.score),calorieAdherenceFraction:fraction(adherence.calorieAdherenceFraction),
+      proteinAdherenceFraction:fraction(adherence.proteinAdherenceFraction),coverageFraction:requiredFraction(adherence.coverageFraction),
+      adherenceDaysEvaluated:count(adherence.adherenceDaysEvaluated)},
+    tdee:{value:null,source:'none',confidence:null}, projection:{projectedGoalDate:null,projectedGoalDateRange:null,projectionConfidence:null,projectionBasis:'none'},
+    journeyProgress:{startWeightLbs:weight(journey.startWeightLbs),goalWeightLbs:weight(journey.goalWeightLbs),
+      currentWeightLbs:weight(journey.currentWeightLbs),progressFraction:fraction(journey.progressFraction)},
+    dataQualityFlags:flags,loggedDaysLast7:count(v.loggedDaysLast7),loggedDaysLast14:count(v.loggedDaysLast14) };
 }
-
-export function useProgressIntelligence(): UseProgressIntelligenceResult {
-  const [state, setState] = useState<ProgressState | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const refreshCounterRef = useRef(0);
-
-  const fetchPIE = useCallback(async () => {
-    console.log('[useProgressIntelligence] Starting fetch');
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Get current session
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData?.session) {
-        console.warn('[useProgressIntelligence] No active session, skipping PIE fetch');
-        setLoading(false);
-        return;
-      }
-
-      const { access_token, user } = sessionData.session;
-      const userId = user.id;
-
-      console.log('[useProgressIntelligence] Fetching PIE for userId:', userId);
-
-      // Check cache first
-      const cached = getCached(userId);
-      if (cached) {
-        console.log('[useProgressIntelligence] Cache hit for userId:', userId);
-        setState(cached);
-        setLoading(false);
-        return;
-      }
-
-      // Call edge function
-      console.log('[useProgressIntelligence] Cache miss — calling edge function');
-      const response = await fetch(PIE_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${access_token}`,
-        },
-        body: JSON.stringify({ userId }),
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        console.error('[useProgressIntelligence] Edge function error:', response.status, text);
-        setError(`PIE fetch failed: ${response.status}`);
-        setLoading(false);
-        return;
-      }
-
-      const data: ProgressState = await response.json();
-      console.log('[useProgressIntelligence] PIE response received, progressStatus:', data.progressStatus);
-
-      setCached(userId, data);
-      setState(data);
-      setLoading(false);
-    } catch (err: any) {
-      console.error('[useProgressIntelligence] Unexpected error:', err?.message ?? err);
-      setError(err?.message ?? 'Unknown error');
-      setLoading(false);
-    }
-  }, []);
-
-  const refresh = useCallback(() => {
-    console.log('[useProgressIntelligence] Manual refresh triggered');
-    // Bust cache for current user on next fetch
-    supabase.auth.getSession().then(({ data }) => {
-      if (data?.session?.user?.id) {
-        cache.delete(data.session.user.id);
-        console.log('[useProgressIntelligence] Cache cleared for userId:', data.session.user.id);
-      }
-    });
-    refreshCounterRef.current += 1;
-    fetchPIE();
-  }, [fetchPIE]);
-
-  useEffect(() => {
-    // Non-blocking: fire and forget — component renders immediately with state=null
-    fetchPIE();
-  }, [fetchPIE]);
-
-  return { state, loading, error, refresh };
+export function invalidatePIECache(userId: string): void { emitGoalChanged(userId); }
+export function useProgressIntelligence(userId?: string) {
+  const resource = useObservationResource('progress', parseObservedProgress, userId);
+  return { state:resource.value, loading:resource.loading, error:resource.error, refresh:resource.refresh };
 }

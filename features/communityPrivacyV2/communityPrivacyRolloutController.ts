@@ -8,7 +8,11 @@ export type CommunityPrivacyActivation = Readonly<{
   scopeKey: string;
 }>;
 export interface CommunityPrivacyRequest<T> extends PromiseLike<T> {
-  setHeader(name: string, value: string): { abortSignal(signal: AbortSignal): PromiseLike<T> };
+  setHeader(name: string, value: string): PromiseLike<T>;
+}
+export function applyCommunityPrivacyAbort<T>(query: PromiseLike<T>, signal: AbortSignal): PromiseLike<T> {
+  if (!('abortSignal' in query) || typeof query.abortSignal !== 'function') throw new Error('Community data is unavailable.');
+  return query.abortSignal(signal);
 }
 export interface CommunityPrivacyScope {
   readonly activation: CommunityPrivacyActivation;
@@ -153,7 +157,7 @@ export function createCommunityPrivacyRolloutController(dependencies: CommunityP
     return { activation, signal: abort.signal, assertCurrent, assertActor,
       async request<T>(query: CommunityPrivacyRequest<T>): Promise<T> {
         assertCurrent();
-        const result = await (credential ? query.setHeader('Authorization', `Bearer ${credential.accessToken}`).abortSignal(abort.signal) : query);
+        const result = await (credential ? applyCommunityPrivacyAbort(query.setHeader('Authorization', `Bearer ${credential.accessToken}`), abort.signal) : query);
         assertCurrent(); return result;
       },
       async fetch(input, init = {}) {

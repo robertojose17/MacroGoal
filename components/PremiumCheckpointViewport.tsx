@@ -7,10 +7,10 @@ export const PremiumViewportContext = createContext<readonly PremiumViewportRef[
 /** Same ScrollView and props, with measured ancestor clips for nested prompt visibility. */
 export const PremiumCheckpointScrollView = forwardRef<ScrollView, ScrollViewProps>(function PremiumCheckpointScrollView(props, forwarded) {
   const parent = useContext(PremiumViewportContext);
-  const own = useRef<ScrollView | null>(null);
+  const own = useRef<PremiumMeasurable | null>(null);
   const viewports = useMemo(() => [...parent, own], [parent]);
   return <PremiumViewportContext.Provider value={viewports}><ScrollView {...props} ref={node => {
-    own.current = node;
+    own.current = node?.getNativeScrollRef() ?? null;
     if (typeof forwarded === 'function') forwarded(node);
     else if (forwarded) forwarded.current = node;
   }} /></PremiumViewportContext.Provider>;

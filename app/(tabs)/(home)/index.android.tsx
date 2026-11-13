@@ -1,3 +1,5 @@
+import { readActiveGoal, type ActiveGoal } from '@/utils/activeGoal';
+import { subscribeGoalChanged } from '@/utils/goalChangeEvents';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { getAppLocale } from '@/lib/localization';
 
@@ -134,7 +136,9 @@ export default function HomeScreen() {
   const screenWidth = Dimensions.get('window').width;
 
   // ── Tracking state ──
-  const [goal, setGoal] = useState<any>(null);
+  const [goal, setGoal] = useState<ActiveGoal | null>(null);
+  const goalLoadRevision = useRef(0);
+  const goalOwner = useRef<string | null>(null);
   const [meals, setMeals] = useState<MealData[]>([
     { type: 'breakfast', label: 'Breakfast', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
     { type: 'lunch', label: 'Lunch', items: [], totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFats: 0 },
@@ -198,10 +202,14 @@ export default function HomeScreen() {
 
   // ── Load tracking data ──
   const loadData = useCallback(async () => {
+    const revision = ++goalLoadRevision.current;
+    setGoal(null);
     try {
       setLoading(true);
       setError(null);
       const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (revision !== goalLoadRevision.current) return;
+      goalOwner.current = user?.id ?? null;
       if (userError) {
         console.error('[Home Android] Error getting user:', userError);
         setError('localization.screens.homeAuthFailed');
@@ -217,23 +225,10 @@ export default function HomeScreen() {
 
       console.log('[Home Android] Loading data for user:', user.id);
 
-      const { data: goalData, error: goalError } = await supabase
-        .from('goals')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (goalError) {
-        console.error('[Home Android] Error loading goal:', goalError);
-        setGoal({ daily_calories: 2000, protein_g: 150, carbs_g: 200, fats_g: 65, fiber_g: 30 });
-      } else if (goalData) {
-        console.log('[Home Android] Goal loaded:', goalData);
-        setGoal(goalData);
-      } else {
-        console.log('[Home Android] No active goal found, using defaults');
-        setGoal({ daily_calories: 2000, protein_g: 150, carbs_g: 200, fats_g: 65, fiber_g: 30 });
-      }
+      const goalData = await readActiveGoal(user.id).catch(() => null);
+      const ownerCheck = await supabase.auth.getSession();
+      if (revision !== goalLoadRevision.current || ownerCheck.error || ownerCheck.data.session?.user.id !== user.id) return;
+      setGoal(goalData);
 
       const { data: tdeeData } = await supabase
         .from('tdee_estimates')
@@ -291,6 +286,7 @@ export default function HomeScreen() {
         .eq('user_id', user.id)
         .eq('date', dateString);
 
+      if (revision !== goalLoadRevision.current) return;
       if (mealsError) {
         console.error('[Home Android] Error loading meals:', mealsError);
         setError('localization.screens.homeLoadFailed');
@@ -372,14 +368,31 @@ export default function HomeScreen() {
         setAllFoodItems(flat);
       }
     } catch (err: any) {
+      if (revision !== goalLoadRevision.current) return;
+      setGoal(null);
       console.error('[Home Android] Error in loadData:', err);
       setError('home.unexpectedError');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (revision === goalLoadRevision.current) { setLoading(false); setRefreshing(false); }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, t]);
+
+  useEffect(() => {
+    const invalidate = () => { goalLoadRevision.current++; setGoal(null); recipesInitialized.current = false; };
+    const unsubscribe = subscribeGoalChanged(owner => {
+      if (owner && owner !== goalOwner.current) return;
+      invalidate(); void loadData();
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const owner = session?.user.id ?? null;
+      if (owner === goalOwner.current) return;
+      goalOwner.current = owner; invalidate();
+      if (owner) void loadData();
+    });
+    return () => { unsubscribe(); subscription.unsubscribe(); invalidate(); };
+  }, [loadData]);
+
 
   // ── Load plans ──
   const loadPlans = useCallback(async () => {
@@ -635,34 +648,9 @@ export default function HomeScreen() {
     recipesInitialized.current = true;
     console.log('[Home Android] initRecipesFood — loading saved recipes, trending, and browse feed');
     await Promise.all([loadSavedRecipes(), loadPopularRecipesFood(), initBrowse()]);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      let goals = { calories: 2000, protein: 150, carbs: 200, fat: 65, remainingCalories: 2000 };
-      if (user) {
-        const [goalRes, mealsRes] = await Promise.all([
-          supabase.from('goals').select('daily_calories, protein_g, carbs_g, fat_g').eq('user_id', user.id).eq('is_active', true).maybeSingle(),
-          supabase.from('meals').select('meal_items(calories)').eq('user_id', user.id).eq('date', new Date().toISOString().split('T')[0]),
-        ]);
-        const g = goalRes.data;
-        if (g) {
-          let consumed = 0;
-          (mealsRes.data || []).forEach((m: any) => {
-            (m.meal_items || []).forEach((item: any) => { consumed += Number(item.calories) || 0; });
-          });
-          goals = {
-            calories: Number(g.daily_calories) || 2000,
-            protein: Number(g.protein_g) || 150,
-            carbs: Number(g.carbs_g) || 200,
-            fat: Number(g.fat_g) || 65,
-            remainingCalories: Math.max(0, (Number(g.daily_calories) || 2000) - consumed),
-          };
-        }
-      }
-      await loadDailySuggestions(goals);
-    } catch (e) {
-      console.warn('[Home Android] initRecipesFood error:', e);
-    }
-  }, [loadSavedRecipes, loadPopularRecipesFood, initBrowse, loadDailySuggestions]);
+    // Personalized generation requires explicit action and a verified accepted-goal snapshot.
+
+  }, [loadSavedRecipes, loadPopularRecipesFood, initBrowse]);
 
   const handleRecipeSearchChange = useCallback((text: string) => {
     setRecipeQuery(text);
@@ -731,7 +719,9 @@ export default function HomeScreen() {
     console.log('[Home Android] Creating new meal plan:', newPlanName.trim());
     setNewPlanSaving(true);
     try {
-      const newPlan = await createMealPlan({ name: newPlanName.trim() });
+      const start = new Date();
+      const end = new Date(start); end.setDate(end.getDate() + 6);
+      const newPlan = await createMealPlan({ name: newPlanName.trim(), start_date: toLocalDateString(start), end_date: toLocalDateString(end) });
       setPlans(prev => [...prev, newPlan]);
       setNewPlanModalVisible(false);
       setNewPlanName('');
@@ -1120,19 +1110,19 @@ export default function HomeScreen() {
         {/* Calories + macros summary card */}
         <View style={[styles.caloriesCard, { backgroundColor: cardBg }]}>
           <View style={styles.caloriesContent}>
-            <ProgressCircle
+            {goal ? <ProgressCircle
               current={totalCalories}
-              target={goal?.daily_calories || 2000}
+              target={goal.daily_calories}
               size={140}
               strokeWidth={12}
               color={colors.calories}
               label="kcal"
-            />
+            /> : <Text accessibilityRole="text">{t('home.goal')}: —</Text>}
             <View style={styles.macroSummaryCompact}>
-              <MacroSummaryRowCompact label={t('common.protein')} eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
-              <MacroSummaryRowCompact label={t('common.carbs')} eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
-              <MacroSummaryRowCompact label={t('common.fats')} eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
-              <MacroSummaryRowCompact label={t('common.fiber')} eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('common.protein')} eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g ?? null} color={colors.protein} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('common.carbs')} eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g ?? null} color={colors.carbs} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('common.fats')} eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g ?? null} color={colors.fats} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('common.fiber')} eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g ?? null} color={colors.fiber} isDark={isDark} />
             </View>
           </View>
         </View>
@@ -1511,16 +1501,16 @@ export default function HomeScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, flexWrap: 'nowrap' }}>
               <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '500', color: textSecondary, width: 56, flexShrink: 0 }}>{t('home.goal')}</Text>
               <View style={{ backgroundColor: '#14B8A622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#14B8A6' }}>{goal?.daily_calories || 2000}<Text style={{ fontSize: 11, fontWeight: '600' }}> kcal</Text></Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#14B8A6' }}>{goal?.daily_calories ?? '—'}<Text style={{ fontSize: 11, fontWeight: '600' }}> kcal</Text></Text>
               </View>
               <View style={{ backgroundColor: '#3B82F622', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6' }}>{goal?.protein_g || 150}<Text style={{ fontSize: 11, fontWeight: '600' }}> P</Text></Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6' }}>{goal?.protein_g ?? '—'}<Text style={{ fontSize: 11, fontWeight: '600' }}> P</Text></Text>
               </View>
               <View style={{ backgroundColor: '#F59E0B22', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B' }}>{goal?.carbs_g || 200}<Text style={{ fontSize: 11, fontWeight: '600' }}> C</Text></Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B' }}>{goal?.carbs_g ?? '—'}<Text style={{ fontSize: 11, fontWeight: '600' }}> C</Text></Text>
               </View>
               <View style={{ backgroundColor: '#EF444422', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>{goal?.fats_g || 65}<Text style={{ fontSize: 11, fontWeight: '600' }}> F</Text></Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>{goal?.fats_g ?? '—'}<Text style={{ fontSize: 11, fontWeight: '600' }}> F</Text></Text>
               </View>
             </View>
 
@@ -2311,7 +2301,7 @@ const recipeTabStyles = StyleSheet.create({
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
-  const percentage = Math.min((eaten / goal) * 100, 100);
+  const percentage = typeof goal === 'number' && goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
   return (
     <View style={styles.macroSummaryRowCompact}>
       <Text style={[styles.macroSummaryLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -2322,7 +2312,7 @@ function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
           <View style={[styles.macroSummaryBarFill, { width: `${percentage}%`, backgroundColor: color }]} />
         </View>
         <Text style={[styles.macroSummaryProgressCompact, { color: isDark ? colors.textDark : colors.text }]}>
-          {eaten} / {goal}g
+          {eaten} / {goal ?? '—'}g
         </Text>
       </View>
     </View>

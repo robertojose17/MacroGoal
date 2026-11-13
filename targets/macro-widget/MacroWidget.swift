@@ -16,6 +16,7 @@ extension Color {
 
 // MARK: - Shared data model (mirrors what the app writes to App Group UserDefaults)
 struct MacroData: Codable {
+    var available: Bool? = nil
     var calories: Int
     var calorieGoal: Int
     var protein: Double
@@ -35,11 +36,11 @@ struct MacroProvider: TimelineProvider {
 
     func placeholder(in context: Context) -> MacroEntry {
         MacroEntry(date: Date(), data: MacroData(
-            calories: 1450, calorieGoal: 2000,
-            protein: 95, proteinGoal: 150,
-            carbs: 160, carbsGoal: 220,
-            fat: 45, fatGoal: 65,
-            streak: 7, date: ""
+            calories: 0, calorieGoal: 0,
+            protein: 0, proteinGoal: 0,
+            carbs: 0, carbsGoal: 0,
+            fat: 0, fatGoal: 0,
+            streak: 0, date: ""
         ))
     }
 
@@ -72,10 +73,10 @@ struct MacroProvider: TimelineProvider {
         }
 
         return MacroEntry(date: Date(), data: MacroData(
-            calories: 0, calorieGoal: 2000,
-            protein: 0, proteinGoal: 150,
-            carbs: 0, carbsGoal: 220,
-            fat: 0, fatGoal: 65,
+            calories: 0, calorieGoal: 0,
+            protein: 0, proteinGoal: 0,
+            carbs: 0, carbsGoal: 0,
+            fat: 0, fatGoal: 0,
             streak: 0, date: ""
         ))
     }
@@ -93,6 +94,13 @@ struct MacroWidgetEntryView: View {
     @Environment(\.widgetFamily) var family
 
     var body: some View {
+        if entry.data.available != true {
+            VStack(spacing: 8) {
+                Text("Macro Goal").font(.headline)
+                Text("Goals unavailable").font(.caption)
+                Text("Open the app to refresh").font(.caption2)
+            }.foregroundColor(.white)
+        } else {
         switch family {
         case .systemSmall:
             SmallWidgetView(data: entry.data)
@@ -100,6 +108,7 @@ struct MacroWidgetEntryView: View {
             MediumWidgetView(data: entry.data)
         default:
             SmallWidgetView(data: entry.data)
+        }
         }
     }
 }

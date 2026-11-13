@@ -69,6 +69,7 @@ function boundMealCandidates(messages:MessageWithId[],owner:string,date:string):
   return found;
 }
 
+type CoachIcon = React.ComponentProps<typeof IconSymbol>['android_material_icon_name'];
 const QUICK_ACTION_CARDS = [
   { iosIcon: 'fork.knife', androidIcon: 'restaurant', titleKey: 'coach.prompt_1_title', subtitleKey: 'coach.prompt_1_sub', messageKey: 'localization.coach.quickMessage1' },
   { iosIcon: 'flame.fill', androidIcon: 'local-fire-department', titleKey: 'coach.prompt_2_title', subtitleKey: 'coach.prompt_2_sub', messageKey: 'localization.coach.quickMessage2' },
@@ -76,7 +77,7 @@ const QUICK_ACTION_CARDS = [
   { iosIcon: 'questionmark.circle.fill', androidIcon: 'help', titleKey: 'coach.prompt_4_title', subtitleKey: 'coach.prompt_4_sub', messageKey: 'localization.coach.quickMessage4' },
   { iosIcon: 'moon.fill', androidIcon: 'nightlight', titleKey: 'coach.prompt_5_title', subtitleKey: 'coach.prompt_5_sub', messageKey: 'localization.coach.quickMessage5' },
   { iosIcon: 'bolt.fill', androidIcon: 'bolt', titleKey: 'coach.prompt_6_title', subtitleKey: 'coach.prompt_6_sub', messageKey: 'localization.coach.quickMessage6' },
-];
+] satisfies {iosIcon:string;androidIcon:CoachIcon;titleKey:string;subtitleKey:string;messageKey:string}[];
 
 const CRAVING_CHIPS = [
   { labelKey: 'localization.coach.cravingLabel1', iosIcon: 'flame.fill', androidIcon: 'local-fire-department', messageKey: 'localization.coach.quickMessage1' },
@@ -91,7 +92,7 @@ const CRAVING_CHIPS = [
   { labelKey: 'localization.coach.cravingLabel10', iosIcon: 'moon.fill', androidIcon: 'nightlight', messageKey: 'localization.coach.cravingMessage10' },
   { labelKey: 'localization.coach.cravingLabel11', iosIcon: 'xmark.circle.fill', androidIcon: 'cancel', messageKey: 'localization.coach.cravingMessage11' },
   { labelKey: 'localization.coach.cravingLabel12', iosIcon: 'moon.stars.fill', androidIcon: 'bedtime', messageKey: 'localization.coach.cravingMessage12' },
-];
+] satisfies {labelKey:string;iosIcon:string;androidIcon:CoachIcon;messageKey:string}[];
 
 
 // ── Store badge detection ────────────────────────────────────────────────────
@@ -427,7 +428,7 @@ function QuickActionCard({
   disabled,
 }: {
   iosIcon: string;
-  androidIcon: string;
+  androidIcon: CoachIcon;
   title: string;
   subtitle: string;
   onPress: () => void;
@@ -881,8 +882,8 @@ type CoachRecommendation = {
   recommendation_text: string;
 };
 
-function getStatusInfo(userStatus: string, t: TFunction): { iconName: { ios: string; android: string }; iconColor: string; label: string } {
-  const map: Record<string, { iconName: { ios: string; android: string }; iconColor: string; label: string }> = {
+function getStatusInfo(userStatus: string, t: TFunction): { iconName: { ios: string; android: CoachIcon }; iconColor: string; label: string } {
+  const map: Record<string, { iconName: { ios: string; android: CoachIcon }; iconColor: string; label: string }> = {
     on_track: { iconName: { ios: 'checkmark.circle.fill', android: 'check_circle' }, iconColor: '#22C55E', label: t('coach.statusOnTrack') },
     faster_than_expected: { iconName: { ios: 'arrow.up.circle.fill', android: 'trending_up' }, iconColor: '#22C55E', label: t('coach.statusFaster') },
     slower_than_expected: { iconName: { ios: 'arrow.down.circle.fill', android: 'trending_down' }, iconColor: '#EF4444', label: t('coach.statusSlower') },
@@ -922,7 +923,8 @@ function getRelativeTime(isoDate: string, t: TFunction, locale: string): string 
 }
 
 // ── Conversation date formatter ──────────────────────────────────────────────
-function formatConvDate(isoDate: string, t: TFunction, locale: string): string {
+function formatConvDate(isoDate: string | null, t: TFunction, locale: string): string {
+  if (!isoDate || !Number.isFinite(Date.parse(isoDate))) return '';
   const d = new Date(isoDate);
   if (Number.isNaN(d.getTime())) return '';
   const today = new Date();
@@ -1053,8 +1055,8 @@ export default function CoachScreen() {
   const [historyConversations, setHistoryConversations] = useState<{
     id: string;
     title: string | null;
-    created_at: string;
-    last_message_at: string;
+    created_at: string | null;
+    last_message_at: string | null;
     preview?: string;
     previewIsUser?: boolean;
   }[]>([]);
@@ -1064,9 +1066,13 @@ export default function CoachScreen() {
     console.log('[AICoach] Loading conversation history');
     setLoadingHistory(true);
     try {
+      const auth = await supabase.auth.getUser();
+      if (auth.error || !auth.data.user) return;
+      const owner = auth.data.user.id;
       const { data: convs } = await supabase
-        .from('coach_conversations')
+        .from('coach_conv_sessions')
         .select('id, title, created_at, last_message_at')
+        .eq('user_id', owner)
         .order('last_message_at', { ascending: false })
         .limit(30);
 
@@ -1093,7 +1099,8 @@ export default function CoachScreen() {
           return { ...conv, preview, previewIsUser: lastMsg?.role === 'user' };
         })
       );
-      setHistoryConversations(withPreviews);
+      const latest = await supabase.auth.getUser();
+      if (!latest.error && latest.data.user?.id === owner) setHistoryConversations(withPreviews);
     } catch (e: any) {
       console.warn('[AICoach] Error loading history:', e?.message);
     } finally {
@@ -1104,6 +1111,11 @@ export default function CoachScreen() {
   const loadConversation = useCallback(async (convId: string) => {
     console.log('[AICoach] Loading conversation from history, id:', convId);
     try {
+      const auth = await supabase.auth.getUser();
+      if (auth.error || !auth.data.user) return;
+      const owner = auth.data.user.id;
+      const ownSession = await supabase.from('coach_conv_sessions').select('id').eq('id', convId).eq('user_id', owner).maybeSingle();
+      if (ownSession.error || !ownSession.data) return;
       const { data: msgs } = await supabase
         .from('coach_messages')
         .select('id, role, content, created_at')
@@ -1130,12 +1142,13 @@ export default function CoachScreen() {
           console.warn('[AICoach] Error clearing gate key in loadConversation:', e?.message);
         }
 
-        const mapped: MessageWithId[] = msgs.map((m) => ({
-          id: m.id,
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-          timestamp: new Date(m.created_at).getTime(),
-        }));
+        const mapped: MessageWithId[] = [];
+        for (const m of msgs) {
+          if ((m.role !== 'user' && m.role !== 'assistant') || !m.created_at || !Number.isFinite(Date.parse(m.created_at))) continue;
+          mapped.push({id:m.id,role:m.role,content:m.content,timestamp:Date.parse(m.created_at)});
+        }
+        const latest = await supabase.auth.getUser();
+        if (latest.error || latest.data.user?.id !== owner) return;
 
         setMessages(mapped);
         setConversationId(convId);
@@ -1924,6 +1937,21 @@ export default function CoachScreen() {
       const actionType = actionProposal.action_type || proposal.action_type || '';
       console.log('[AICoach] Confirming inline action:', action_id, 'type:', actionType);
 
+      // AI output is not an accepted goal. Never deactivate/insert or patch
+      // macros from a proposal; the manual editor loads its own verified CAS.
+      if (actionType === 'update_goal' || actionType === 'adjust_calories') {
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, actionStatus: 'pending' as const } : m));
+        Alert.alert(
+          t('coach.reviewGoalsTitle', { defaultValue: 'Review your goals' }),
+          t('coach.reviewGoalsManual', { defaultValue: 'No nutrition targets were changed. Review your current goals in the manual editor; automatic recommendations are not enabled.' }),
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('coach.openGoalEditor', { defaultValue: 'Open goal editor' }), onPress: () => router.push('/edit-goals') },
+          ]
+        );
+        return;
+      }
+
       // Mark as confirming while async work runs
       setMessages((prev) =>
         prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'confirming' as const } : m)
@@ -1933,15 +1961,15 @@ export default function CoachScreen() {
       if (
         actionType === 'create_meal_plan' &&
         (
-          (proposal.items && proposal.items.length > 0) ||
-          (proposal.days && proposal.days.length > 0)
+          (Array.isArray(proposal.items) && proposal.items.length > 0) ||
+          (Array.isArray(proposal.days) && proposal.days.length > 0)
         )
       ) {
         const planName = proposal.plan_name || t('localization.coach.aiMealPlan');
         const startDate = proposal.start_date || '';
         const endDate = proposal.end_date || '';
 
-        console.log('[AICoach] create_meal_plan confirmed, plan_name:', planName, 'items format:', !!(proposal.items && proposal.items.length > 0));
+        console.log('[AICoach] create_meal_plan confirmed, plan_name:', planName, 'items format:', !!(Array.isArray(proposal.items) && proposal.items.length > 0));
         setCreatingPlan(true);
 
         try {
@@ -1951,10 +1979,10 @@ export default function CoachScreen() {
 
           let flatItems: any[] = [];
 
-          if (proposal.items && proposal.items.length > 0) {
+          if (Array.isArray(proposal.items) && proposal.items.length > 0) {
             // New enriched format — items is already a flat array
             flatItems = proposal.items;
-          } else if (proposal.days && proposal.days.length > 0) {
+          } else if (Array.isArray(proposal.days) && proposal.days.length > 0) {
             // Old format — flatten days[].meals[]
             flatItems = proposal.days.flatMap((day: any) =>
               day.meals.map((meal: any) => ({
@@ -2099,136 +2127,6 @@ export default function CoachScreen() {
           ...prev,
           { id: genId(), role: 'assistant', content: successContent, timestamp: Date.now() },
         ]);
-        return;
-      }
-
-      // ── update_goal ───────────────────────────────────────────────────────
-      if (actionType === 'update_goal') {
-        console.log('[AICoach] update_goal confirmed, proposed_value:', proposal.proposed_value);
-
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          console.warn('[AICoach] No user for update_goal');
-          setMessages((prev) =>
-            prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'pending' as const } : m)
-          );
-          return;
-        }
-
-        // Fetch current active goal to preserve all existing fields
-        const { data: currentGoal } = await supabase
-          .from('goals')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .maybeSingle();
-
-        console.log('[AICoach] Current active goal:', currentGoal);
-
-        // Deactivate current goal
-        await supabase
-          .from('goals')
-          .update({ is_active: false })
-          .eq('user_id', user.id)
-          .eq('is_active', true);
-
-        const newCalories = Number(proposal.proposed_value ?? proposal.current_value ?? currentGoal?.daily_calories ?? 0);
-
-        const newGoalData: Record<string, unknown> = {
-          user_id: user.id,
-          // Preserve existing fields
-          goal_type: currentGoal?.goal_type ?? 'maintain',
-          macro_preset: currentGoal?.macro_preset ?? null,
-          start_date: currentGoal?.start_date ?? null,
-          loss_rate_lbs_per_week: currentGoal?.loss_rate_lbs_per_week ?? null,
-          goal_intensity: currentGoal?.goal_intensity ?? 1,
-          // Apply new values (AI proposal overrides existing)
-          daily_calories: newCalories,
-          protein_g: (proposal.protein_g as number | undefined) ?? currentGoal?.protein_g ?? null,
-          carbs_g: (proposal.carbs_g as number | undefined) ?? currentGoal?.carbs_g ?? null,
-          fats_g: (proposal.fats_g as number | undefined) ?? currentGoal?.fats_g ?? null,
-          fiber_g: (proposal.fiber_g as number | undefined) ?? currentGoal?.fiber_g ?? null,
-          is_active: true,
-        };
-
-        console.log('[AICoach] Inserting new goal:', newGoalData);
-        const { error: goalError } = await supabase.from('goals').insert(newGoalData);
-
-        if (goalError) {
-          console.error('[AICoach] Error inserting new goal:', goalError.message);
-          Alert.alert(t('common.error'), t('localization.coach.goalsFailed'));
-          setMessages((prev) =>
-            prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'pending' as const } : m)
-          );
-          return;
-        }
-
-        const successContent = t('localization.coach.goalUpdated', { calories: newCalories.toLocaleString(locale) });
-        console.log('[AICoach] Goal updated successfully, new daily_calories:', newCalories);
-        setMessages((prev) => [
-          ...prev,
-          { id: genId(), role: 'assistant', content: successContent, timestamp: Date.now() },
-        ]);
-        setMessages((prev) =>
-          prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'confirmed' as const } : m)
-        );
-        return;
-      }
-
-      // ── adjust_calories ───────────────────────────────────────────────────
-      if (actionType === 'adjust_calories') {
-        console.log('[AICoach] adjust_calories confirmed, proposed_calories:', proposal.proposed_calories);
-
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          console.warn('[AICoach] No user for adjust_calories');
-          setMessages((prev) =>
-            prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'pending' as const } : m)
-          );
-          return;
-        }
-
-        const proposedCalories = Number(proposal.proposed_calories ?? 0);
-        const previousCalories = Number(proposal.current_calories ?? 0);
-
-        console.log('[AICoach] Updating goals table daily_calories to:', proposedCalories, 'for user:', user.id);
-        const { error: goalError } = await supabase
-          .from('goals')
-          .update({ daily_calories: proposedCalories })
-          .eq('user_id', user.id)
-          .eq('is_active', true);
-
-        if (goalError) {
-          console.error('[AICoach] Error updating daily_calories:', goalError.message);
-          Alert.alert(t('common.error'), t('localization.coach.caloriesFailed'));
-          setMessages((prev) =>
-            prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'pending' as const } : m)
-          );
-          return;
-        }
-
-        console.log('[AICoach] Inserting coach_actions record for adjust_calories');
-        await supabase.from('coach_actions').insert({
-          user_id: user.id,
-          action_type: 'adjust_calories',
-          new_value: {
-            daily_calories: proposedCalories,
-            previous_calories: previousCalories,
-            reason: proposal.reason ?? '',
-          },
-          status: 'applied',
-          created_at: new Date().toISOString(),
-        });
-
-        const successContent = t('localization.coach.targetApplied', { calories: proposedCalories.toLocaleString(locale) });
-        console.log('[AICoach] adjust_calories applied successfully, new target:', proposedCalories);
-        setMessages((prev) => [
-          ...prev,
-          { id: genId(), role: 'assistant', content: successContent, timestamp: Date.now() },
-        ]);
-        setMessages((prev) =>
-          prev.map((m) => m.id === messageId ? { ...m, actionStatus: 'confirmed' as const } : m)
-        );
         return;
       }
 

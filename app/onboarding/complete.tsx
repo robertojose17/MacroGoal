@@ -3,7 +3,7 @@ import type { PremiumFlow } from '@/utils/premiumCheckpointContract';
 import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 import { getAppLocale } from '@/lib/localization';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -29,11 +29,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase/client';
 import { trackEvent } from '@/utils/analytics';
 import { trackOnboardingEvent, trackPaywallActionOnce, getOrCreateSessionId } from '@/utils/onboardingAnalytics';
-import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
+import { prepareOnboardingNutrition, recoveredOnboardingPresentation } from '@/utils/onboardingNutrition';
+import { useInitialOnboarding } from '@/hooks/useInitialOnboarding';
 import { Sex, GoalType, ActivityLevel } from '@/types';
 import Purchases, { isPurchasesAvailable } from '@/utils/purchases';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { toLocalDateString } from '@/utils/dateUtils';
 
 const ONESIGNAL_PROMPT_KEY = 'onesignal_prompt_shown_v1';
 
@@ -101,8 +101,8 @@ export default function CompleteOnboardingScreen() {
   }, []);
 
   // Body data
-  const [sex, setSex] = useState<Sex>('male');
-  const [age, setAge] = useState('');
+  const [sex, setSex] = useState<Sex | null>(null);
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [units, setUnits] = useState<'metric' | 'imperial'>('metric');
   const [heightFeet, setHeightFeet] = useState('');
   const [heightInches, setHeightInches] = useState('');
@@ -111,7 +111,7 @@ export default function CompleteOnboardingScreen() {
   const [goalWeight, setGoalWeight] = useState('');
   const [goalType, setGoalType] = useState<GoalType>('lose');
   const [lossRateLbsPerWeek, setLossRateLbsPerWeek] = useState<number>(1.0);
-  const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel | null>(null);
 
   // Pain point
   const [painPoint, setPainPoint] = useState<number | null>(null);
@@ -122,12 +122,28 @@ export default function CompleteOnboardingScreen() {
   const [recipeStyles, setRecipeStyles] = useState<string[]>([]);
   const [dislikedFoods, setDislikedFoods] = useState('');
 
-  // Calculated results
-  const [calcCalories, setCalcCalories] = useState(0);
-  const [calcProtein, setCalcProtein] = useState(0);
-  const [calcCarbs, setCalcCarbs] = useState(0);
-  const [calcFats, setCalcFats] = useState(0);
-  const [calcWeeks, setCalcWeeks] = useState(0);
+  const onboarding = useInitialOnboarding();
+  // Preview is read-only. The user must explicitly accept these targets before
+  // the atomic production RPC can write profile + goal together.
+  const previewResult = useMemo(() => {
+    if (step < 9 || !onboarding.snapshot) return { prepared: null, error: null };
+    try {
+      return { prepared: prepareOnboardingNutrition({ dateOfBirth, sex, units, heightFeet, heightInches, heightCm,
+        weight, goalWeight, goalType, lossRateLbsPerWeek, activityLevel, dietaryRestrictions,
+        proteinPreferences, recipeStyles, dislikedFoods }, onboarding.snapshot, new Date()), error: null };
+    } catch (failure) {
+      return { prepared: null, error: failure instanceof Error ? failure.message : 'Please review your information.' };
+    }
+  }, [step, onboarding.snapshot, dateOfBirth, sex, units, heightFeet, heightInches, heightCm, weight, goalWeight,
+    goalType, lossRateLbsPerWeek, activityLevel, dietaryRestrictions, proteinPreferences, recipeStyles, dislikedFoods]);
+  const recoveredPresentation = useMemo(() => {
+    try { return { value: recoveredOnboardingPresentation(onboarding.recoveredInput), error: null }; }
+    catch { return { value: null, error: 'The saved request needs review before continuing.' }; }
+  }, [onboarding.recoveredInput]);
+  const calcWeeks = recoveredPresentation.value?.weeks ?? previewResult.prepared?.preview.weeks ?? 0;
+  // A cold start goes directly to the existing recovery controls, never through
+  // new body-data entry or an automatic replay of the original request.
+  useEffect(() => { if (onboarding.pending && !onboarding.loading && step < 9) setStep(9); }, [onboarding.pending, onboarding.loading, step]);
 
   // Animated bullets for step 2
   const bullet1Anim = useRef(new Animated.Value(0)).current;
@@ -136,8 +152,6 @@ export default function CompleteOnboardingScreen() {
   const bullet4Anim = useRef(new Animated.Value(0)).current;
   const bullet5Anim = useRef(new Animated.Value(0)).current;
 
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
   // ─── Navigation ────────────────────────────────────────────────────────────
 
@@ -163,7 +177,7 @@ export default function CompleteOnboardingScreen() {
   };
 
   const goBack = () => {
-    if (step > 0) {
+    if (step > 0 && !onboarding.saving && !onboarding.pending && !onboarding.saved) {
       console.log(`[Onboarding] Going back from step ${step} to step ${step - 1}`);
       trackOnboardingEvent('onboarding_back_tapped', step);
       goToStep(step - 1);
@@ -204,200 +218,24 @@ export default function CompleteOnboardingScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  // ─── Calculations + Save (step 9) ──────────────────────────────────────────
-
-  useEffect(() => {
-    if (step === 9) {
-      runCalculationsAndSave();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
-
-  const runCalculationsAndSave = async () => {
-    console.log('[Onboarding] Step 9 mounted — running calculations and saving');
-    setSaving(true);
-    setSaveError(null);
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
-        throw new Error('You must be logged in');
-      }
-
-      // Convert height to cm
-      let heightInCm: number;
-      if (units === 'imperial') {
-        const totalInches = parseInt(heightFeet) * 12 + parseInt(heightInches);
-        heightInCm = totalInches * 2.54;
-      } else {
-        heightInCm = parseInt(heightCm);
-      }
-
-      // Convert weight to kg
-      let weightInKg: number;
-      if (units === 'imperial') {
-        weightInKg = parseFloat(weight) * 0.453592;
-      } else {
-        weightInKg = parseFloat(weight);
-      }
-
-      // Convert goal weight to kg
-      let goalWeightInKg: number;
-      if (units === 'imperial') {
-        goalWeightInKg = parseFloat(goalWeight) * 0.453592;
-      } else {
-        goalWeightInKg = parseFloat(goalWeight);
-      }
-
-      const ageNum = parseInt(age);
-
-      console.log('[Onboarding] Calculating goals with:', {
-        weight: weightInKg,
-        height: heightInCm,
-        age: ageNum,
-        sex,
-        activityLevel,
-        goalType,
-        goalWeight: goalWeightInKg,
-        lossRateLbsPerWeek: goalType === 'lose' ? lossRateLbsPerWeek : null,
-      });
-
-      const bmr = calculateBMR(weightInKg, heightInCm, ageNum, sex);
-      const tdee = calculateTDEE(bmr, activityLevel);
-      const targetCalories = calculateTargetCalories(
-        tdee,
-        goalType,
-        goalType === 'lose' ? lossRateLbsPerWeek : undefined
-      );
-      const macros = calculateMacrosWithPreset(targetCalories, weightInKg, 'lean_body');
-
-      console.log('[Onboarding] Calculated:', { bmr, tdee, targetCalories, macros });
-
-      // Set state for display
-      setCalcCalories(targetCalories);
-      setCalcProtein(macros.protein);
-      setCalcCarbs(macros.carbs);
-      setCalcFats(macros.fats);
-
-      // Calculate weeks to goal
-      const currentWeightLbs = units === 'imperial' ? parseFloat(weight) : parseFloat(weight) * 2.20462;
-      const goalWeightLbs = units === 'imperial' ? parseFloat(goalWeight) : parseFloat(goalWeight) * 2.20462;
-      let weeks = 0;
-      if (goalType === 'lose') {
-        weeks = Math.round(Math.abs(currentWeightLbs - goalWeightLbs) / lossRateLbsPerWeek);
-      } else if (goalType === 'gain') {
-        weeks = Math.round(Math.abs(currentWeightLbs - goalWeightLbs) / 0.5);
-      }
-      setCalcWeeks(weeks);
-
-      // Date of birth
-      const currentYear = new Date().getFullYear();
-      const birthYear = currentYear - ageNum;
-      const dateOfBirth = `${birthYear}-01-01`;
-
-      // Save user profile
-      console.log('[Onboarding] Saving user profile to Supabase...');
-
-      // Check if journey_start_date is already set (only set it once, on first completion)
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('journey_start_date, journey_start_weight')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      const updatePayload: Record<string, unknown> = {
-        sex,
-        date_of_birth: dateOfBirth,
-        height: heightInCm,
-        current_weight: weightInKg,
-        goal_weight: goalWeightInKg,
-        activity_level: activityLevel,
-        preferred_units: units,
-        dietary_restrictions: dietaryRestrictions,
-        protein_preferences: proteinPreferences,
-        recipe_styles: recipeStyles,
-        disliked_foods: dislikedFoods,
-        onboarding_completed: true,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (!existingUser?.journey_start_date) {
-        const todayStr = toLocalDateString(new Date());
-        console.log('[Onboarding] Setting journey_start_date for first time:', todayStr);
-        updatePayload.journey_start_date = todayStr;
-        updatePayload.journey_start_weight = weightInKg;
-      } else {
-        console.log('[Onboarding] journey_start_date already set, skipping');
-      }
-
-      const { error: userError } = await supabase
-        .from('users')
-        .update(updatePayload)
-        .eq('id', user.id);
-
-      if (userError) {
-        console.error('[Onboarding] User update error:', userError);
-        throw userError;
-      }
-
-      console.log('[Onboarding] User profile updated');
-
-      // Deactivate existing goals
-      await supabase
-        .from('goals')
-        .update({ is_active: false })
-        .eq('user_id', user.id)
-        .eq('is_active', true);
-
-      // Create new goal
-      const goalData: Record<string, unknown> = {
-        user_id: user.id,
-        goal_type: goalType,
-        goal_intensity: 1,
-        daily_calories: targetCalories,
-        protein_g: macros.protein,
-        carbs_g: macros.carbs,
-        fats_g: macros.fats,
-        fiber_g: macros.fiber,
-        macro_preset: 'lean_body',
-        is_active: true,
-      };
-
-      if (goalType === 'lose') {
-        goalData.loss_rate_lbs_per_week = lossRateLbsPerWeek;
-      }
-
-      console.log('[Onboarding] Creating goal in Supabase...');
-      const { error: goalError } = await supabase.from('goals').insert(goalData);
-
-      if (goalError) {
-        console.error('[Onboarding] Goal creation error:', goalError);
-        throw goalError;
-      }
-
-      console.log('[Onboarding] Goal created successfully');
-
-      // Fire-and-forget backfill — no await, no error handling needed
-      const session = (await supabase.auth.getSession()).data.session;
-      if (session) {
-        console.log('[Onboarding] Triggering backfill-tdee-estimates for userId:', session.user.id);
-        fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/backfill-tdee-estimates`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ userId: session.user.id }),
-        }).catch(() => {}); // intentionally ignored
-      }
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : 'Failed to save your information. Please try again.';
-      console.error('[Onboarding] Save error:', error);
-      setSaveError(msg);
-    } finally {
-      setSaving(false);
-    }
+  const acceptPreparedGoal = async () => {
+    if (!previewResult.prepared || onboarding.pending || onboarding.saving) return;
+    if (await onboarding.run({ goal: previewResult.prepared.goal, profile: previewResult.prepared.profile })) goNext();
+  };
+  const retryOriginalRequest = async () => {
+    if (!onboarding.canRetry || onboarding.saving || recoveredPresentation.error) return;
+    if (await onboarding.run()) goNext();
+  };
+  const reviewFromStart = async () => {
+    if (recoveredPresentation.error) { Alert.alert('Request needs review', 'The original request cannot be replaced while its result is uncertain. Please contact support to reconcile it.'); return; }
+    if (onboarding.saving || (onboarding.pending && onboarding.canRetry)) return;
+    // A newly read CAS must not silently legitimize an old form. Review begins
+    // with explicit inputs again, never an automatic recalculation/retry.
+    setSex(null); setDateOfBirth(''); setHeightFeet(''); setHeightInches(''); setHeightCm('');
+    setWeight(''); setGoalWeight(''); setActivityLevel(null); setDietaryRestrictions([]);
+    setProteinPreferences([]); setRecipeStyles([]); setDislikedFoods('');
+    goToStep(3);
+    await onboarding.review();
   };
 
   // ─── Notification permission helper ───────────────────────────────────────
@@ -454,29 +292,36 @@ export default function CompleteOnboardingScreen() {
   // ─── Step 4 validation ─────────────────────────────────────────────────────
 
   const step4Valid = (() => {
-    if (units === 'imperial') {
-      return heightFeet !== '' && heightInches !== '' && weight !== '' && goalWeight !== '';
-    }
-    return heightCm !== '' && weight !== '' && goalWeight !== '';
+    const number = (value: string) => /^\d+(?:\.\d+)?$/.test(value.trim()) ? Number(value.trim()) : NaN;
+    const height = units === 'imperial' ? (number(heightFeet) * 12 + number(heightInches)) * 2.54 : number(heightCm);
+    const kilos = number(weight) * (units === 'imperial' ? 0.453592 : 1);
+    const target = number(goalWeight) * (units === 'imperial' ? 0.453592 : 1);
+    return height >= 100 && height <= 250 && kilos >= 20 && kilos <= 500 && target >= 20 && target <= 500
+      && (units !== 'imperial' || (Number.isInteger(number(heightFeet)) && number(heightInches) < 12));
   })();
 
   // ─── Goal projection text ──────────────────────────────────────────────────
 
-  const goalProjectionText = (() => {
-    if (goalType === 'maintain') {
-      return t('onboarding.projectionMaintain');
-    }
-    if (calcWeeks === 0) {
-      return t('onboarding.projectionAtGoal');
-    }
-    return t('onboarding.projectionWeeks', { goalWeight, unit: weightUnit, weeks: calcWeeks });
-  })();
+  const goalProjectionText = t('onboarding.reviewEstimate', {
+    defaultValue: 'Review this initial estimate. It is not a measured Daily Burn or a guaranteed timeline. No adaptive recommendations are enabled.',
+  });
 
   // ─── Progress bar ──────────────────────────────────────────────────────────
 
   const progress = step / 10;
 
   // ─── Render ────────────────────────────────────────────────────────────────
+
+  if (onboarding.loading || onboarding.blocked || (!onboarding.snapshot && onboarding.error)) {
+    return <View style={[styles.fullScreen, { backgroundColor: DARK_BG, justifyContent: 'center', padding: 24 }]}>
+      {onboarding.loading ? <ActivityIndicator size="large" color={PRIMARY} /> : <>
+        <Text style={styles.s9ErrorText}>{onboarding.error}</Text>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => onboarding.blocked ? router.replace('/settings') : void onboarding.review()}>
+          <Text style={styles.primaryBtnText}>{onboarding.blocked ? 'Open Settings' : 'Verify account again'}</Text>
+        </TouchableOpacity>
+      </>}
+    </View>;
+  }
 
   return (
     <View style={styles.root}>
@@ -489,7 +334,7 @@ export default function CompleteOnboardingScreen() {
 
       {/* Back button — steps 1–9 */}
       {step > 0 && step < 10 && (
-        <TouchableOpacity style={styles.backBtn} onPress={goBack}>
+        <TouchableOpacity style={styles.backBtn} onPress={goBack} disabled={onboarding.saving || onboarding.pending || onboarding.saved}>
           <Text style={styles.backBtnText}>‹</Text>
         </TouchableOpacity>
       )}
@@ -517,8 +362,8 @@ export default function CompleteOnboardingScreen() {
           <Step3
             sex={sex}
             setSex={setSex}
-            age={age}
-            setAge={setAge}
+            dateOfBirth={dateOfBirth}
+            setDateOfBirth={setDateOfBirth}
             units={units}
             setUnits={setUnits}
             onNext={goNext}
@@ -579,15 +424,18 @@ export default function CompleteOnboardingScreen() {
         )}
         {step === 9 && (
           <Step9
-            saving={saving}
-            saveError={saveError}
-            calories={calcCalories}
-            protein={calcProtein}
-            carbs={calcCarbs}
-            fats={calcFats}
+            saving={onboarding.saving}
+            saveError={onboarding.error ?? recoveredPresentation.error ?? (onboarding.pending ? null : previewResult.error)}
+            calories={previewResult.prepared?.preview.calories ?? null}
+            protein={previewResult.prepared?.preview.protein ?? null}
+            carbs={previewResult.prepared?.preview.carbs ?? null}
+            fats={previewResult.prepared?.preview.fats ?? null}
             goalProjectionText={goalProjectionText}
-            onRetry={runCalculationsAndSave}
-            onNext={goNext}
+            pending={onboarding.pending}
+            canRetry={onboarding.canRetry && !recoveredPresentation.error}
+            onRetry={retryOriginalRequest}
+            onReview={reviewFromStart}
+            onNext={acceptPreparedGoal}
           />
         )}
         {step === 10 && (
@@ -595,12 +443,12 @@ export default function CompleteOnboardingScreen() {
             onStartTrial={handleStartTrial}
             onSkip={handleSkipTrial}
             totalWeeks={calcWeeks}
-            goalWeight={goalWeight}
-            weightUnit={weightUnit}
-            currentWeight={weight}
-            lossRateLbsPerWeek={lossRateLbsPerWeek}
-            units={units}
-            goalType={goalType}
+            goalWeight={recoveredPresentation.value?.goalWeight ?? goalWeight}
+            weightUnit={recoveredPresentation.value?.weightUnit ?? weightUnit}
+            currentWeight={recoveredPresentation.value?.weight ?? weight}
+            lossRateLbsPerWeek={recoveredPresentation.value?.lossRateLbsPerWeek ?? lossRateLbsPerWeek}
+            units={recoveredPresentation.value?.units ?? units}
+            goalType={recoveredPresentation.value?.goalType ?? goalType}
           />
         )}
       </Animated.View>
@@ -644,7 +492,7 @@ function Step0({ onNext }: { onNext: () => void }) {
 // ─── ICON HELPER ─────────────────────────────────────────────────────────────
 
 const renderOnboardingIcon = (iconValue: string, size = 24) => {
-  const iconMap: Record<string, { ios: string; android: string; color: string }> = {
+  const iconMap: Record<string, { ios: string; android: React.ComponentProps<typeof IconSymbol>['android_material_icon_name']; color: string }> = {
     '📊': { ios: 'chart.bar.fill', android: 'bar_chart', color: PRIMARY },
     '🔄': { ios: 'arrow.clockwise', android: 'refresh', color: PRIMARY },
     '⚡': { ios: 'bolt.fill', android: 'bolt', color: '#F59E0B' },
@@ -845,22 +693,22 @@ function Step2({
 function Step3({
   sex,
   setSex,
-  age,
-  setAge,
+  dateOfBirth,
+  setDateOfBirth,
   units,
   setUnits,
   onNext,
 }: {
-  sex: Sex;
+  sex: Sex | null;
   setSex: (v: Sex) => void;
-  age: string;
-  setAge: (v: string) => void;
+  dateOfBirth: string;
+  setDateOfBirth: (v: string) => void;
   units: 'metric' | 'imperial';
   setUnits: (v: 'metric' | 'imperial') => void;
   onNext: () => void;
 }) {
   const { t } = useTranslation();
-  const ctaDisabled = age === '';
+  const ctaDisabled = !sex || !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth);
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex1}>
       <PremiumCheckpointScrollView
@@ -893,15 +741,16 @@ function Step3({
           })}
         </View>
 
-        {/* Age */}
-        <Text style={styles.fieldLabel}>{t('onboarding.howOldAreYou')}</Text>
+        {/* Exact date of birth, never a fabricated January 1 from age */}
+        <Text style={styles.fieldLabel}>{t('onboarding.dateOfBirth', { defaultValue: 'Date of birth (YYYY-MM-DD)' })}</Text>
         <TextInput
           style={styles.bigInput}
-          placeholder={t('localization.screens.exampleAge')}
+          placeholder="YYYY-MM-DD"
           placeholderTextColor="rgba(255,255,255,0.3)"
-          keyboardType="number-pad"
-          value={age}
-          onChangeText={setAge}
+          keyboardType="numbers-and-punctuation"
+          maxLength={10}
+          value={dateOfBirth}
+          onChangeText={setDateOfBirth}
           returnKeyType="done"
         />
 
@@ -1219,7 +1068,7 @@ function Step6({
   setActivityLevel,
   onNext,
 }: {
-  activityLevel: ActivityLevel;
+  activityLevel: ActivityLevel | null;
   setActivityLevel: (v: ActivityLevel) => void;
   onNext: () => void;
 }) {
@@ -1264,7 +1113,8 @@ function Step6({
         </View>
 
         <TouchableOpacity
-          style={styles.primaryBtn}
+          style={[styles.primaryBtn, !activityLevel && styles.primaryBtnDisabled]}
+          disabled={!activityLevel}
           onPress={() => {
             console.log('[Onboarding] Step 6: Continue pressed');
             onNext();
@@ -1473,17 +1323,23 @@ function Step9({
   carbs,
   fats,
   goalProjectionText,
+  pending,
+  canRetry,
   onRetry,
+  onReview,
   onNext,
 }: {
   saving: boolean;
   saveError: string | null;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fats: number;
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fats: number | null;
+  pending: boolean;
+  canRetry: boolean;
   goalProjectionText: string;
   onRetry: () => void;
+  onReview: () => void;
   onNext: () => void;
 }) {
   const { t } = useTranslation();
@@ -1502,40 +1358,42 @@ function Step9({
               <ActivityIndicator size="large" color={PRIMARY} />
               <Text style={styles.s9LoadingText}>{t('onboarding.buildingPlan')}</Text>
             </View>
-          ) : saveError ? (
+          ) : saveError || pending ? (
             <View style={styles.s9ErrorBlock}>
-              <Text style={styles.s9ErrorText}>{saveError}</Text>
-              <TouchableOpacity style={styles.primaryBtn} onPress={onRetry}>
-                <Text style={styles.primaryBtnText}>{t('onboarding.tryAgain')}</Text>
-              </TouchableOpacity>
+              <Text style={styles.s9ErrorText}>{saveError ?? 'The previous result is unresolved. Verify that same request before continuing.'}</Text>
+              {canRetry ? <TouchableOpacity style={styles.primaryBtn} onPress={onRetry}>
+                <Text style={styles.primaryBtnText}>Retry original request</Text>
+              </TouchableOpacity> : <TouchableOpacity style={styles.primaryBtn} onPress={onReview}>
+                <Text style={styles.primaryBtnText}>Review information again</Text>
+              </TouchableOpacity>}
             </View>
           ) : (
             <>
-              <Text style={styles.stepTitle}>{t('onboarding.planReady')}</Text>
+              <Text style={styles.stepTitle}>{t('onboarding.reviewTargets', { defaultValue: 'Review your targets' })}</Text>
               <Text style={styles.stepSubtitle}>{goalProjectionText}</Text>
 
               <View style={styles.s9Grid}>
                 <View style={styles.s9StatCard}>
                   <IconSymbol ios_icon_name="flame.fill" android_material_icon_name="local_fire_department" size={24} color={PRIMARY} />
-                  <Text style={styles.s9StatValue}>{calories.toLocaleString(getAppLocale())}</Text>
+                  <Text style={styles.s9StatValue}>{calories?.toLocaleString(getAppLocale()) ?? '--'}</Text>
                   <Text style={styles.s9StatUnit}>kcal</Text>
                   <Text style={styles.s9StatLabel}>{t('onboarding.dailyCalories')}</Text>
                 </View>
                 <View style={styles.s9StatCard}>
                   <IconSymbol ios_icon_name="fork.knife" android_material_icon_name="restaurant" size={24} color={PRIMARY} />
-                  <Text style={styles.s9StatValue}>{protein}g</Text>
+                  <Text style={styles.s9StatValue}>{protein ?? '--'}g</Text>
                   <Text style={styles.s9StatUnit}> </Text>
                   <Text style={styles.s9StatLabel}>{t('common.protein')}</Text>
                 </View>
                 <View style={styles.s9StatCard}>
                   <Text style={styles.s9StatEmoji}>🍚</Text>
-                  <Text style={styles.s9StatValue}>{carbs}g</Text>
+                  <Text style={styles.s9StatValue}>{carbs ?? '--'}g</Text>
                   <Text style={styles.s9StatUnit}> </Text>
                   <Text style={styles.s9StatLabel}>{t('common.carbs')}</Text>
                 </View>
                 <View style={styles.s9StatCard}>
                   <Text style={styles.s9StatEmoji}>🥑</Text>
-                  <Text style={styles.s9StatValue}>{fats}g</Text>
+                  <Text style={styles.s9StatValue}>{fats ?? '--'}g</Text>
                   <Text style={styles.s9StatUnit}> </Text>
                   <Text style={styles.s9StatLabel}>{t('onboarding.fat')}</Text>
                 </View>
@@ -1543,9 +1401,10 @@ function Step9({
 
               <TouchableOpacity
                 style={styles.primaryBtn}
+                disabled={calories === null || protein === null || carbs === null || fats === null}
                 onPress={onNext}
               >
-                <Text style={styles.primaryBtnText}>{t('onboarding.showRoadmap')}</Text>
+                <Text style={styles.primaryBtnText}>{t('onboarding.acceptTargets', { defaultValue: 'Accept and save these targets' })}</Text>
               </TouchableOpacity>
             </>
           )}

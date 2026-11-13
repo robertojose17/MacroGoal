@@ -1,3 +1,5 @@
+import type { Database } from '@/lib/supabase/types';
+import { knownNonnegative } from '@/utils/savedMealDraftContract';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
 
 import React, { useState, useCallback } from 'react';
@@ -61,6 +63,45 @@ async function createMealPlanFromTemplate(
   const endDate = toLocalDateString(nextWeek);
   const planName = plan.name;
 
+  const meals = plan.day?.meals;
+  if (!meals) {
+    throw new Error('Template meals are unavailable. Nothing was saved.');
+  }
+
+  const preparedItems: Omit<Database['public']['Tables']['meal_plan_items']['Insert'], 'plan_id'>[] = [];
+
+  for (const mealDef of MEAL_DEFS) {
+    const items: TemplateItem[] = meals[mealDef.key] ?? [];
+    for (const item of items) {
+      const fiber = Reflect.get(item, 'fiber_g');
+      if (![item.grams, item.calories, item.protein_g, item.carbs_g, item.fats_g, fiber].every(knownNonnegative) || !knownNonnegative(fiber)) throw new Error('Template nutrition is incomplete, including fiber. Nothing was saved.');
+      const grams = Math.round(item.grams);
+      const calories = Math.round(item.calories);
+      const protein = Math.round(item.protein_g);
+      const carbs = Math.round(item.carbs_g);
+      const fats = Math.round(item.fats_g);
+
+      preparedItems.push({
+        date: startDate,
+        meal_type: mealDef.key,
+        food_name: item.food_name,
+        quantity: 1,
+        grams: grams > 0 ? grams : null,
+        serving_unit: grams > 0 ? 'g' : null,
+        serving_description: grams > 0 ? grams + 'g' : null,
+        calories,
+        protein,
+        carbs,
+        fats,
+        fiber,
+        food_item_id: item.food_item_id || null,
+      });
+    }
+  }
+
+  if (!preparedItems.length) throw new Error('Template is empty. Nothing was saved.');
+  const current = await supabase.auth.getUser();
+  if (current.error || current.data.user?.id !== user.id) throw new Error('Account changed');
   console.log('[TemplatePlanDetail] Inserting meal_plan:', planName);
   const { data: newPlan, error: planError } = await supabase
     .from('meal_plans')
@@ -81,42 +122,7 @@ async function createMealPlanFromTemplate(
 
   console.log('[TemplatePlanDetail] Meal plan created:', newPlan.id);
 
-  const meals = plan.day?.meals;
-  if (!meals) {
-    console.warn('[TemplatePlanDetail] No meals in template day');
-    return;
-  }
-
-  const insertItems: object[] = [];
-
-  for (const mealDef of MEAL_DEFS) {
-    const items: TemplateItem[] = meals[mealDef.key] ?? [];
-    for (const item of items) {
-      const grams = Math.round(Number(item.grams) || 0);
-      const calories = Math.round(Number(item.calories) || 0);
-      const protein = Math.round(Number(item.protein_g) || 0);
-      const carbs = Math.round(Number(item.carbs_g) || 0);
-      const fats = Math.round(Number(item.fats_g) || 0);
-
-      insertItems.push({
-        plan_id: newPlan.id,
-        date: startDate,
-        meal_type: mealDef.key,
-        food_name: item.food_name,
-        quantity: 1,
-        grams: grams > 0 ? grams : null,
-        serving_unit: grams > 0 ? 'g' : null,
-        serving_description: grams > 0 ? grams + 'g' : null,
-        calories,
-        protein,
-        carbs,
-        fats,
-        fiber: 0,
-        food_item_id: item.food_item_id || null,
-      });
-    }
-  }
-
+  const insertItems = preparedItems.map(item => ({ ...item, plan_id: newPlan.id }));
   if (insertItems.length > 0) {
     console.log('[TemplatePlanDetail] Inserting', insertItems.length, 'meal_plan_items');
     const { error: itemsError } = await supabase

@@ -1854,6 +1854,38 @@ export type Database = {
           },
         ]
       }
+      day_plan_assignments: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          meal_plan_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          meal_plan_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          meal_plan_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "day_plan_assignments_plan_owner_fkey"
+            columns: ["meal_plan_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
       edu_post_topics: {
         Row: {
           created_at: string | null
@@ -3624,6 +3656,35 @@ export type Database = {
         }
         Relationships: []
       }
+      recipe_favorites: {
+        Row: {
+          created_at: string
+          id: string
+          recipe_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          recipe_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          recipe_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_favorites_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "meal_recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recipe_image_audits: {
         Row: {
           audited_at: string | null
@@ -3673,6 +3734,44 @@ export type Database = {
             columns: ["recipe_id"]
             isOneToOne: true
             referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_reviews: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: string
+          rating: number
+          recipe_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rating: number
+          recipe_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rating?: number
+          recipe_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_reviews_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "meal_recipes"
             referencedColumns: ["id"]
           },
         ]
@@ -5582,6 +5681,37 @@ export type Database = {
         }
         Returns: number
       }
+      claim_food_nutrition_refresh_v1: {
+        Args: {
+          p_expected_revision: number
+          p_food_id: string
+          p_provider: string
+          p_request_id: string
+          p_source_id: string
+        }
+        Returns: Json
+      }
+      claim_recipe_image_audit_batch: {
+        Args: { p_batch_id: string; p_run_id: string }
+        Returns: {
+          description: string
+          id: string
+          image_url: string
+          ingredients: Json
+          instructions: Json
+          title: string
+        }[]
+      }
+      claim_selected_nutrition_v1: {
+        Args: {
+          p_food_id: string
+          p_provider: string
+          p_request_id: string
+          p_source_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       coach_authorize_phase_v2: {
         Args: {
           p_attempt_id: string
@@ -5732,6 +5862,14 @@ export type Database = {
         Args: { p_owner: string; p_payload: Json; p_submission: string }
         Returns: Json
       }
+      create_off_mass_food_v1: {
+        Args: {
+          p_evidence: Json
+          p_expected_code: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
       current_week_start: { Args: never; Returns: string }
       decrement_comments: { Args: { post_id: string }; Returns: undefined }
       decrement_likes: { Args: { post_id: string }; Returns: number }
@@ -5745,6 +5883,16 @@ export type Database = {
           name: string
           username: string
         }[]
+      }
+      finish_recipe_image_audit_item: {
+        Args: {
+          p_batch_id: string
+          p_recipe_id: string
+          p_result: Json
+          p_run_id: string
+          p_succeeded: boolean
+        }
+        Returns: boolean
       }
       generate_daily_bot_tracker_data: { Args: never; Returns: undefined }
       generate_weekly_bot_xp: { Args: never; Returns: undefined }
@@ -6076,6 +6224,16 @@ export type Database = {
       }
       mg_eval_20261015_status_v1: { Args: never; Returns: Json }
       nullify_zero_byte_checkin_photos: { Args: never; Returns: undefined }
+      observed_get_dynamic_tdee_context_v1: { Args: never; Returns: Json }
+      observed_set_dynamic_tdee_settings_v1: {
+        Args: { p_enabled: boolean; p_review_day: number }
+        Returns: Json
+      }
+      preview_get_dynamic_tdee_context_v1: { Args: never; Returns: Json }
+      preview_set_dynamic_tdee_settings_v1: {
+        Args: { p_enabled: boolean; p_review_day: number }
+        Returns: Json
+      }
       process_last_week: { Args: never; Returns: undefined }
       profile_nutrition: {
         Args: { p_from: string; p_target: string; p_to: string }
@@ -6118,9 +6276,31 @@ export type Database = {
         }[]
       }
       publish_weekly_featured_recipe: { Args: never; Returns: Json }
+      read_catalog_portion_sources_v1: {
+        Args: { p_food_ids: string[] }
+        Returns: {
+          food_revision: number
+          id: string
+          portion_source: Json
+          protected: boolean
+          snapshot: Json
+        }[]
+      }
       read_food_correction_targets_v1: {
         Args: { p_barcodes: string[]; p_id: string }
         Returns: Json
+      }
+      read_food_nutrition_refresh_state_v1: {
+        Args: { p_food_id: string }
+        Returns: Json
+      }
+      read_food_search_snapshots_v1: {
+        Args: { p_food_ids: string[] }
+        Returns: {
+          id: string
+          protected: boolean
+          snapshot: Json
+        }[]
       }
       read_usda_portions_v1: {
         Args: { p_fdc_ids: string[] }
@@ -6146,17 +6326,45 @@ export type Database = {
         Args: { p_payload: Json; p_user_id: string }
         Returns: string
       }
+      record_selected_nutrition_batch_v1: {
+        Args: { p_items: Json; p_request_id: string }
+        Returns: Json
+      }
+      record_selected_nutrition_v1: {
+        Args: { p_evidence: Json; p_food_id: string; p_request_id: string }
+        Returns: Json
+      }
       record_usda_portions_v1: {
         Args: { p_fdc_id: string; p_payload: Json }
         Returns: undefined
       }
       record_weekly_xp: { Args: { p_xp: number }; Returns: undefined }
       refresh_active_user_count: { Args: never; Returns: undefined }
+      refresh_food_nutrition_v1: {
+        Args: {
+          p_evidence: Json
+          p_expected_revision: number
+          p_food_id: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
       remove_profile_follower: {
         Args: {
           p_expected_revision: string
           p_request_id: string
           p_requester_id: string
+        }
+        Returns: Json
+      }
+      replace_nutrition_goal: {
+        Args: {
+          p_expected_goal_id: string
+          p_expected_updated_at: string
+          p_expected_user_id?: string
+          p_goal: Json
+          p_profile?: Json
+          p_request_id: string
         }
         Returns: Json
       }
@@ -6175,6 +6383,45 @@ export type Database = {
           p_expected_revision: string
           p_request_id: string
           p_requester_id: string
+        }
+        Returns: Json
+      }
+      restart_accepted_nutrition_journey_v1: {
+        Args: {
+          p_activity_level: string
+          p_current_weight_kg: number
+          p_expected_goal_id: string
+          p_expected_goal_updated_at: string
+          p_expected_profile_updated_at: string
+          p_expected_user_id: string
+          p_request_id: string
+          p_start_date: string
+          p_start_weight_kg: number
+        }
+        Returns: Json
+      }
+      restart_nutrition_journey: {
+        Args: {
+          p_activity_level: string
+          p_current_weight_kg: number
+          p_expected_goal_id: string
+          p_expected_goal_updated_at: string
+          p_request_id: string
+          p_start_date: string
+          p_start_weight_kg: number
+        }
+        Returns: Json
+      }
+      save_accepted_nutrition_goal_v1: {
+        Args: {
+          p_expected_goal_id: string
+          p_expected_profile_updated_at: string
+          p_expected_updated_at: string
+          p_expected_user_id: string
+          p_goal: Json
+          p_operation: string
+          p_profile: Json
+          p_request_id: string
         }
         Returns: Json
       }
@@ -6370,6 +6617,10 @@ export type Database = {
       social_post_author_visible: {
         Args: { p_author: string }
         Returns: boolean
+      }
+      start_recipe_image_audit_run: {
+        Args: { p_limit?: number; p_mode?: string }
+        Returns: Json
       }
       text_to_bytea: { Args: { data: string }; Returns: string }
       toggle_post_like: {

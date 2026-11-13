@@ -1,3 +1,6 @@
+import { acceptedGoalSnapshot, readActiveGoal, assertActiveGoal, type AcceptedGoalSnapshot } from '@/utils/activeGoal';
+import { subscribeGoalChanged } from '@/utils/goalChangeEvents';
+import { invokeAcceptedGoalGeneration } from '@/utils/acceptedGoalGeneration';
 import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
 import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
@@ -539,6 +542,11 @@ export default function AIMealPlannerScreen() {
     return () => { show.remove(); hide.remove(); };
   }, []);
   const [userGoals, setUserGoals] = useState<UserGoals | null>(null);
+  const goalContext = useRef<{owner:string; snapshot:AcceptedGoalSnapshot} | null>(null);
+  const goalOwner = useRef<string | null>(null);
+  const generationEpoch = useRef(0);
+  const generationBusy = useRef(false);
+  const writeBlocked = useRef(false);
   const [userPreferences, setUserPreferences] = useState<UserPreferences | null>(null);
   const [generatedPlan, setGeneratedPlan] = useState<GeneratedPlan | null>(null);
 
@@ -568,71 +576,57 @@ export default function AIMealPlannerScreen() {
   const [toastVisible, setToastVisible] = useState(false);
   const toastKey = useRef(0);
 
-  useEffect(() => {
-    isMounted.current = true;
-    loadUserGoals();
-    return () => { isMounted.current = false; };
+  const loadUserGoals = useCallback(async () => {
+    const epoch = ++generationEpoch.current;
+    goalContext.current = null; setUserGoals(null); setUserPreferences(null);
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user || !isMounted.current || epoch !== generationEpoch.current) return;
+      goalOwner.current = user.id;
+      const [goal, prefs] = await Promise.all([
+        readActiveGoal(user.id),
+        supabase.from('users').select('dietary_restrictions, protein_preferences, recipe_styles, disliked_foods').eq('id',user.id).single(),
+      ]);
+      const session = await supabase.auth.getSession();
+      if (!isMounted.current || epoch !== generationEpoch.current) return;
+      if (session.error || session.data.session?.user.id !== user.id || prefs.error || !prefs.data) throw Error('goal_source_unavailable');
+      const snapshot = acceptedGoalSnapshot(goal);
+      goalContext.current = {owner:user.id,snapshot};
+      setUserGoals({daily_calories:goal.daily_calories,daily_protein:goal.protein_g,daily_carbs:goal.carbs_g,daily_fats:goal.fats_g});
+      setUserPreferences({dietary_restrictions:prefs.data.dietary_restrictions,protein_preferences:prefs.data.protein_preferences,recipe_styles:prefs.data.recipe_styles,disliked_foods:prefs.data.disliked_foods});
+    } catch {
+      if (isMounted.current && epoch === generationEpoch.current) { goalContext.current=null; setUserGoals(null); setUserPreferences(null); }
+    }
   }, []);
 
-  // ── Load goals ──────────────────────────────────────────────────────────────
-
-  const loadUserGoals = async () => {
-    console.log('[AIMealPlanner] loadUserGoals called');
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.log('[AIMealPlanner] loadUserGoals: no authenticated user');
-        return;
-      }
-      const [goalsResult, prefsResult] = await Promise.all([
-        supabase
-          .from('goals')
-          .select('daily_calories, protein_g, carbs_g, fats_g')
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .maybeSingle(),
-        supabase
-          .from('users')
-          .select('dietary_restrictions, protein_preferences, recipe_styles, disliked_foods')
-          .eq('id', user.id)
-          .maybeSingle(),
-      ]);
-
-      if (goalsResult.data && isMounted.current) {
-        console.log('[AIMealPlanner] loadUserGoals success:', goalsResult.data);
-        setUserGoals({
-          daily_calories: goalsResult.data.daily_calories,
-          daily_protein: goalsResult.data.protein_g,
-          daily_carbs: goalsResult.data.carbs_g,
-          daily_fats: goalsResult.data.fats_g,
-        });
-      } else {
-        console.log('[AIMealPlanner] loadUserGoals: no goals found');
-      }
-
-      if (prefsResult.data && isMounted.current) {
-        console.log('[AIMealPlanner] user preferences loaded:', prefsResult.data);
-        setUserPreferences({
-          dietary_restrictions: prefsResult.data.dietary_restrictions || null,
-          protein_preferences: prefsResult.data.protein_preferences || null,
-          recipe_styles: prefsResult.data.recipe_styles || null,
-          disliked_foods: prefsResult.data.disliked_foods || null,
-        });
-      } else {
-        console.log('[AIMealPlanner] no user preferences found');
-      }
-    } catch (e) {
-      console.error('[AIMealPlanner] loadUserGoals error:', e);
-    }
-  };
+  useEffect(() => {
+    isMounted.current = true;
+    const invalidate = () => { generationEpoch.current++; goalContext.current=null; setUserGoals(null); setUserPreferences(null); setGeneratedPlan(null); setStep('preferences'); setReplacing(false); };
+    void loadUserGoals();
+    const unsubscribe=subscribeGoalChanged(owner=>{
+      if (owner && owner!==goalOwner.current) return;
+      invalidate(); void loadUserGoals();
+    });
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
+      const owner=session?.user.id??null;
+      if(owner===goalOwner.current)return;
+      goalOwner.current=owner;invalidate();if(owner)void loadUserGoals();
+    });
+    return()=>{isMounted.current=false;invalidate();unsubscribe();subscription.unsubscribe();};
+  }, [loadUserGoals]);
 
   // ── Generate plan ───────────────────────────────────────────────────────────
 
   const handleGenerate = useCallback(async () => {
-    if (!userGoals) {
+    if (!userGoals || !goalContext.current || !userPreferences) {
       Alert.alert(t('aiMealPlanner.noGoalSet'), t('aiMealPlanner.setGoalFirst'));
       return;
     }
+    if (generationBusy.current) return;
+    generationBusy.current = true;
+    const context = goalContext.current;
+    const epoch = generationEpoch.current;
+    const current = () => isMounted.current && epoch === generationEpoch.current;
     console.log('[AIMealPlanner] Generate My Plan pressed, foodPrefs:', foodPrefs, 'userPreferences:', userPreferences);
     setStep('generating');
 
@@ -642,18 +636,16 @@ export default function AIMealPlannerScreen() {
 
     try {
       console.log('[AIMealPlanner] invoking generate-meal-plan, prompt:', prompt, 'userPreferences:', userPreferences, 'language:', i18n.language);
-      const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
-        body: { messages: [{ role: 'user', content: prompt }], userGoals, userPreferences, language: i18n.language },
-      });
-      if (!isMounted.current) return;
-      if (error) throw new Error(error.message);
+      const data = await invokeAcceptedGoalGeneration('generate-meal-plan', context.owner, context.snapshot,
+        {messages:[{role:'user',content:prompt}], userGoals, userPreferences, language:i18n.language}, current);
+      if (!current()) return;
 
       console.log('[AIMealPlanner] generate-meal-plan response, readyToSave:', data?.readyToSave);
 
       if (data?.readyToSave && data?.planData) {
         console.log('[AIMealPlanner] raw planData keys:', Object.keys(data.planData || {}));
         const coerced = coerceBackendPlan(data.planData);
-        console.log('[AIMealPlanner] coerced plan, breakfast items:', coerced.breakfast?.items?.length, 'lunch items:', coerced.lunch?.items?.length);
+        console.log('[AIMealPlanner] coerced plan, breakfast items:', getMealItems(coerced.breakfast).length, 'lunch items:', getMealItems(coerced.lunch).length);
         const normalized = normalizePlan(coerced);
         setGeneratedPlan(normalized);
         setStep('plan');
@@ -662,10 +654,12 @@ export default function AIMealPlannerScreen() {
       }
     } catch (e: any) {
       console.error('[AIMealPlanner] handleGenerate error:', e?.message || e);
-      if (!isMounted.current) return;
+      if (!current()) return;
+      if (/goal_changed|goal_source_unavailable|active_goal_unavailable|account_changed/.test(String(e?.message))) { goalContext.current=null; setUserGoals(null); setUserPreferences(null); setGeneratedPlan(null); }
       setStep('preferences');
       Alert.alert(t('common.error'), e?.message || t('aiMealPlanner.failedToGenerate'));
     }
+    finally { generationBusy.current = false; }
   }, [userGoals, foodPrefs, userPreferences, t]);
 
   const handleRegenerate = useCallback(() => {
@@ -683,11 +677,31 @@ export default function AIMealPlannerScreen() {
     setTimeout(() => setToastVisible(true), 10);
   }, []);
 
+  const capturePlannerWrite = useCallback(() => {
+    const context = goalContext.current;
+    const epoch = generationEpoch.current;
+    if (!context || writeBlocked.current) throw Error('plan_write_review_required');
+    const isCurrent = () => isMounted.current && epoch === generationEpoch.current;
+    const check = async () => {
+      if (!isCurrent()) throw Error('plan_write_cancelled');
+      await assertActiveGoal(context.owner,context.snapshot);
+      const session=await supabase.auth.getSession();
+      if (!isCurrent()) throw Error('plan_write_cancelled');
+      if (session.error || session.data.session?.user.id!==context.owner) throw Error('account_changed');
+    };
+    return {owner:context.owner,isCurrent,check};
+  }, []);
+
   const handleAddFood = useCallback(async (food: PlanFood, mealType: MealType) => {
     console.log('[AIMealPlanner] Add food pressed:', food.name, 'to', mealType);
+    if (generationBusy.current || writeBlocked.current) return;
+    generationBusy.current=true;
+    let attempted=false, completed=false;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { Alert.alert(t('common.error'), t('aiMealPlanner.notAuthenticated')); return; }
+      const review=capturePlannerWrite();
+      await review.check();
+      const user={id:review.owner};
+
 
       const todayStr = getTodayStr();
       const servingGrams = food.serving_unit === 'g' && food.serving_size > 0 ? food.serving_size : 100;
@@ -695,7 +709,10 @@ export default function AIMealPlannerScreen() {
       // Step 1: Upsert food into foods table (store per-100g values)
       console.log('[AIMealPlanner] inserting food into foods table:', food.name);
       const ratio = servingGrams > 0 ? 100 / servingGrams : 1;
-      const { data: foodData, error: foodError } = await supabase
+      await review.check();
+        if (getTodayStr() !== todayStr) throw Error('plan_date_changed');
+        attempted=true;
+        const { data: foodData, error: foodError } = await supabase
         .from('foods')
         .insert({
           name: food.name,
@@ -717,12 +734,14 @@ export default function AIMealPlannerScreen() {
 
       // Step 2: Log via RPC (atomic upsert meal + insert meal_item)
       console.log('[AIMealPlanner] calling log_food RPC for', food.name, 'mealType:', mealType, 'date:', todayStr);
+      await review.check();
+      if (getTodayStr() !== todayStr) throw Error('plan_date_changed');
       const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
         p_user_id: user.id,
         p_date: todayStr,
         p_meal_type: mealType,
         p_food_id: foodData.id,
-        p_food_item_id: null,
+        p_food_item_id: undefined,
         p_quantity: food.serving_size > 0 ? food.serving_size : 1,
         p_calories: Math.round(Number(food.calories) || 0),
         p_protein: Math.round(Number(food.protein) || 0),
@@ -734,27 +753,38 @@ export default function AIMealPlannerScreen() {
         p_logged_at: new Date().toISOString(),
       });
       if (rpcError) throw new Error(`Failed to log food: ${rpcError.message}`);
+      if (!rpcData || typeof rpcData !== 'object' || Array.isArray(rpcData) || typeof rpcData.meal_item_id !== 'string') throw Error('plan_write_unverified');
 
       const mealLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1);
-      console.log('[AIMealPlanner] log_food RPC success:', food.name, 'meal_id:', rpcData?.meal_id, 'meal_item_id:', rpcData?.meal_item_id);
+      console.log('[AIMealPlanner] log_food RPC success:', food.name);
 
       // AI planner foods are user_created — do not affect catalog popularity
       console.log('[AIMealPlanner] Skipping logFoodUsage for AI planner food (user_created):', food.name);
 
+      await review.check();
+      completed=true;
       showToast(t('aiMealPlanner.addedToMealToast', { meal: mealLabel }));
     } catch (e: any) {
       console.error('[AIMealPlanner] handleAddFood error:', e?.message || e);
-      Alert.alert(t('common.error'), t('aiMealPlanner.failedToAddFood'));
+      if (isMounted.current) Alert.alert(t('common.error'), attempted ? (i18n.language.startsWith('es') ? 'Puede que se hayan guardado cambios parciales. Revisa tu diario y tus planes antes de repetir.' : 'Some changes may have been saved. Review your diary and plans before trying again.') : t('aiMealPlanner.failedToAddFood'));
+    } finally {
+      generationBusy.current=false;
+      if (attempted && !completed) writeBlocked.current=true;
     }
-  }, [showToast, t]);
+  }, [capturePlannerWrite, showToast, t]);
 
   const handleAddAllToMeal = useCallback(async (mealType: MealType) => {
     if (!generatedPlan) return;
     const foods = getMealItems(generatedPlan[mealType]);
     console.log('[AIMealPlanner] Add all to meal pressed:', mealType, 'count:', foods.length);
+    if (generationBusy.current || writeBlocked.current) return;
+    generationBusy.current=true;
+    let attempted=false, completed=false;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { Alert.alert(t('common.error'), t('aiMealPlanner.notAuthenticated')); return; }
+      const review=capturePlannerWrite();
+      await review.check();
+      const user={id:review.owner};
+
 
       const todayStr = getTodayStr();
 
@@ -765,6 +795,9 @@ export default function AIMealPlannerScreen() {
         const ratio = servingGrams > 0 ? 100 / servingGrams : 1;
 
         console.log('[AIMealPlanner] bulk: inserting food into foods table:', food.name);
+        await review.check();
+        if (getTodayStr() !== todayStr) throw Error('plan_date_changed');
+        attempted=true;
         const { data: foodData, error: foodError } = await supabase
           .from('foods')
           .insert({
@@ -784,16 +817,18 @@ export default function AIMealPlannerScreen() {
           .single();
         if (foodError) {
           console.error('[AIMealPlanner] bulk: failed to create food:', food.name, foodError.message);
-          continue;
+          throw Error('plan_write_partial_review_required');
         }
 
         console.log('[AIMealPlanner] bulk: calling log_food RPC for', food.name, 'food_id:', foodData.id);
+        await review.check();
+        if (getTodayStr() !== todayStr) throw Error('plan_date_changed');
         const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
           p_user_id: user.id,
           p_date: todayStr,
           p_meal_type: mealType,
           p_food_id: foodData.id,
-          p_food_item_id: null,
+          p_food_item_id: undefined,
           p_quantity: food.serving_size > 0 ? food.serving_size : 1,
           p_calories: Math.round(Number(food.calories) || 0),
           p_protein: Math.round(Number(food.protein) || 0),
@@ -806,10 +841,11 @@ export default function AIMealPlannerScreen() {
         });
         if (rpcError) {
           console.error('[AIMealPlanner] bulk: log_food RPC failed for', food.name, rpcError.message);
-          continue;
+          throw Error('plan_write_partial_review_required');
         }
-        if (rpcData?.meal_item_id) insertedItemIds.push(rpcData.meal_item_id);
-        console.log('[AIMealPlanner] bulk: log_food RPC success for', food.name, 'meal_item_id:', rpcData?.meal_item_id);
+        if (!rpcData || typeof rpcData !== 'object' || Array.isArray(rpcData) || typeof rpcData.meal_item_id !== 'string') throw Error('plan_write_unverified');
+        insertedItemIds.push(rpcData.meal_item_id);
+        console.log('[AIMealPlanner] bulk: log_food RPC success for', food.name, 'meal_item_id:', rpcData.meal_item_id);
 
         // AI planner foods are user_created — do not affect catalog popularity
         console.log('[AIMealPlanner] Skipping logFoodUsage for bulk AI planner food (user_created):', food.name);
@@ -820,12 +856,17 @@ export default function AIMealPlannerScreen() {
 
 
 
+      await review.check();
+      completed=true;
       showToast(t('aiMealPlanner.allAddedToMealToast', { meal: mealLabel }));
     } catch (e: any) {
       console.error('[AIMealPlanner] handleAddAllToMeal error:', e?.message || e);
-      Alert.alert(t('common.error'), t('aiMealPlanner.failedToAddFoods'));
+      if (isMounted.current) Alert.alert(t('common.error'), attempted ? (i18n.language.startsWith('es') ? 'Puede que se hayan guardado cambios parciales. Revisa tu diario y tus planes antes de repetir.' : 'Some changes may have been saved. Review your diary and plans before trying again.') : t('aiMealPlanner.failedToAddFoods'));
+    } finally {
+      generationBusy.current=false;
+      if (attempted && !completed) writeBlocked.current=true;
     }
-  }, [generatedPlan, showToast, t]);
+  }, [capturePlannerWrite, generatedPlan, showToast, t]);
 
   // ── Recipe modal ────────────────────────────────────────────────────────────
 
@@ -986,7 +1027,11 @@ export default function AIMealPlannerScreen() {
   }, [generatedPlan]);
 
   const handleReplace = useCallback(async () => {
-    if (!replaceTarget || !replaceText.trim() || !userGoals) return;
+    if (!replaceTarget || !replaceText.trim() || !userGoals || !userPreferences || !goalContext.current || generationBusy.current) return;
+    generationBusy.current=true;
+    const context=goalContext.current;
+    const epoch=generationEpoch.current;
+    const current=()=>isMounted.current && epoch===generationEpoch.current;
     const { mealType } = replaceTarget;
     console.log('[AIMealPlanner] Replace submit pressed, mealType:', mealType, 'preference:', replaceText.trim());
     setReplacing(true);
@@ -994,11 +1039,9 @@ export default function AIMealPlannerScreen() {
     const prompt = `REPLACE_MEAL: Replace the ${mealType} meal with something different. User preference: ${replaceText.trim()}. Return the COMPLETE updated plan in the same JSON format, keeping all other meals exactly the same, only replacing the ${mealType} items and dish_description.`;
     try {
       console.log('[AIMealPlanner] invoking generate-meal-plan for replace, prompt:', prompt, 'language:', i18n.language);
-      const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
-        body: { messages: [{ role: 'user', content: prompt }], userGoals, language: i18n.language },
-      });
-      if (!isMounted.current) return;
-      if (error) throw new Error(error.message);
+      const data = await invokeAcceptedGoalGeneration('generate-meal-plan',context.owner,context.snapshot,
+        {messages:[{role:'user',content:prompt}],userGoals,userPreferences,language:i18n.language},current);
+      if (!current()) return;
 
       console.log('[AIMealPlanner] replace response, readyToSave:', data?.readyToSave);
 
@@ -1015,12 +1058,15 @@ export default function AIMealPlannerScreen() {
         throw new Error(t('aiMealPlanner.couldNotReplaceMeal'));
       }
     } catch (e: any) {
+      if (!current()) return;
+      if (/goal_changed|goal_source_unavailable|active_goal_unavailable|account_changed/.test(String(e?.message))) { goalContext.current=null; setUserGoals(null); setUserPreferences(null); setGeneratedPlan(null); setStep('preferences'); }
       console.error('[AIMealPlanner] handleReplace error:', e?.message || e);
       Alert.alert(t('common.error'), e?.message || t('aiMealPlanner.failedToReplaceMeal'));
     } finally {
-      if (isMounted.current) setReplacing(false);
+      generationBusy.current=false;
+      if (current()) setReplacing(false);
     }
-  }, [replaceTarget, replaceText, userGoals, showToast, t]);
+  }, [replaceTarget, replaceText, userGoals, userPreferences, showToast, t]);
 
   // ── Save plan ───────────────────────────────────────────────────────────────
 
@@ -1033,11 +1079,18 @@ export default function AIMealPlannerScreen() {
   const handleSavePlan = useCallback(async () => {
     if (!generatedPlan || !planName.trim()) return;
     console.log('[AIMealPlanner] handleSavePlan called, planName:', planName.trim());
+    if (generationBusy.current || writeBlocked.current) return;
+    generationBusy.current=true;
+    let attempted=false, completed=false;
     setSaving(true);
     try {
+      const review=capturePlannerWrite();
+      await review.check();
+      const guard={expectedUserId:review.owner,isCurrent:review.isCurrent};
       const dateStr = getTodayStr();
       console.log('[AIMealPlanner] creating meal plan:', planName.trim(), dateStr);
-      const newPlan = await createMealPlan({ name: planName.trim(), start_date: dateStr, end_date: dateStr });
+      attempted=true;
+      const newPlan = await createMealPlan({ name: planName.trim(), start_date: dateStr, end_date: dateStr },guard);
       console.log('[AIMealPlanner] meal plan created:', newPlan.id);
 
       const mealTypes: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -1046,6 +1099,7 @@ export default function AIMealPlannerScreen() {
         for (const food of foods) {
           const unit = food.serving_unit || 'g';
           console.log('[AIMealPlanner] adding meal plan item:', food.name, 'to', mealType, 'unit:', unit);
+          await review.check();
           await addMealPlanItem(newPlan.id, {
             date: dateStr,
             meal_type: mealType,
@@ -1053,29 +1107,33 @@ export default function AIMealPlannerScreen() {
             brand: food.brand || undefined,
             quantity: food.serving_size > 0 ? food.serving_size : 1,
             serving_unit: unit,
-            serving_description: food.serving_description || null,
+            serving_description: food.serving_description || undefined,
             calories: Math.round(Number(food.calories) || 0),
             protein: Math.round(Number(food.protein) || 0),
             carbs: Math.round(Number(food.carbs) || 0),
             fats: Math.round(Number(food.fats) || 0),
             fiber: Math.round(Number(food.fiber) || 0),
-            grams: unit === 'g' && food.serving_size > 0 ? food.serving_size : null,
+            grams: unit === 'g' && food.serving_size > 0 ? food.serving_size : undefined,
             dish_description: getMealDescription(generatedPlan[mealType]) || undefined,
             recipe_url: getMealRecipeUrl(generatedPlan[mealType]) || undefined,
-          });
+          },guard);
         }
       }
 
       console.log('[AIMealPlanner] all items saved, navigating to plan detail:', newPlan.id);
+      await review.check();
+      completed=true;
       setSaveModalVisible(false);
       router.replace({ pathname: '/meal-plan-detail', params: { planId: newPlan.id } });
     } catch (e: any) {
       console.error('[AIMealPlanner] handleSavePlan error:', e?.message || e);
-      Alert.alert(t('common.error'), t('aiMealPlanner.failedToSave'));
+      if (isMounted.current) Alert.alert(t('common.error'), attempted ? (i18n.language.startsWith('es') ? 'Puede que se hayan guardado cambios parciales. Revisa tu diario y tus planes antes de repetir.' : 'Some changes may have been saved. Review your diary and plans before trying again.') : t('aiMealPlanner.failedToSave'));
     } finally {
+      generationBusy.current=false;
+      if (attempted && !completed) writeBlocked.current=true;
       if (isMounted.current) setSaving(false);
     }
-  }, [generatedPlan, planName, router, t]);
+  }, [capturePlannerWrite, generatedPlan, planName, router, t]);
 
   // ── Derived values ──────────────────────────────────────────────────────────
 

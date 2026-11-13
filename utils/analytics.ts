@@ -1,3 +1,4 @@
+import { toJson } from './jsonValue';
 import { supabase } from '@/lib/supabase/client';
 
 export type AnalyticsEvent =
@@ -11,12 +12,12 @@ export async function trackEvent(
   properties?: Record<string, unknown>
 ): Promise<void> {
   try {
-    console.log('[Analytics] Tracking event:', event, properties ?? {});
+    console.log('[Analytics] Tracking event:', event);
     const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase.from('analytics_events').insert({
       user_id: user?.id ?? null,
       event_name: event,
-      properties: properties ?? null,
+      properties: toJson(properties ?? null),
     });
     if (error) {
       console.warn('[Analytics] Insert error for event', event, error);

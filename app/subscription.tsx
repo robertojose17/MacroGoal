@@ -38,6 +38,7 @@ import { capturePremiumFlow, newCheckpointId } from '@/utils/premiumCheckpointCo
 import type { Attribution } from '@/utils/premiumCheckpointContract';
 import { checkpoint, checkpointActor, displayedPackage, purchaseAttribution, observedPurchaseError, actorStillCurrent, transactionCandidate } from '@/utils/premiumCheckpoints';
 import { usePremiumCheckpointVisibility } from '@/hooks/usePremiumCheckpointVisibility';
+import type { PremiumMeasurable } from '@/components/PremiumCheckpointViewport';
 
 function loadPurchases(): { Purchases: any; LOG_LEVEL: any } {
   if (!isPurchasesAvailable) return { Purchases: null, LOG_LEVEL: null };
@@ -65,12 +66,12 @@ type FeatureKey = 'snap' | 'mealplans' | 'progress' | 'noads' | 'grocery';
 interface FeatureItem {
   key: FeatureKey;
   icon_ios: string;
-  icon_android: keyof typeof import('@expo/vector-icons/MaterialIcons').glyphMap;
+  icon_android: React.ComponentProps<typeof IconSymbol>['android_material_icon_name'];
   label: string;
   description: string;
 }
 
-const ICON_GRID_ITEM_KEYS: { key: string; icon_ios: string; icon_android: string; labelKey: string; description: string }[] = [
+const ICON_GRID_ITEM_KEYS: { key: string; icon_ios: string; icon_android: React.ComponentProps<typeof IconSymbol>['android_material_icon_name']; labelKey: string; description: string }[] = [
   {
     key: 'snap',
     icon_ios: 'camera.fill',
@@ -131,7 +132,7 @@ export default function SubscriptionScreen() {
   const purchaseBusyRef = React.useRef(false);
   const restoreBusyRef = React.useRef(false);
   const configuredActorRef = React.useRef<string | null>(null);
-  const offerViewport = React.useRef<ScrollView | null>(null);
+  const offerViewport = React.useRef<PremiumMeasurable | null>(null);
   const observeOffer = usePremiumCheckpointVisibility(checkpointFlow,
     Platform.OS !== 'web' && !loading && !premiumLoading && !errorMessage && !isPremium && !purchasing && !showSuccessModal, offerViewport);
   const cardRef = (pkg: PurchasesPackage) => {
@@ -582,7 +583,7 @@ export default function SubscriptionScreen() {
     );
   }
 
-  const PREMIUM_HERO_FEATURES = [
+  const PREMIUM_HERO_FEATURES: { ios: string; android: React.ComponentProps<typeof IconSymbol>['android_material_icon_name']; label: string; desc: string }[] = [
     { ios: 'camera.fill', android: 'camera-alt', label: t('localization.shared.hero0'), desc: t('localization.shared.hero1') },
     { ios: 'list.clipboard.fill', android: 'assignment', label: t('localization.shared.hero2'), desc: t('localization.shared.hero3') },
     { ios: 'cart.fill', android: 'shopping-cart', label: t('localization.shared.hero4'), desc: t('localization.shared.hero5') },
@@ -805,7 +806,7 @@ export default function SubscriptionScreen() {
     <>
       <View style={styles.newRoot}>
         <StatusBar style="light" />
-        <ScrollView ref={offerViewport} showsVerticalScrollIndicator={false} bounces={false}>
+        <ScrollView ref={node => { offerViewport.current = node?.getNativeScrollRef() ?? null; }} showsVerticalScrollIndicator={false} bounces={false}>
 
           {/* ── 1. HERO ── */}
           <View style={{ backgroundColor: '#000', flexDirection: 'row', paddingBottom: 0 }}>

@@ -104,15 +104,27 @@ export default function CoachConversationActions(props:Props){
   {action(say('View Details','Ver detalles'),()=>{void openRecommendation(o.id,diaryMealTypeForLocalTime());},gate!=='ready'||pending)}
   {action(say('Add to diary','Añadir al diario'),()=>{void openRecommendation(o.id,diaryMealTypeForLocalTime());},gate!=='ready'||pending||Object.values(o.nutrition.values).some(x=>x===null))}
  </View>);
- if(props.active===false&&recommendationCards.length)return <View style={s.container}>{recommendationCards}{busy&&<ActivityIndicator/>}</View>;
+ const resumeControl=props.onResume&&savedOptions&&props.showRecovery!==false
+  ?action(say('Resume these meal options','Retomar estas opciones de comida'),()=>props.onResume?.(),gate!=='ready'||pending):null;
+ if(props.active===false&&recommendationCards.length)return <View style={s.container}>{recommendationCards}{resumeControl}{busy&&<ActivityIndicator/>}</View>;
  if(props.active===false)return ready?.options.length?<View style={s.container}>{ready.options.map(o=><View key={o.id} style={s.card}>
   <Text style={s.title}>{o.name}</Text><Text style={s.body}>{o.nutrition.basis.label}</Text>
   <Text style={s.body}>{o.nutrition.values.calories??'-'} kcal · {o.nutrition.values.protein??'-'} g {say('protein','proteína')}</Text>
   {action(say('View Details','Ver detalles'),()=>{void review(ready,o.id,diaryMealTypeForLocalTime());},gate!=='ready')}
    {action(say('Add to diary','Añadir al diario'),()=>{void review(ready,o.id,diaryMealTypeForLocalTime());},gate!=='ready'||Object.values(o.nutrition.values).some(x=>x===null))}
- </View>)}</View>:null;
+ </View>)}{resumeControl}</View>:resumeControl?<View style={s.container}>{resumeControl}</View>:null;
  return <View style={s.container}>
   {recommendationCards}
+  {savedOptions&&!ready&&!pending&&props.showRecovery!==false&&action(say('Resume meal search','Retomar búsqueda de comida'),()=>{void run('restore');},gate!=='ready')}
+  {h&&!ready&&constraintsLoaded&&constraints&&<>
+    {action(say('Change preferences','Cambiar preferencias'),()=>setShowPreferences(value=>!value),gate!=='ready'||pending)}
+    {showPreferences&&<View style={s.details}>
+      {(['exclusions','allergens','dietary_preferences'] as const).map(key=>constraints[key].map(value=><React.Fragment key={`${key}:${value}`}>
+        {action(say(`Remove: ${value}`,`Quitar: ${value}`),()=>setConstraints(current=>current?{...current,[key]:current[key].filter(item=>item!==value)}:null),gate!=='ready'||pending)}
+      </React.Fragment>))}
+      {action(say('Done','Listo'),()=>setShowPreferences(false))}
+    </View>}
+  </>}
   {h?.value.status==='clarify'&&props.onPrompt&&<View style={s.row}>{coachMealQuickReplies(h.value,es).map(reply=><React.Fragment key={reply}>{action(reply,()=>props.onPrompt?.(reply),gate!=='ready'||pending||busy)}</React.Fragment>)}</View>}
   {!props.hasConversation&&!h&&!result&&<><Text style={s.body}>{say('Hi, I’m your Coach. Tell me what you feel like eating, or what you’d like help with today.','Hola, soy tu Coach. Cuéntame qué te apetece comer o en qué quieres ayuda hoy.')}</Text>{props.isPremium&&!props.premiumLoading&&!props.premiumError&&<View style={s.row}>{action(say('Choose something to eat','Elegir qué comer'),()=>props.onPrompt?.(say('Help me choose something to eat.','Ayúdame a elegir qué comer.')))}{action(say('Review my day','Revisar mi día'),()=>props.onPrompt?.(say('Help me review my day.','Ayúdame a revisar mi día.')))}</View>}</>}
   {props.premiumLoading&&<Text style={s.muted}>{say('Checking access…','Verificando acceso…')}</Text>}

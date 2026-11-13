@@ -60,7 +60,7 @@ export interface ShareableProgressCardProps {
   onAfterTransformChange?: (scale: number, translateX: number, translateY: number) => void;
 }
 
-function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+function resolveImageSource(source: string | number | ImageSourcePropType | null | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
   if (typeof source === 'string') return { uri: source };
   return source as ImageSourcePropType;

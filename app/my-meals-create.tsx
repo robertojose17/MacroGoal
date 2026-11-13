@@ -1,3 +1,4 @@
+import { prepareSavedMealDraftItems } from '@/utils/savedMealDraftContract';
 
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, ActivityIndicator, Platform } from 'react-native';
@@ -190,6 +191,7 @@ export default function MyMealsCreateScreen() {
     setSaving(true);
 
     try {
+      const preparedItems = prepareSavedMealDraftItems(draftItems);
       // STEP 1: Get user (already done above for logging)
       console.log('[MyMealsCreate] STEP 1: Getting user...');
       
@@ -202,6 +204,8 @@ export default function MyMealsCreateScreen() {
 
       console.log('[MyMealsCreate] ✅ User found:', user.id);
 
+      const currentActor = await supabase.auth.getUser();
+      if (currentActor.error || currentActor.data.user?.id !== user.id) throw new Error('Account changed. Draft preserved.');
       // STEP 3: Create saved meal
       console.log('[MyMealsCreate] STEP 3: Creating saved meal...');
 
@@ -243,27 +247,7 @@ export default function MyMealsCreateScreen() {
       // STEP 4: Create saved meal items
       console.log('[MyMealsCreate] STEP 4: Creating saved meal items...');
 
-      const itemsToInsert = draftItems.map((item, index) => {
-        console.log(`[MyMealsCreate] ========== ITEM ${index + 1} ==========`);
-        console.log('[MyMealsCreate] food_id:', item.food_id);
-        console.log('[MyMealsCreate] food_name:', item.food_name);
-
-        return {
-          saved_meal_id: savedMeal.id,
-          food_id: item.food_id || null,
-          food_item_id: item.food_item_id || null,
-          food_name: item.food_name,
-          food_brand: item.food_brand || null,
-          serving_amount: item.serving_amount,
-          serving_unit: item.serving_unit,
-          servings_count: item.servings_count,
-          calories: item.calories,
-          protein: item.protein,
-          carbs: item.carbs,
-          fat: item.fats,
-          fiber: item.fiber,
-        };
-      });
+      const itemsToInsert = preparedItems.map(item => ({ ...item, saved_meal_id: savedMeal.id }));
 
       const { data: insertedItems, error: itemsError } = await supabase
         .from(TABLE_SAVED_MEAL_ITEMS)
@@ -273,11 +257,9 @@ export default function MyMealsCreateScreen() {
       if (itemsError) {
         console.error('[MyMealsCreate] ❌ ERROR CREATING SAVED MEAL ITEMS:', itemsError);
         
-        // Rollback: delete the saved meal
-        console.log('[MyMealsCreate] Rolling back: deleting saved meal', savedMeal.id);
-        await supabase.from(TABLE_SAVED_MEALS).delete().eq('id', savedMeal.id);
-        
-        Alert.alert(t('common.error'), t('myMealsCreate.failedToSaveItems', { message: itemsError.message }));
+        // A failed acknowledgement cannot prove the child insert rolled back.
+        // Preserve both remote rows and the draft for explicit reconciliation.
+        Alert.alert(t('common.error'), 'The saved meal may be incomplete. Your draft was preserved. Review saved meals before retrying.');
         setSaving(false);
         return;
       }

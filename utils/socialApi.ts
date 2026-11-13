@@ -1,3 +1,4 @@
+import { toJson } from './jsonValue';
 import { withCommunityPrivacyScope } from '@/features/communityPrivacyV2/communityPrivacyRollout';
 import type { CommunityPrivacyActivation, CommunityPrivacyScope } from '@/features/communityPrivacyV2/communityPrivacyRollout';
 import { remainingCommunityReads, acceptedConnectionCount } from '@/features/communityPrivacyV2Compatibility/configuredRemainingReads';
@@ -316,8 +317,8 @@ export async function createPost(post: CreatePostInput, publicationId?: string):
       meal_carbs: post.meal_carbs ?? null,
       meal_fat: post.meal_fat ?? null,
       meal_recipe_id: post.meal_recipe_id ?? null,
-      meal_recipe_data: post.meal_recipe_data ?? null,
-      progress_stats: post.progress_stats ?? null,
+      meal_recipe_data: toJson(post.meal_recipe_data ?? null),
+      progress_stats: toJson(post.progress_stats ?? null),
       auto_post_type: post.auto_post_type ?? null,
       auto_post_date: post.auto_post_date ?? null,
       streak_days: post.streak_days ?? null,
@@ -472,34 +473,30 @@ export async function fetchComments(post_id: string): Promise<Comment[]> {
 
 // ─── Saves — direct Supabase + SECURITY DEFINER RPCs ─────────────────────────
 
-export async function savePost(post_id: string): Promise<{ saved: boolean; saves_count: number }> {
+async function changePostSaved(post_id: string, saved: boolean, expectedUserId?: string): Promise<{ saved: boolean; saves_count: number }> {
   return withCommunityPrivacyScope(async scope => {
-  console.log('[SocialApi] savePost — post_id:', post_id);
-  const { data: { session } } = await supabase.auth.getSession();
-  scope.assertActor(session?.user?.id);
-  if (!session?.user) throw new Error('Not authenticated');
-
-  await scope.request(supabase.from('social_post_saves').upsert({ post_id, user_id: session.user.id }));
-  const { data: newCount } = await scope.request(supabase.rpc('increment_saves', { post_id }));
-  console.log('[SocialApi] savePost — saves_count:', newCount);
-  return { saved: true, saves_count: (newCount as number) ?? 1 };
-
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    scope.assertActor(user?.id);
+    if (authError || !user) throw new Error('Not authenticated');
+    if (expectedUserId && user.id !== expectedUserId) throw new Error('Community actor changed');
+    const request = saved
+      ? supabase.from('social_post_saves').upsert({ post_id, user_id: user.id })
+      : supabase.from('social_post_saves').delete().eq('post_id', post_id).eq('user_id', user.id);
+    const { error: writeError } = await scope.request(request);
+    if (writeError) throw writeError;
+    // These remain two operations, not an atomic bookmark + counter transaction.
+    // A failed second operation must never be presented as confirmed success.
+    const { data: count, error: countError } = await scope.request(supabase.rpc(saved ? 'increment_saves' : 'decrement_saves', { post_id }));
+    if (countError) throw new Error('Bookmark may have changed, but its count could not be verified. Refresh before retrying.');
+    if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) throw new Error('Bookmark changed but its count is unavailable. Refresh before retrying.');
+    return { saved, saves_count: count };
   });
 }
-
-export async function unsavePost(post_id: string): Promise<{ saved: boolean; saves_count: number }> {
-  return withCommunityPrivacyScope(async scope => {
-  console.log('[SocialApi] unsavePost — post_id:', post_id);
-  const { data: { session } } = await supabase.auth.getSession();
-  scope.assertActor(session?.user?.id);
-  if (!session?.user) throw new Error('Not authenticated');
-
-  await scope.request(supabase.from('social_post_saves').delete().eq('post_id', post_id).eq('user_id', session.user.id));
-  const { data: newCount } = await scope.request(supabase.rpc('decrement_saves', { post_id }));
-  console.log('[SocialApi] unsavePost — saves_count:', newCount);
-  return { saved: false, saves_count: (newCount as number) ?? 0 };
-
-  });
+export async function savePost(post_id: string, expectedUserId?: string): Promise<{ saved: boolean; saves_count: number }> {
+  return changePostSaved(post_id, true, expectedUserId);
+}
+export async function unsavePost(post_id: string, expectedUserId?: string): Promise<{ saved: boolean; saves_count: number }> {
+  return changePostSaved(post_id, false, expectedUserId);
 }
 
 // ─── Comment Edit / Delete ────────────────────────────────────────────────────

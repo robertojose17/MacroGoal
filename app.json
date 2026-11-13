@@ -63,6 +63,12 @@
       "expo-router",
       "expo-web-browser",
       [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Macro Goal uses your camera to scan barcodes on food packaging so you can quickly add accurate nutrition information."

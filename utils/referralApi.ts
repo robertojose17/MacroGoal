@@ -82,7 +82,9 @@ export async function getReferralStats(): Promise<{
 
   const totalReferrals = referrals?.length ?? 0;
   const premiumConverts = referrals?.filter((r: any) => r.converted_to_premium).length ?? 0;
-  const xpEarned = totalReferrals * 1000;
+  const { data: ledger, error: ledgerError } = await supabase.from('xp_ledger').select('xp_amount').eq('user_id', user.id).eq('event_type', 'referral_completed');
+  if (ledgerError) throw new Error('Referral reward total is unavailable');
+  const xpEarned = (ledger ?? []).reduce((sum, row) => sum + row.xp_amount, 0);
 
   const referralList = (referrals ?? []).map((r: any) => ({
     username: r.users?.username || 'A friend',
@@ -110,7 +112,7 @@ export async function getReferralStats(): Promise<{
   };
 }
 
-export async function applyReferralCode(code: string): Promise<{ success: boolean; error?: string }> {
+export async function applyReferralCode(code: string): Promise<{ success: boolean; error?: string; rewardStatus?: 'pending_verification' }> {
   console.log('[referralApi] applyReferralCode called with code:', code);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: 'Not logged in' };
@@ -166,55 +168,10 @@ export async function applyReferralCode(code: string): Promise<{ success: boolea
 
 
 
-  // Award XP to referrer via direct DB write (different user — cannot use JWT-bound edge fn)
-  try {
-    console.log('[referralApi] awarding XP to referrer user_id:', rc.user_id);
-    const today = new Date().toISOString().slice(0, 10);
-    // Use a stable source_id so this is idempotent (unique constraint on xp_ledger)
-    const referrerSourceId = `referral_completed:${referral.id}:referrer`;
-
-    // 1. Insert into xp_ledger for history/dedup
-    const { error: ledgerError } = await supabase
-      .from('xp_ledger')
-      .insert({
-        user_id: rc.user_id,
-        event_type: 'referral_completed',
-        source_id: referrerSourceId,
-        xp_awarded: 1000,
-        date: today,
-        metadata: { xp_reward: 1000, referred_user_id: user.id, referral_id: referral.id },
-      });
-
-    if (ledgerError && ledgerError.code !== '23505') {
-      // 23505 = unique violation = already awarded, that's fine
-      console.warn('[referralApi] xp_ledger insert for referrer failed:', ledgerError);
-    } else {
-      // 2. Increment referrer's total_xp in user_xp (read-then-write to avoid overwrite)
-      const { data: currentXp } = await supabase
-        .from('user_xp')
-        .select('total_xp')
-        .eq('user_id', rc.user_id)
-        .maybeSingle();
-
-      const newTotal = (Number(currentXp?.total_xp) || 0) + 1000;
-      const { error: xpError } = await supabase
-        .from('user_xp')
-        .upsert(
-          { user_id: rc.user_id, total_xp: newTotal },
-          { onConflict: 'user_id' }
-        );
-
-      if (xpError) {
-        console.warn('[referralApi] user_xp upsert for referrer failed:', xpError);
-      } else {
-        console.log('[referralApi] XP awarded to referrer, new total_xp:', newTotal);
-      }
-    }
-  } catch (e) {
-    console.warn('[referralApi] XP award for referrer failed (non-fatal):', e);
-  }
-
-  return { success: true };
+  // The code was applied above. XP is a separate server-authorized transaction;
+  // never award another actor's XP from this client or fabricate missing columns.
+  console.warn('[referralApi] Referral applied; reward settlement is not verified.');
+  return { success: true, rewardStatus: 'pending_verification' };
 }
 
 export async function submitAffiliateApplication(data: {

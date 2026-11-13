@@ -1,3 +1,4 @@
+import { knownNonnegative } from '@/utils/savedMealDraftContract';
 
 import React, { useState, useCallback, useEffect } from 'react';
 import {
@@ -135,14 +136,11 @@ export default function RecipeEditScreen() {
 
       // Parse ingredients — stored as [{name, amount}] or [{name, grams, kcal, protein, carbs, fat}]
       if (Array.isArray(recipe.ingredients)) {
-        const parsed: Ingredient[] = recipe.ingredients.map((item: any) => ({
-          name: item.name || '',
-          grams: Number(item.grams) || 0,
-          kcal: Number(item.kcal) || 0,
-          protein: Number(item.protein) || 0,
-          carbs: Number(item.carbs) || 0,
-          fat: Number(item.fat) || 0,
-        }));
+        const parsed: Ingredient[] = [];
+        for (const item of recipe.ingredients) {
+          if (!item || typeof item !== 'object' || Array.isArray(item) || typeof item.name !== 'string' || !knownNonnegative(item.grams) || !knownNonnegative(item.kcal) || !knownNonnegative(item.protein) || !knownNonnegative(item.carbs) || !knownNonnegative(item.fat)) throw new Error('Ingredient nutrition is unavailable. Review the original recipe before editing.');
+          parsed.push({ name: item.name, grams: item.grams, kcal: item.kcal, protein: item.protein, carbs: item.carbs, fat: item.fat });
+        }
         setIngredients(parsed);
       }
 
@@ -251,17 +249,18 @@ export default function RecipeEditScreen() {
       return;
     }
     const kcalNum = parseFloat(qaKcal);
-    if (!qaKcal.trim() || isNaN(kcalNum) || kcalNum <= 0) {
+    if (!qaKcal.trim() || isNaN(kcalNum) || kcalNum < 0) {
       Alert.alert(t('recipeEdit.required'), t('recipeEdit.enterCalories'));
       return;
     }
+    if (![qaGrams, qaKcal, qaProtein, qaCarbs, qaFat].every(value => value.trim() !== '' && knownNonnegative(Number(value)))) { Alert.alert(t('common.error'), 'Enter known amounts for every nutrient, including explicit zero when appropriate.'); return; }
     const ing: Ingredient = {
       name: trimmedName,
-      grams: parseFloat(qaGrams) || 0,
+      grams: Number(qaGrams),
       kcal: kcalNum,
-      protein: parseFloat(qaProtein) || 0,
-      carbs: parseFloat(qaCarbs) || 0,
-      fat: parseFloat(qaFat) || 0,
+      protein: Number(qaProtein),
+      carbs: Number(qaCarbs),
+      fat: Number(qaFat),
     };
     console.log('[RecipeEdit] Quick Add ingredient submitted:', ing.name, 'kcal:', ing.kcal);
     setIngredients(prev => [...prev, ing]);
@@ -286,6 +285,7 @@ export default function RecipeEditScreen() {
       return;
     }
 
+    if (!ingredients.every(i => [i.grams, i.kcal, i.protein, i.carbs, i.fat].every(knownNonnegative))) { Alert.alert(t('common.error'), 'Review all ingredient nutrition before saving.'); return; }
     setSaving(true);
     try {
       let thumbnailUrl: string | null = existingThumbnail;
@@ -306,23 +306,28 @@ export default function RecipeEditScreen() {
 
       const payload = {
         name: name.trim(),
-        description: description.trim() || null,
+        description: description.trim(),
         meal_type: mealType,
         cuisine: cuisine.trim() || 'Other',
-        calories: Math.round(totalKcal) || null,
-        protein: Math.round(totalProtein) || null,
-        carbs: Math.round(totalCarbs) || null,
-        fat: Math.round(totalFat) || null,
+        calories: Math.round(totalKcal),
+        protein: Math.round(totalProtein),
+        carbs: Math.round(totalCarbs),
+        fat: Math.round(totalFat),
         ingredients: ingredientsPayload.length > 0 ? ingredientsPayload : null,
         instructions: instructions.trim() || null,
         thumbnail_url: thumbnailUrl,
       };
 
+      const auth = await supabase.auth.getUser();
+      if (auth.error || !auth.data.user) throw new Error('Account unavailable');
       console.log('[RecipeEdit] Updating recipe:', id, 'name:', payload.name);
       const { error } = await supabase
         .from('meal_recipes')
         .update(payload)
-        .eq('id', id);
+        .eq('id', id)
+        .eq('created_by', auth.data.user.id)
+        .select('id')
+        .single();
 
       if (error) {
         console.error('[RecipeEdit] Error updating recipe:', error);

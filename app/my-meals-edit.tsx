@@ -1,3 +1,4 @@
+import { prepareSavedMealDraftItems } from '@/utils/savedMealDraftContract';
 
 import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, ActivityIndicator } from 'react-native';
@@ -164,22 +165,14 @@ export default function MyMealsEditScreen() {
 
       console.log('[MyMealsEdit] Flushing', draftItems.length, 'draft item(s) into saved_meal_items for meal:', mealId);
 
-      const itemsToInsert = draftItems.map(item => ({
-        saved_meal_id: mealId,
-        food_id: item.food_id || null,
-        food_item_id: item.food_item_id || null,
-        food_name: item.food_name,
-        food_brand: item.food_brand || null,
-        serving_amount: item.serving_amount,
-        serving_unit: item.serving_unit,
-        servings_count: item.servings_count,
-        calories: item.calories,
-        protein: item.protein,
-        carbs: item.carbs,
-        fat: item.fats,
-        fiber: item.fiber,
-      }));
+      const itemsToInsert = prepareSavedMealDraftItems(draftItems).map(item => ({ ...item, saved_meal_id: mealId }));
 
+      const auth = await supabase.auth.getUser();
+      if (auth.error || !auth.data.user) throw new Error('Account unavailable');
+      const owner = auth.data.user.id;
+      const parent = await supabase.from(TABLE_SAVED_MEALS).select('id').eq('id', mealId).eq('user_id', owner).maybeSingle();
+      const actor = await supabase.auth.getUser();
+      if (parent.error || !parent.data || actor.error || actor.data.user?.id !== owner) throw new Error('Account or saved meal changed. Draft preserved.');
       const { error } = await supabase
         .from(TABLE_SAVED_MEAL_ITEMS)
         .insert(itemsToInsert);
@@ -187,6 +180,7 @@ export default function MyMealsEditScreen() {
       if (error) {
         console.error('[MyMealsEdit] Error inserting draft items into saved_meal_items:', error);
         Alert.alert(t('common.error'), t('myMealsEdit.failedToAddFoods'));
+        return;
       } else {
         console.log('[MyMealsEdit] Draft items flushed successfully');
       }

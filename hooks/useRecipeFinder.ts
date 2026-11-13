@@ -1,10 +1,12 @@
+import { acceptedGoalSnapshot, readActiveGoal } from '@/utils/activeGoal';
+import { subscribeGoalChanged } from '@/utils/goalChangeEvents';
+import { invokeAcceptedGoalGeneration } from '@/utils/acceptedGoalGeneration';
 import { useTranslation } from 'react-i18next';
 /**
  * useRecipeFinder — manages recipe search, daily suggestions, and saved recipes
  */
 
-import { useState, useCallback, useRef } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 
 export type RecipeIngredient = {
@@ -23,6 +25,7 @@ export type RecipeReview = {
 };
 
 export type RecipeResult = {
+  click_count?: number;
   id: string;
   name: string;
   description: string;
@@ -59,7 +62,6 @@ export type UserGoals = {
   remainingProtein?: number;
 };
 
-const SUGGESTIONS_KEY_PREFIX = '@recipe_suggestions_';
 
 function normalizeRecipes(raw: any[]): RecipeResult[] {
   return raw.map((r: any, idx: number) => ({
@@ -134,6 +136,18 @@ export function useRecipeFinder() {
   const [savedRecipes, setSavedRecipes] = useState<RecipeResult[]>([]);
 
   const loadingRef = useRef(false);
+  const suggestionsEpoch = useRef(0);
+  const suggestionsOwner = useRef<string | null>(null);
+  useEffect(() => {
+    const invalidate = () => { suggestionsEpoch.current++; setDailySuggestions(null); setSuggestionsLoading(false); };
+    const unsubscribe = subscribeGoalChanged(owner => { if (!owner || owner === suggestionsOwner.current) invalidate(); });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const owner = session?.user.id ?? null;
+      if (owner === suggestionsOwner.current) return;
+      suggestionsOwner.current = owner; invalidate(); setSavedRecipes([]);
+    });
+    return () => { invalidate(); unsubscribe(); subscription.unsubscribe(); };
+  }, []);
 
   // ─── Browse feed state ───────────────────────────────────────────────────────
   const [browseResults, setBrowseResults] = useState<RecipeResult[]>([]);
@@ -201,60 +215,32 @@ export function useRecipeFinder() {
 
   // ─── Daily suggestions ───────────────────────────────────────────────────────
   const loadDailySuggestions = useCallback(async (
-    userGoals: UserGoals,
-    forceRefresh = false,
+    _userGoals: UserGoals, _forceRefresh = false,
   ): Promise<void> => {
     if (loadingRef.current) return;
-
-    const today = new Date().toISOString().split('T')[0];
-    const cacheKey = `${SUGGESTIONS_KEY_PREFIX}${today}`;
-
-    if (!forceRefresh) {
-      try {
-        const cached = await AsyncStorage.getItem(cacheKey);
-        if (cached) {
-          const parsed: DailySuggestions = JSON.parse(cached);
-          if (parsed.generated_date === today) {
-            console.log('[useRecipeFinder] loadDailySuggestions — using cached suggestions');
-            setDailySuggestions(parsed);
-            return;
-          }
-        }
-      } catch {}
-    }
-
     loadingRef.current = true;
-    setSuggestionsLoading(true);
-    console.log('[useRecipeFinder] loadDailySuggestions — invoking recipe-finder edge function');
-
+    const epoch = suggestionsEpoch.current;
+    const current = () => epoch === suggestionsEpoch.current;
+    setSuggestionsLoading(true); setDailySuggestions(null);
     try {
-      const { data, error } = await supabase.functions.invoke('recipe-finder', {
-        body: {
-          query: 'healthy recipes',
-          type: 'suggestions',
-          userGoals: {
-            ...userGoals,
-            remainingProtein: userGoals.remainingProtein ?? Math.round(userGoals.protein * 0.5),
-          },
-        },
-      });
-      if (error) throw new Error(error.message);
-      console.log('[useRecipeFinder] loadDailySuggestions — response received, duration_ms:', data?.duration_ms);
-      const recipes = normalizeRecipes(data?.recipes || []);
-      console.log('[useRecipeFinder] loadDailySuggestions — parsed', recipes.length, 'suggestions');
-
-      const contextSummary = userGoals.remainingCalories > 0
-        ? `Suggestions based on your ${userGoals.remainingCalories} remaining calories`
-        : 'Suggested recipes for your goals';
-
-      const suggestions: DailySuggestions = { recipes, generated_date: today, context_summary: contextSummary };
-      setDailySuggestions(suggestions);
-      try { await AsyncStorage.setItem(cacheKey, JSON.stringify(suggestions)); } catch {}
-    } catch (e: any) {
-      console.error('[useRecipeFinder] loadDailySuggestions error:', e?.message);
+      const { data, error } = await supabase.auth.getSession();
+      if (!current()) return;
+      const owner = data.session?.user.id;
+      if (error || !owner) throw Error('account_changed');
+      suggestionsOwner.current = owner;
+      const expected = acceptedGoalSnapshot(await readActiveGoal(owner));
+      if (!current()) return;
+      const result = await invokeAcceptedGoalGeneration('recipe-finder', owner, expected,
+        {query:'healthy recipes',type:'suggestions'}, current);
+      if (!current()) return;
+      const recipes = normalizeRecipes(Array.isArray(result.recipes) ? result.recipes : []);
+      setDailySuggestions({ recipes, generated_date:new Date().toISOString().slice(0,10), context_summary:'Suggested recipes for your accepted goals' });
+      // Legacy day-only cache is neither read nor written: it is not owner/goal-bound.
+    } catch (e) {
+      if (current()) setSearchError(e instanceof Error ? e.message : 'Recipe suggestions unavailable');
     } finally {
-      setSuggestionsLoading(false);
       loadingRef.current = false;
+      if (current()) setSuggestionsLoading(false);
     }
   }, []);
 

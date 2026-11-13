@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,8 +15,7 @@ import {
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { supabase } from '@/lib/supabase/client';
-import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateAge } from '@/utils/calculations';
+import { useAcceptedGoalEditor } from '@/hooks/useAcceptedGoalEditor';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
@@ -25,166 +24,39 @@ export default function CustomMacrosScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
+  const editor = useAcceptedGoalEditor();
+  const { loading, busy: saving } = editor;
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
   const [fats, setFats] = useState('');
-
-  const proteinNum = parseFloat(protein) || 0;
-  const carbsNum = parseFloat(carbs) || 0;
-  const fatsNum = parseFloat(fats) || 0;
+  const number = (value: string) => value.trim() === '' ? NaN : Number(value);
+  const proteinNum = number(protein), carbsNum = number(carbs), fatsNum = number(fats);
   const total = proteinNum + carbsNum + fatsNum;
   const totalDisplay = Math.round(total * 10) / 10;
-  const isValid = Math.abs(total - 100) <= 0.5;
-
+  const isValid = [proteinNum, carbsNum, fatsNum].every(n => Number.isFinite(n) && n >= 0 && n <= 100) && Math.abs(total - 100) <= 0.5;
   useEffect(() => {
-    loadCurrentGoal();
-  }, []);
-
-  const loadCurrentGoal = async () => {
-    console.log('[CustomMacros] Loading current goal from Supabase');
+    const goal = editor.snapshot?.goal;
+    if (!goal || !Number.isFinite(goal.daily_calories) || goal.daily_calories <= 0) return;
+    setProtein(String(Math.round(goal.protein_g * 4 / goal.daily_calories * 100)));
+    setCarbs(String(Math.round(goal.carbs_g * 4 / goal.daily_calories * 100)));
+    setFats(String(Math.round(goal.fats_g * 9 / goal.daily_calories * 100)));
+  }, [editor.snapshot]);
+  const handleSave = async () => {
+    const snapshot = editor.snapshot;
+    if (!snapshot || !isValid || editor.pending || editor.busy) return;
+    const calories = snapshot.goal.daily_calories;
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) {
-        console.log('[CustomMacros] No authenticated user found');
-        setLoading(false);
-        return;
-      }
-
-      const { data: goal, error } = await supabase
-        .from('goals')
-        .select('protein_g, carbs_g, fats_g, daily_calories')
-        .eq('user_id', authUser.id)
-        .eq('is_active', true)
-        .single();
-
-      if (error) {
-        console.warn('[CustomMacros] Error loading goal:', error.message);
-        setLoading(false);
-        return;
-      }
-
-      if (goal && goal.daily_calories && goal.daily_calories > 0) {
-        const cal = goal.daily_calories;
-        const pPct = Math.round(((goal.protein_g * 4) / cal) * 100);
-        const cPct = Math.round(((goal.carbs_g * 4) / cal) * 100);
-        const fPct = Math.round(((goal.fats_g * 9) / cal) * 100);
-        console.log('[CustomMacros] Pre-filling percentages:', { pPct, cPct, fPct });
-        setProtein(String(pPct));
-        setCarbs(String(cPct));
-        setFats(String(fPct));
-      } else {
-        // Sensible defaults
-        setProtein('30');
-        setCarbs('40');
-        setFats('30');
-      }
-    } catch (err) {
-      console.error('[CustomMacros] Unexpected error loading goal:', err);
-    } finally {
-      setLoading(false);
-    }
+      await editor.run('save', {
+        userId: snapshot.profile.id, expectedProfileUpdatedAt: snapshot.profile.updated_at,
+        expectedGoal: snapshot.goal, operation: 'manual_goal', profile: {},
+        isCurrent: () => editor.isCurrent(snapshot.profile.id),
+        goal: { daily_calories: calories, protein_g: Math.round(calories * proteinNum / 400),
+          carbs_g: Math.round(calories * carbsNum / 400), fats_g: Math.round(calories * fatsNum / 900),
+          fiber_g: snapshot.goal.fiber_g, macro_preset: 'custom' },
+      });
+      Alert.alert(t('customMacros.saved'), t('customMacros.savedMessage'));
+    } catch (error) { Alert.alert(t('common.error'), error instanceof Error ? error.message : 'Unable to verify saved goals'); }
   };
-
-  const handleSave = useCallback(async () => {
-    console.log('[CustomMacros] Save button pressed — protein:', protein, 'carbs:', carbs, 'fats:', fats);
-
-    if (!isValid) {
-      Alert.alert(t('customMacros.invalidSplit'), t('customMacros.invalidSplitMessage', { total: totalDisplay }));
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) throw new Error('Not authenticated');
-
-      console.log('[CustomMacros] Fetching user profile from Supabase');
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
-
-      if (userError) throw userError;
-
-      const age = calculateAge(userData.date_of_birth);
-      if (!age || !userData.height || !userData.current_weight || !userData.sex || !userData.activity_level) {
-        throw new Error('Missing required profile data to recalculate goals');
-      }
-
-      console.log('[CustomMacros] Fetching active goal from Supabase');
-      const { data: currentGoal, error: goalError } = await supabase
-        .from('goals')
-        .select('*')
-        .eq('user_id', authUser.id)
-        .eq('is_active', true)
-        .single();
-
-      if (goalError) throw goalError;
-
-      const bmr = calculateBMR(userData.current_weight, userData.height, age, userData.sex);
-      const tdee = calculateTDEE(bmr, userData.activity_level);
-      const targetCalories = calculateTargetCalories(
-        tdee,
-        currentGoal.goal_type,
-        currentGoal.goal_type === 'lose' ? currentGoal.loss_rate_lbs_per_week : undefined
-      );
-
-      const proteinPct = proteinNum / 100;
-      const carbsPct = carbsNum / 100;
-      const fatsPct = fatsNum / 100;
-
-      const protein_g = Math.round((targetCalories * proteinPct) / 4);
-      const carbs_g = Math.round((targetCalories * carbsPct) / 4);
-      const fats_g = Math.round((targetCalories * fatsPct) / 9);
-      const fiber_g = Math.round((targetCalories / 1000) * 14);
-
-      console.log('[CustomMacros] Recalculated macros:', { targetCalories, protein_g, carbs_g, fats_g, fiber_g });
-
-      console.log('[CustomMacros] Deactivating current goal');
-      await supabase
-        .from('goals')
-        .update({ is_active: false })
-        .eq('user_id', authUser.id)
-        .eq('is_active', true);
-
-      const newGoalData: any = {
-        user_id: authUser.id,
-        goal_type: currentGoal.goal_type,
-        goal_intensity: currentGoal.goal_intensity || 1,
-        daily_calories: targetCalories,
-        protein_g,
-        carbs_g,
-        fats_g,
-        fiber_g,
-        is_active: true,
-        start_date: currentGoal.start_date || null,
-        macro_preset: 'custom',
-      };
-
-      if (currentGoal.goal_type === 'lose') {
-        newGoalData.loss_rate_lbs_per_week = currentGoal.loss_rate_lbs_per_week;
-      }
-
-      console.log('[CustomMacros] Inserting new goal into Supabase');
-      const { error: insertError } = await supabase.from('goals').insert(newGoalData);
-      if (insertError) throw insertError;
-
-      console.log('[CustomMacros] Goal saved successfully');
-      Alert.alert(t('customMacros.saved'), t('customMacros.savedMessage'), [
-        { text: t('common.ok'), onPress: () => router.back() },
-      ]);
-    } catch (err: any) {
-      console.error('[CustomMacros] Error saving custom macros:', err);
-      Alert.alert(t('common.error'), err.message || t('customMacros.failedToSave'));
-    } finally {
-      setSaving(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [protein, carbs, fats, isValid, proteinNum, carbsNum, fatsNum, totalDisplay]);
 
   const bg = isDark ? colors.backgroundDark : colors.primaryBackground;
   const cardBg = isDark ? colors.cardDark : colors.card;
@@ -296,6 +168,9 @@ export default function CustomMacrosScreen() {
           )}
         </View>
 
+        {!!editor.error && <Text accessibilityRole="alert">{editor.error}</Text>}
+        {editor.canRetrySave && <TouchableOpacity disabled={saving} onPress={() => { void editor.run('save').catch(() => {}); }}><Text>Retry the same save</Text></TouchableOpacity>}
+        <TouchableOpacity disabled={saving} onPress={() => { void editor.review().catch(() => {}); }}><Text>Review current goals</Text></TouchableOpacity>
         {/* Save Button */}
         <TouchableOpacity
           style={[
@@ -303,7 +178,7 @@ export default function CustomMacrosScreen() {
             { backgroundColor: isValid ? colors.accent : colors.disabled },
           ]}
           onPress={handleSave}
-          disabled={!isValid || saving}
+          disabled={!isValid || saving || editor.pending || !editor.snapshot}
           activeOpacity={0.8}
         >
           {saving ? (

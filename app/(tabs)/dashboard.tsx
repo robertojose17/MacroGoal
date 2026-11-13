@@ -86,8 +86,14 @@ interface CoachInsight {
   id: string;
   insight_text: string;
   cta_message: string | null;
-  is_read: boolean;
-  created_at: string;
+  is_read: boolean | null;
+  created_at: string | null;
+}
+
+function isRecentUnreadInsight(insight: CoachInsight, now = Date.now()): boolean {
+  if (!insight.created_at || insight.is_read !== false) return false;
+  const createdAt = new Date(insight.created_at).getTime();
+  return Number.isFinite(createdAt) && createdAt <= now && now - createdAt <= 24 * 60 * 60 * 1000;
 }
 
 function CoachInsightCard({ userId, isDark, isPremium }: { userId: string; isDark: boolean; isPremium: boolean }) {
@@ -149,9 +155,7 @@ function CoachInsightCard({ userId, isDark, isPremium }: { userId: string; isDar
   if (!insight.insight_text) return null;
 
   // Only show insights from the last 24 hours
-  const createdAt = new Date(insight.created_at).getTime();
-  const now = Date.now();
-  if (now - createdAt > 24 * 60 * 60 * 1000) return null;
+  if (!isRecentUnreadInsight(insight)) return null;
 
   const cardBg = isDark ? '#0D1F2D' : '#F0F7FF';
   const borderColor = colors.primary + '25';

@@ -53,14 +53,9 @@ export async function apiRequest(
   options: RequestInit = {}
 ): Promise<Response> {
   const token = await getAuthToken();
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...options.headers,
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
+  const headers = new Headers(options.headers);
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  if (token) headers.set('Authorization', `Bearer ${token}`);
 
   return fetch(`${API_URL}${endpoint}`, {
     ...options,

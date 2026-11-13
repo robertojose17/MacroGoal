@@ -80,6 +80,7 @@ export default function CheckInFormScreen() {
         .from('check_ins')
         .select('*')
         .eq('id', checkInId)
+        .eq('user_id', userWithPrefs.id)
         .single();
 
       if (error) {
@@ -94,13 +95,14 @@ export default function CheckInFormScreen() {
       // Parse date correctly from database (stored as YYYY-MM-DD)
       const [year, month, day] = data.date.split('-').map(Number);
       const localDate = new Date(year, month - 1, day, 12, 0, 0);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(data.date) || localDate.getFullYear() !== year || localDate.getMonth() !== month - 1 || localDate.getDate() !== day) throw new Error('Invalid check-in date');
       console.log('[CheckInForm] 📅 Parsed date:', data.date, '→', localDate.toLocaleDateString(getAppLocale()));
       setDate(localDate);
       
       // Weight is ALWAYS stored in kg in the database
       // Convert to lbs for display
       if (data.weight) {
-        const weightInKg = parseFloat(data.weight);
+        const weightInKg = data.weight;
         console.log('[CheckInForm] ⚖️ Weight from DB (always kg):', weightInKg);
         const lbs = weightInKg * 2.20462;
         console.log('[CheckInForm] ⚖️ Converting kg → lbs for display:', weightInKg, 'kg →', lbs, 'lbs');
@@ -113,6 +115,8 @@ export default function CheckInFormScreen() {
       setNotes(data.notes || '');
     } catch (error) {
       console.error('[CheckInForm] Error in loadCheckInData:', error);
+      Alert.alert(t('common.error'), t('checkInForm.failedToLoad'));
+      router.back();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkInId, router]);
@@ -245,7 +249,7 @@ export default function CheckInFormScreen() {
       setSaving(true);
 
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) {
+      if (!authUser || !user?.id || authUser.id !== user.id) {
         Alert.alert(t('common.error'), t('common.loggedIn'));
         return;
       }
@@ -299,7 +303,9 @@ export default function CheckInFormScreen() {
         const { error } = await supabase
           .from('check_ins')
           .update(checkInData)
-          .eq('id', checkInId);
+          .eq('id', checkInId)
+          .eq('user_id', authUser.id)
+          .select('id').single();
 
         if (error) {
           console.error('[CheckInForm] Error updating check-in:', error);
@@ -425,10 +431,6 @@ export default function CheckInFormScreen() {
     try {
       await uploadPhoto(pendingCheckInId, photoUri);
       console.log('[CheckInForm] ✅ Modal photo uploaded successfully');
-      console.log('[CheckInForm] awarding progress_photo XP for check-in:', pendingCheckInId);
-      tryAwardProgressPhoto(pendingCheckInId);
-      console.log('[CheckInForm] emitting xp:refresh after progress photo upload');
-      emitXpRefresh();
       setShowPhotoModal(false);
       setSelectedPhotoUri(null);
       Alert.alert(t('common.success'), t('checkInForm.checkInSavedWithPhoto'), [{ text: t('common.ok'), onPress: () => router.back() }]);

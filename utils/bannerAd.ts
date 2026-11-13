@@ -1,8 +1,9 @@
 // Web / fallback stub — no native ads on web.
-// ZERO imports from native packages.
+// No runtime imports from native packages.
 import React from 'react';
+import type { BannerAdProps } from 'react-native-google-mobile-ads';
 
-export const BannerAd = (): React.ReactElement | null => null;
+export const BannerAd: React.FC<BannerAdProps> = () => null;
 
 export const BannerAdSize: Record<string, string> = {
   ANCHORED_ADAPTIVE_BANNER: 'ANCHORED_ADAPTIVE_BANNER',

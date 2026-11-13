@@ -103,8 +103,8 @@ function FloatingParticles() {
           style={[
             styles.particle,
             {
-              top: cfg.top as string,
-              left: cfg.left as string,
+              top: cfg.top,
+              left: cfg.left,
               width: cfg.size,
               height: cfg.size,
               borderRadius: cfg.size / 2,

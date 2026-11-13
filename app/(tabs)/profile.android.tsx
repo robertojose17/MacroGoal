@@ -8,6 +8,7 @@ import { ProtectedReaderBoundary } from '@/features/communityPrivacyV2Compatibil
 
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { acceptedGoalSnapshot, type ActiveGoal } from '@/utils/activeGoal';
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
@@ -35,11 +36,12 @@ import { supabase } from '@/lib/supabase/client';
 import { usePremium } from '@/hooks/usePremium';
 import ProgressCircle from '@/components/ProgressCircle';
 import { toLocalDateString } from '@/utils/dateUtils';
-import { calcMacros } from '@/utils/macros';
+import { profileNutritionAverage, profileNutritionByDate, type ProfileNutritionTotals } from '@/utils/profileNutritionTotals';
 import CalendarDateRangePicker from '@/components/CalendarDateRangePicker';
 import { useStreakStatus } from '@/hooks/useStreakStatus';
 import { calcDailyScore } from '@/utils/consistencyMath';
 import FeedPostCard from '@/components/social/FeedPostCard';
+import { toggleLike, savePost, unsavePost } from '@/utils/socialApi';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -74,7 +76,7 @@ type NutritionRange = 'today' | '7d' | '30d' | 'custom';
 
 function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
   const { t } = useTranslation();
-  const percentage = goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
+  const percentage = typeof eaten === 'number' && typeof goal === 'number' && goal > 0 ? Math.min((eaten / goal) * 100, 100) : 0;
   return (
     <View style={styles.macroSummaryRowCompact}>
       <Text style={[styles.macroSummaryLabelCompact, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -85,9 +87,9 @@ function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
           <View style={[styles.macroSummaryBarFill, { width: `${percentage}%` as any, backgroundColor: color }]} />
         </View>
         <Text style={[styles.macroSummaryProgressCompact, { color: isDark ? colors.textDark : colors.text }]}>
-          {eaten}
+          {eaten ?? '--'}
           {' / '}
-          {goal}
+          {goal ?? '—'}
           {t('localization.profileUi.grams')}
         </Text>
       </View>
@@ -143,12 +145,14 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
   const [followingCount, setFollowingCount] = useState<number | null>(0);
 
   // Consistency score (30-day)
-  const [consistencyScore, setConsistencyScore] = useState(0);
+  const [consistencyScore, setConsistencyScore] = useState<number | null>(null);
 
   // Posts feed
   const [posts, setPosts] = useState<any[]>([]);
   const [commentsPost, setCommentsPost] = useState<any>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const postActionLocks = useRef(new Set<string>());
+  const postActionUncertain = useRef(new Set<string>());
 
   // Follow modal
   const [followerActionTarget, setFollowerActionTarget] = useState<{ id: string; name: string } | null>(null);
@@ -159,9 +163,13 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
   const [followModalLoading, setFollowModalLoading] = useState(false);
 
   // Nutrition card
-  const [totalCalories, setTotalCalories] = useState(0);
-  const [totalMacros, setTotalMacros] = useState({ protein: 0, carbs: 0, fats: 0, fiber: 0 });
-  const [goal, setGoal] = useState<any>(null);
+  const [nutritionTotals, setNutritionTotals] = useState<ProfileNutritionTotals | null>(null);
+  const [goal, setGoal] = useState<ActiveGoal | null>(null);
+  const profileRead = useRef(0);
+  const nutritionRead = useRef(0);
+  const scoreRead = useRef(0);
+  const actorRef = useRef<string | null>(null);
+  const latestProfileLoad = useRef<(() => Promise<void>) | null>(null);
 
   // Range selector
   const [nutritionRange, setNutritionRange] = useState<NutritionRange>('today');
@@ -193,6 +201,8 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
     customStart?: Date,
     customEnd?: Date,
   ) => {
+    const revision = ++nutritionRead.current;
+    setNutritionTotals(null);
     return withCommunityPrivacyScope(async scope => {
     scope.assertActor(userId);
     const today = new Date();
@@ -246,46 +256,18 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
 
     const { data: mealsData, error: mealsError } = await scope.request(query);
     scope.assertCurrent();
-    console.log('[Profile] loadNutritionData — meals query:', mealsError ? mealsError.message : `${mealsData?.length ?? 0} meals`);
+    if (!profileFocused.current || revision !== nutritionRead.current || actorRef.current !== userId) return;
+    if (mealsError) throw new Error('Nutrition unavailable');
+    console.log('[Profile] loadNutritionData — meals query:', `${mealsData?.length ?? 0} meals`);
 
-    let totalCals = 0, totalP = 0, totalC = 0, totalF = 0, totalFib = 0;
-    mealsData?.forEach((meal: any) => {
-      meal.meal_items?.forEach((item: any) => {
-        const hasStoredMacros = item.calories != null && item.calories > 0;
-        const fi = item.food_items;
-        const grams = item.grams ?? 0;
-        const macros = hasStoredMacros
-          ? { calories: item.calories ?? 0, protein: item.protein ?? 0, carbs: item.carbs ?? 0, fats: item.fats ?? 0, fiber: item.fiber ?? 0 }
-          : fi
-            ? (() => { const r = calcMacros(fi, grams); return { calories: r.calories, protein: r.protein, carbs: r.carbs, fats: r.fat, fiber: r.fiber }; })()
-            : { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
-        if (!item.is_scheduled) {
-          totalCals += macros.calories;
-          totalP    += macros.protein;
-          totalC    += macros.carbs;
-          totalF    += macros.fats;
-          totalFib  += macros.fiber;
-        }
-      });
-    });
-
-    // Divide by day count for averages
-    const avgCals = totalCals / dayCount;
-    const avgP    = totalP / dayCount;
-    const avgC    = totalC / dayCount;
-    const avgF    = totalF / dayCount;
-    const avgFib  = totalFib / dayCount;
-
-    console.log('[Profile] loadNutritionData — totals: calories:', avgCals, 'protein:', avgP, 'carbs:', avgC, 'fats:', avgF, 'fiber:', avgFib, '(daily avg over', dayCount, 'days)');
-
-    setTotalCalories(avgCals);
-    setTotalMacros({ protein: avgP, carbs: avgC, fats: avgF, fiber: avgFib });
+    setNutritionTotals(profileNutritionAverage(mealsData, dayCount));
     setRangeDayCount(dayCount);
   
     }, activation.scopeKey);
   };
 
   const loadConsistencyScore = async (userId: string) => {
+    const revision = ++scoreRead.current;
     return withCommunityPrivacyScope(async scope => {
     scope.assertActor(userId);
     console.log('[Profile] loadConsistencyScore — starting 30-day calculation for user:', userId);
@@ -299,7 +281,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
       const [mealsRes, goalsRes] = await Promise.all([
         scope.request(supabase
           .from('meals')
-          .select('date, meal_items(calories, protein, is_scheduled)')
+          .select('date, meal_items(calories, protein, carbs, fats, fiber, grams, is_scheduled, food_items!meal_items_food_item_id_fkey(calories, protein, carbs, fat, fiber, serving_size, macros_per))')
           .eq('user_id', userId)
           .gte('date', startStr)
           .lte('date', endStr)),
@@ -312,23 +294,17 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
       ]);
     scope.assertCurrent();
 
+      if (!profileFocused.current || revision !== scoreRead.current || actorRef.current !== userId) return;
       console.log('[Profile] loadConsistencyScore — meals:', mealsRes.error ? mealsRes.error.message : `${mealsRes.data?.length ?? 0} meals`, 'goals:', goalsRes.error ? goalsRes.error.message : 'ok');
 
-      const calorieTarget = goalsRes.data?.daily_calories ?? 2000;
-      const proteinTarget = goalsRes.data?.protein_g ?? 150;
+      const calorieTarget = goalsRes.data?.daily_calories;
+      const proteinTarget = goalsRes.data?.protein_g;
+      if (mealsRes.error || goalsRes.error || typeof calorieTarget !== 'number' || !Number.isFinite(calorieTarget) || calorieTarget <= 0 || typeof proteinTarget !== 'number' || !Number.isFinite(proteinTarget) || proteinTarget < 0) {
+        setConsistencyScore(null); return;
+      }
 
-      // Group meals by date
-      const byDate: Record<string, { calories: number; protein: number }> = {};
-      mealsRes.data?.forEach((meal: any) => {
-        const d = meal.date;
-        if (!byDate[d]) byDate[d] = { calories: 0, protein: 0 };
-        meal.meal_items?.forEach((item: any) => {
-          if (!item.is_scheduled) {
-            byDate[d].calories += item.calories ?? 0;
-            byDate[d].protein += item.protein ?? 0;
-          }
-        });
-      });
+      const byDate = profileNutritionByDate(mealsRes.data);
+      if (!byDate) { setConsistencyScore(null); return; }
 
       // Score each of the 30 days
       let totalScore = 0;
@@ -348,6 +324,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
       setConsistencyScore(avg);
     } catch (err) {
       scope.assertCurrent();
+      if (profileFocused.current && revision === scoreRead.current && actorRef.current === userId) setConsistencyScore(null);
       console.error('[Profile] loadConsistencyScore — error:', err);
     }
   
@@ -355,6 +332,10 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
   };
 
   const loadData = async () => {
+    const revision = ++profileRead.current;
+    ++nutritionRead.current; ++scoreRead.current;
+    setGoal(null); setConsistencyScore(null); setNutritionTotals(null); setPosts([]);
+    const isCurrent = () => profileFocused.current && revision === profileRead.current;
     const followerCountSequence = privacyProtected ? ++followerCountRefresh.current : 0;
     return withCommunityPrivacyScope(async scope => {
     console.log('[Profile] loadData — starting');
@@ -362,12 +343,16 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
       setLoading(true);
       const { data: { user: authUser } } = await supabase.auth.getUser();
       scope.assertCurrent();
+      if (!isCurrent()) return;
       scope.assertActor(authUser?.id);
       if (!authUser) {
         console.log('[Profile] loadData — no authenticated user');
         setLoading(false);
         return;
       }
+      if (actorRef.current && actorRef.current !== authUser.id) return;
+      actorRef.current = authUser.id;
+      setCurrentUserId(authUser.id);
       console.log('[Profile] loadData — fetching data for user:', authUser.id);
 
       const [
@@ -384,6 +369,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
         scope.request(supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).maybeSingle()),
       ]);
       scope.assertCurrent();
+      if (!isCurrent()) return;
 
       console.log('[Profile] loadData — user result:', userResult.error ? userResult.error.message : 'ok');
       console.log('[Profile] loadData — posts count:', postsResult.count, postsResult.error?.message);
@@ -403,9 +389,11 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
       }
       setFollowingCount(privacyProtected ? followingResult.count : (followingResult.error ? 0 : (followingResult.count ?? 0)));
 
-      if (goalsResult.data) {
-        setGoal(goalsResult.data);
+      let verifiedGoal: ActiveGoal | null = null;
+      if (!goalsResult.error && goalsResult.data?.user_id === authUser.id && goalsResult.data.is_active === true) {
+        try { acceptedGoalSnapshot(goalsResult.data); verifiedGoal = goalsResult.data; } catch { /* Missing or invalid target stays unavailable. */ }
       }
+      setGoal(verifiedGoal);
 
       // Load nutrition and consistency score in parallel
       await Promise.all([
@@ -413,6 +401,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
         loadConsistencyScore(authUser.id),
       ]);
       scope.assertCurrent();
+      if (!isCurrent()) return;
 
       // Load posts feed
       const { data: postsData, error: postsError } = await scope.request(supabase
@@ -422,18 +411,33 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
         .order('created_at', { ascending: false })
         .limit(50));
       scope.assertCurrent();
+      if (!isCurrent()) return;
 
       console.log('[Profile] loadData — posts feed:', postsError ? postsError.message : `${postsData?.length ?? 0} posts`);
-      setPosts(postsData ?? []);
+      if (postsError) throw postsError;
+      const ownPosts = (postsData ?? []).filter(post => post.user_id === authUser.id);
+      const ids = ownPosts.map(post => post.id);
+      const [likes, saves] = ids.length ? await Promise.all([
+        scope.request(supabase.from('social_post_likes').select('post_id').eq('user_id', authUser.id).in('post_id', ids)),
+        scope.request(supabase.from('social_post_saves').select('post_id').eq('user_id', authUser.id).in('post_id', ids)),
+      ]) : [{ data: [], error: null }, { data: [], error: null }];
+      scope.assertCurrent();
+      if (!isCurrent() || actorRef.current !== authUser.id) return;
+      if (likes.error || saves.error) throw new Error('Post action status unavailable');
+      const likedIds = new Set(likes.data?.map(row => row.post_id));
+      const savedIds = new Set(saves.data?.map(row => row.post_id));
+      setPosts(ownPosts.map(post => ({ ...post, liked_by_me: likedIds.has(post.id), saved_by_me: savedIds.has(post.id) })));
+      postActionUncertain.current.clear();
     } catch (err) {
       console.error('[Profile] loadData — unexpected error:', err);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isCurrent()) { setLoading(false); setRefreshing(false); }
     }
   
     }, activation.scopeKey).catch(() => {});
   };
+
+  latestProfileLoad.current = loadData;
 
   useFocusEffect(
     useCallback(() => {
@@ -444,10 +448,45 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
   );
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setCurrentUserId(data.session?.user?.id ?? null);
-    });
+    let active = true;
+    const profileCounter = profileRead, nutritionCounter = nutritionRead, scoreCounter = scoreRead;
+    let eventRevision = 0;
+    const applyActor = (id: string | null) => {
+      if (!active) return;
+      if (actorRef.current === id) { setCurrentUserId(id); return; }
+      if (actorRef.current !== id) {
+        ++profileRead.current; ++nutritionRead.current; ++scoreRead.current;
+        setGoal(null); setConsistencyScore(null); setNutritionTotals(null); setPosts([]); setUser(null);
+      }
+      actorRef.current = id; setCurrentUserId(id);
+      if (id && profileFocused.current) void latestProfileLoad.current?.();
+    };
+    const subscription = supabase.auth.onAuthStateChange((_event, session) => { ++eventRevision; applyActor(session?.user.id ?? null); });
+    const started = eventRevision;
+    supabase.auth.getSession().then(({data, error}) => { if (eventRevision === started) applyActor(error ? null : data.session?.user.id ?? null); });
+    return () => { active = false; subscription.data.subscription.unsubscribe(); ++profileCounter.current; ++nutritionCounter.current; ++scoreCounter.current; };
   }, []);
+
+  const handleOwnPostAction = async (postId: string, currentValue: boolean, kind: 'like' | 'save') => {
+    const owner = currentUserId, revision = profileRead.current;
+    if (!owner || actorRef.current !== owner || !profileFocused.current || !posts.some(post => post.id === postId && post.user_id === owner)) return;
+    const key = `${owner}:${postId}`;
+    if (postActionLocks.current.has(key) || postActionUncertain.current.has(key)) return;
+    postActionLocks.current.add(key);
+    const current = () => profileFocused.current && actorRef.current === owner && profileRead.current === revision;
+    try {
+      if (kind === 'like') {
+        const result = await toggleLike(postId, currentValue, owner);
+        if (current()) setPosts(previous => previous.map(post => post.id === postId ? { ...post, liked_by_me: result.liked, likes_count: result.likes_count } : post));
+      } else {
+        const result = await (currentValue ? unsavePost(postId, owner) : savePost(postId, owner));
+        if (current()) setPosts(previous => previous.map(post => post.id === postId ? { ...post, saved_by_me: result.saved, saves_count: result.saves_count } : post));
+      }
+    } catch {
+      postActionUncertain.current.add(key);
+      if (current()) Alert.alert(t('common.error'), 'The result could not be verified. Refresh before trying again.');
+    } finally { postActionLocks.current.delete(key); }
+  };
 
   const onRefresh = () => {
     console.log('[Profile] pull-to-refresh triggered');
@@ -579,6 +618,7 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
     connectionNavigation.current = false;
     return () => {
       profileFocused.current = false;
+      ++profileRead.current; ++nutritionRead.current; ++scoreRead.current;
       followerActionNavigation.current = true;
       ++followerCountRefresh.current;
       setFollowerActionTarget(null);
@@ -792,12 +832,12 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
 
   const currentStreakDisplay = String(currentStreak);
   const bestStreakDisplay = String(bestStreak);
-  const consistencyScoreDisplay = String(consistencyScore);
+  const consistencyScoreDisplay = consistencyScore === null ? '—' : String(consistencyScore);
   const postsCountDisplay = String(postsCount);
   const followersCountDisplay = privacyProtected && followersCount === null ? t('localization.profileUi.unavailable') : String(followersCount);
   const followingCountDisplay = privacyProtected && followingCount === null ? t('localization.profileUi.unavailable') : String(followingCount);
 
-  const totalCaloriesRounded = Math.round(totalCalories);
+  const totalCaloriesRounded = nutritionTotals === null ? null : Math.round(nutritionTotals.calories);
 
   const isMultiDay = nutritionRange !== 'today';
   const averageLabelText = isMultiDay
@@ -1066,19 +1106,19 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
 
           {/* The actual macro content */}
           <View style={styles.caloriesContent}>
-            <ProgressCircle
+            {goal && totalCaloriesRounded !== null ? <ProgressCircle
               current={totalCaloriesRounded}
-              target={goal?.daily_calories || 2000}
+              target={goal.daily_calories}
               size={140}
               strokeWidth={12}
               color={colors.calories}
               label={t('localization.profileUi.kcal')}
-            />
+            /> : <Text style={{ color: secondaryText }}>{getAppLocale().startsWith('es') ? (goal ? 'Nutrición no disponible: --' : 'Meta no disponible') : (goal ? 'Nutrition unavailable: --' : 'Goal unavailable')}</Text>}
             <View style={styles.macroSummaryCompact}>
-              <MacroSummaryRowCompact label={t('localization.profileUi.protein')} eaten={Math.round(totalMacros.protein)} goal={goal?.protein_g || 150} color={colors.protein} isDark={isDark} />
-              <MacroSummaryRowCompact label={t('localization.profileUi.carbs')} eaten={Math.round(totalMacros.carbs)} goal={goal?.carbs_g || 200} color={colors.carbs} isDark={isDark} />
-              <MacroSummaryRowCompact label={t('localization.profileUi.fats')} eaten={Math.round(totalMacros.fats)} goal={goal?.fats_g || 65} color={colors.fats} isDark={isDark} />
-              <MacroSummaryRowCompact label={t('localization.profileUi.fiber')} eaten={Math.round(totalMacros.fiber)} goal={goal?.fiber_g || 30} color={colors.fiber} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('localization.profileUi.protein')} eaten={nutritionTotals === null ? null : Math.round(nutritionTotals.protein)} goal={goal?.protein_g ?? null} color={colors.protein} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('localization.profileUi.carbs')} eaten={nutritionTotals === null ? null : Math.round(nutritionTotals.carbs)} goal={goal?.carbs_g ?? null} color={colors.carbs} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('localization.profileUi.fats')} eaten={nutritionTotals === null ? null : Math.round(nutritionTotals.fats)} goal={goal?.fats_g ?? null} color={colors.fats} isDark={isDark} />
+              <MacroSummaryRowCompact label={t('localization.profileUi.fiber')} eaten={nutritionTotals === null ? null : Math.round(nutritionTotals.fiber)} goal={goal?.fiber_g ?? null} color={colors.fiber} isDark={isDark} />
             </View>
           </View>
         </View>
@@ -1095,22 +1135,20 @@ function OwnerProfileBody({ activation }: { activation: CommunityPrivacyActivati
               </Text>
             </View>
           ) : (
-            posts.map((post) => (
+            currentUserId && posts.map((post) => (
               <FeedPostCard
                 key={post.id}
                 post={{
                   ...post,
-                  liked_by_me: false,
-                  saved_by_me: false,
                   comments_count: post.comments_count ?? 0,
                   likes_count: post.likes_count ?? 0,
                   saves_count: post.saves_count ?? 0,
                 }}
-                currentUserId={currentUserId ?? undefined}
-                onLike={(postId, liked) => {
-                  console.log('[Profile] onLike — postId:', postId, 'liked:', liked);
-                  setPosts(prev => prev.map(p => p.id === postId ? { ...p, liked_by_me: liked, likes_count: liked ? (p.likes_count ?? 0) + 1 : Math.max(0, (p.likes_count ?? 0) - 1) } : p));
-                }}
+                currentUserId={currentUserId}
+                isDark={isDark}
+                ownerActionsOnly
+                onLike={(postId, liked) => { void handleOwnPostAction(postId, liked, 'like'); }}
+                onSave={(postId, saved) => { void handleOwnPostAction(postId, saved, 'save'); }}
                 onDelete={(postId) => {
                   handleDeletePost(postId);
                 }}

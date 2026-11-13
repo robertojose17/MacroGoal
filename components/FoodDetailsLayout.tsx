@@ -1,3 +1,4 @@
+import { sourceReadonly, sourceRouteReadonly, sourceDisplayValue, sourceBasis, sourceNutrientRows, sourceIngredients } from '@/utils/barcodeSourcePreview';
 import { usdaPortionOptions, dedupePracticalServingOptions } from '@/utils/usdaPortionOptions';
 import { resolveCatalogUsdaPortions } from '@/utils/catalogUsdaPortions';
 import { captureSelectedNutrition } from '@/utils/selectedNutritionCapture';
@@ -549,6 +550,7 @@ export default function FoodDetailsLayout({
   // `product` may be null during loading; we guard with a fallback so the array is always valid.
   const servingOptions = useMemo<ServingOption[]>(() => {
     const options: ServingOption[] = [];
+    if (sourceReadonly(product)) return options;
 
     if (product) {
       // ── Natural unit (cookie, egg, slice, etc.) ──────────────────────────
@@ -686,6 +688,15 @@ export default function FoodDetailsLayout({
 
     try {
       let parsedProduct: OpenFoodFactsProduct = JSON.parse(offData);
+      // Provider-only records must never pass through canonical capture, gram inference or logging.
+      if (sourceReadonly(parsedProduct)) {
+        if (!isCurrent()) return;
+        setProduct(parsedProduct);
+        setPer100Macros(null);
+        setIsFav(false);
+        viewLoadComplete.current = true;
+        return;
+      }
       if(routeContext.recoverySaved==='1')parsedProduct._serving_authority='confirmed_correction';
       if(mode!=='edit'&&!itemId)void captureSelectedNutrition(parsedProduct,food_item_id).catch(()=>{});
       if(mode!=='edit'&&!itemId&&!preferredUsdaPortion(parsedProduct,mode,itemId)&&!exactFdcId(parsedProduct._usda_fdc_id)&&parsedProduct._db_id&&parsedProduct._serving_authority!=='confirmed_correction'&&!parsedProduct._manual_food_id){
@@ -1392,6 +1403,7 @@ export default function FoodDetailsLayout({
   };
 
   const handleToggleFavorite = async () => {
+    if (sourceRouteReadonly(offData) || sourceReadonly(product)) return;
     console.log('[FoodDetails] Favorite button pressed, current isFav:', isFav);
     if (!product) {
       console.log('[FoodDetails] handleToggleFavorite: no product, aborting');
@@ -1508,6 +1520,7 @@ export default function FoodDetailsLayout({
    * Returns null if the product has no usable name.
    */
   const upsertFoodItem = async (prod: OpenFoodFactsProduct): Promise<string | null> => {
+    if (sourceRouteReadonly(offData) || sourceReadonly(prod)) return null;
     // USDA IDs are not barcodes. Existing provider rows are never overwritten by a client snapshot.
     if(prod._usda_fdc_id){
       const {data}=await (supabase as SupabaseClient).from('food_items').select('id').eq('usda_fdc_id',prod._usda_fdc_id).maybeSingle();
@@ -1641,6 +1654,7 @@ export default function FoodDetailsLayout({
 
 
   const handleSave = async () => {
+    if (sourceRouteReadonly(offData) || sourceReadonly(product)) return;
     console.log('[FoodDetails] Save button pressed');
     if (!product) {
       return;
@@ -2059,6 +2073,7 @@ export default function FoodDetailsLayout({
   }
 
   const macros = calculateMacros(true);
+  const providerOnly = sourceRouteReadonly(offData) || sourceReadonly(product);
 
   const currentBanner = bannerQueue[0];
 
@@ -2088,7 +2103,7 @@ export default function FoodDetailsLayout({
             {mode === 'ingredient' ? t('foodDetails.addIngredient') : t('foodDetails.title')}
           </Text>
         </View>
-        <TouchableOpacity style={styles.favoriteButton} onPress={handleToggleFavorite}>
+        <TouchableOpacity style={[styles.favoriteButton, providerOnly && {opacity:0.4}]} disabled={providerOnly} accessibilityState={{disabled:providerOnly}} onPress={handleToggleFavorite}>
           <IconSymbol
             ios_icon_name={isFav ? 'heart.fill' : 'heart'}
             android_material_icon_name={isFav ? 'favorite' : 'favorite-border'}
@@ -2118,7 +2133,7 @@ export default function FoodDetailsLayout({
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: textColor }]}>{t('foodDetails.servingSize')}</Text>
 
-          <ServingPicker
+          {providerOnly ? <Text style={{color:textColor}}>{sourceBasis(product, i18n.language.startsWith('es'))}</Text> : <ServingPicker
             options={coachDisplayServingOptions(servingOptions, selectedServingOptionKey, coachDetails)}
             selectedKey={selectedServingOptionKey}
             quantity={numberOfServings}
@@ -2131,7 +2146,7 @@ export default function FoodDetailsLayout({
               handleNumberOfServingsChange(value);
             }}
             isDark={isDark}
-          />
+          />}
         </View>
 
         <View style={styles.section}>
@@ -2139,29 +2154,46 @@ export default function FoodDetailsLayout({
           <View style={[styles.macroCard, { backgroundColor: cardBackground }]}>
             <View style={styles.macroRow}>
               <Text style={[styles.macroLabel, { color: textColor }]}>{t('common.calories')}</Text>
-              <Text style={[styles.macroValue, { color: textColor }]}>{macros.calories} {t('common.kcal')}</Text>
+              <Text style={[styles.macroValue, { color: textColor }]}>{providerOnly ? sourceDisplayValue(product, 'energy-kcal') : macros.calories + ' ' + t('common.kcal')}</Text>
             </View>
             <View style={styles.macroRow}>
               <Text style={[styles.macroLabel, { color: textColor }]}>{t('common.protein')}</Text>
-              <Text style={[styles.macroValue, { color: textColor }]}>{macros.protein}{t('common.grams')}</Text>
+              <Text style={[styles.macroValue, { color: textColor }]}>{providerOnly ? sourceDisplayValue(product, 'proteins') : macros.protein + t('common.grams')}</Text>
             </View>
             <View style={styles.macroRow}>
               <Text style={[styles.macroLabel, { color: textColor }]}>{t('common.carbs')}</Text>
-              <Text style={[styles.macroValue, { color: textColor }]}>{macros.carbs}{t('common.grams')}</Text>
+              <Text style={[styles.macroValue, { color: textColor }]}>{providerOnly ? sourceDisplayValue(product, 'carbohydrates') : macros.carbs + t('common.grams')}</Text>
             </View>
             <View style={styles.macroRow}>
               <Text style={[styles.macroLabel, { color: textColor }]}>{t('common.fats')}</Text>
-              <Text style={[styles.macroValue, { color: textColor }]}>{macros.fats}{t('common.grams')}</Text>
+              <Text style={[styles.macroValue, { color: textColor }]}>{providerOnly ? sourceDisplayValue(product, 'fat') : macros.fats + t('common.grams')}</Text>
             </View>
             <View style={styles.macroRow}>
               <Text style={[styles.macroLabel, { color: textColor }]}>{t('common.fiber')}</Text>
-              <Text style={[styles.macroValue, { color: textColor }]}>{product?.nutriments?.['fiber_100g'] == null && product?.nutriments?.['fiber'] == null ? '\u2014' : macros.fiber + t('common.grams')}</Text>
+              <Text style={[styles.macroValue, { color: textColor }]}>{providerOnly ? sourceDisplayValue(product, 'fiber') : product?.nutriments?.['fiber_100g'] == null && product?.nutriments?.['fiber'] == null ? '\u2014' : macros.fiber + t('common.grams')}</Text>
             </View>
           </View>
         </View>
 
         {/* ── Micronutrients section ── */}
         {(() => {
+          if (providerOnly) {
+            const rows = sourceNutrientRows(product).rows.filter(row => row.amount !== null && !['energy-kcal','proteins','carbohydrates','fat','fiber'].includes(row.key));
+            const ingredients = sourceIngredients(product);
+            if (!rows.length && !ingredients) return null;
+            return <View style={styles.microSection}>
+              <TouchableOpacity style={[styles.microToggle,{backgroundColor:cardBackground}]} onPress={() => setShowMicroDetails(v=>!v)}>
+                <Text style={[styles.microToggleText,{color:textColor}]}>{showMicroDetails?t('foodDetails.hideDetailedNutrition'):t('foodDetails.showMoreNutrition')}</Text>
+              </TouchableOpacity>
+              {showMicroDetails && <View style={[styles.microCard,{backgroundColor:cardBackground}]}>
+                {rows.map(row=><View key={row.key} style={styles.macroRow}>
+                  <Text style={[styles.macroLabel,{color:textColor}]}>{i18n.language.startsWith('es')?row.es:row.en}</Text>
+                  <Text style={[styles.macroValue,{color:textColor}]}>{sourceDisplayValue(product,row.key)}</Text>
+                </View>)}
+                {ingredients ? <Text style={{color:textColor}}>{ingredients}</Text> : null}
+              </View>}
+            </View>;
+          }
           const n = (product.nutriments ?? {}) as Record<string, number | undefined>;
           const servingGrams = getTotalGrams();
           const extMacroRows = buildExtendedMacroRows(n, servingGrams);
@@ -2338,7 +2370,9 @@ export default function FoodDetailsLayout({
         )}
 
         <TouchableOpacity
-          style={[styles.saveButton, { backgroundColor: colors.primary }]}
+          disabled={providerOnly}
+          accessibilityState={{disabled:providerOnly}}
+          style={[styles.saveButton, { backgroundColor: colors.primary, opacity:providerOnly?0.4:1 }]}
           onPress={() => {
             console.log('[FoodDetails] Add to Meal / Update button pressed, mode=', mode);
             handleSave();

@@ -112,19 +112,21 @@ export interface FeedPost {
   category?: string | null;
 }
 
-export interface FeedPostCardProps {
+interface FeedPostCardBaseProps {
   post: FeedPost;
   isDark: boolean;
   currentUserId: string;
   onLike: (postId: string, liked: boolean) => void;
   onSave: (postId: string, savedByMe: boolean) => void;
-  onReport: (postId: string) => void;
-  onBlock: (userId: string) => void;
   onDelete: (postId: string) => void;
   onOpenComments: (post: FeedPost) => void;
   onSaveMeal?: (post: FeedPost) => void;
   showSaveMeal?: boolean;
 }
+export type FeedPostCardProps = FeedPostCardBaseProps & (
+  | { ownerActionsOnly: true; onReport?: never; onBlock?: never }
+  | { ownerActionsOnly?: false; onReport: (postId: string) => void; onBlock: (userId: string) => void }
+);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -330,6 +332,7 @@ export default function FeedPostCard({
   onOpenComments,
   onSaveMeal,
   showSaveMeal = false,
+  ownerActionsOnly = false,
 }: FeedPostCardProps) {
   useTranslation();
   const router = useRouter();
@@ -342,6 +345,8 @@ export default function FeedPostCard({
   const authorAvatarUri = post.author?.avatar_url ?? null;
   const relTime = getRelativeTime(post.created_at);
   const isOwn = post.user_id === currentUserId;
+  // Owner-only callers may omit moderation, but may never render another actor's post.
+  if (ownerActionsOnly && (!currentUserId || !isOwn)) return null;
   const isAutoPost = post.post_type_v2 === 'auto';
   const isEduPost = post.auto_post_type === 'educational';
   const displayName = isEduPost ? t('localization.social.coach') : (authorUsername ?? t('localization.social.user'));
@@ -375,13 +380,13 @@ export default function FeedPostCard({
   const handleReport = () => {
     console.log('[FeedPostCard] Report pressed for post:', post.id);
     setMenuVisible(false);
-    onReport(post.id);
+    if (!ownerActionsOnly && onReport) onReport(post.id);
   };
 
   const handleBlock = () => {
     console.log('[FeedPostCard] Block pressed for user:', post.user_id);
     setMenuVisible(false);
-    if (post.user_id) onBlock(post.user_id);
+    if (!ownerActionsOnly && post.user_id && onBlock) onBlock(post.user_id);
   };
 
   const handleDelete = () => {

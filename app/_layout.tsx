@@ -1,3 +1,4 @@
+import { syncProfileTimezone } from '@/utils/profileTimezoneSync';
 import { useCommunityPrivacyRolloutLifecycle } from '@/features/communityPrivacyV2/communityPrivacyRollout';
 
 import '@/lib/i18n';
@@ -53,7 +54,6 @@ if (Platform.OS !== "web") {
 // isExpoGo — used by the deferred OneSignal click-listener below
 const isExpoGo = Constants.appOwnership === "expo";
 
-const TIMEZONE_STORAGE_KEY = "user_timezone_synced";
 
 function loadPurchases(): { Purchases: any; LOG_LEVEL: any } {
   return { Purchases, LOG_LEVEL };
@@ -281,64 +281,23 @@ export default function RootLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── Timezone sync ────────────────────────────────────────────────────────
-  // Fire-and-forget: sync the device timezone to the backend once per change.
-  // Runs whenever the session becomes available (i.e. user is signed in).
+  // Owner-scoped timezone writes use the actual users table. Repeated token
+  // refreshes do not rebase an open goal form or share a cache across accounts.
   useEffect(() => {
-    if (!session) return;
-
-    const syncTimezone = async () => {
-      try {
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        console.log("[Layout] timezone sync — device timezone:", tz);
-
-        const cached = await AsyncStorage.getItem(TIMEZONE_STORAGE_KEY);
-        if (cached === tz) {
-          console.log("[Layout] timezone sync — already synced, skipping");
-          return;
-        }
-
-        console.log("[Layout] timezone sync — sending to backend:", tz);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          await supabase.from('profiles').update({ timezone: tz }).eq('id', user.id);
-        }
-        await AsyncStorage.setItem(TIMEZONE_STORAGE_KEY, tz);
-        console.log("[Layout] timezone sync — success, cached:", tz);
-      } catch (e) {
-        console.warn("[Layout] timezone sync failed (non-fatal):", e);
-      }
+    const owner = session?.user.id;
+    if (!owner) return;
+    let active = true, busy = false;
+    const sync = async () => {
+      if (!active || busy) return;
+      busy = true;
+      try { await syncProfileTimezone(owner, () => active); }
+      catch (failure) { console.warn('[Layout] timezone sync could not be verified', failure instanceof Error ? failure.message : 'unknown'); }
+      finally { busy = false; }
     };
-
-    syncTimezone();
-  }, [session]);
-
-  // ─── Timezone resync on foreground ────────────────────────────────────────
-  // If the user travels to a new timezone while the app is backgrounded,
-  // re-sync when they bring the app back to the foreground.
-  useEffect(() => {
-    if (!session) return;
-
-    const handleAppStateChange = async (nextState: AppStateStatus) => {
-      if (nextState !== 'active') return;
-      try {
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const cached = await AsyncStorage.getItem(TIMEZONE_STORAGE_KEY);
-        if (cached === tz) return; // unchanged, skip
-        console.log('[Layout] timezone resync on foreground — sending:', tz);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          await supabase.from('profiles').update({ timezone: tz }).eq('id', user.id);
-        }
-        await AsyncStorage.setItem(TIMEZONE_STORAGE_KEY, tz);
-      } catch (e) {
-        console.warn('[Layout] timezone resync (AppState) failed:', e);
-      }
-    };
-
-    const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => sub.remove();
-  }, [session]);
+    void sync();
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => { if (nextState === 'active') void sync(); });
+    return () => { active = false; subscription.remove(); };
+  }, [session?.user.id]);
 
   // ─── Navigation guard ─────────────────────────────────────────────────────
   // Runs once isReady flips to true. Does NOT wait for segments — on cold
@@ -406,11 +365,11 @@ export default function RootLayout() {
             }
 
             // Always update last_app_open (fire and forget)
-            supabase
+            void Promise.resolve(supabase
               .from('users')
               .update({ last_app_open: toLocalDateString(new Date()) })
-              .eq('id', session.user.id)
-              .then(() => console.log('[Navigation] last_app_open updated'))
+              .eq('id', session.user.id))
+              .then(({ error }) => { if (error) throw error; })
               .catch((e: unknown) => console.warn('[Navigation] last_app_open update failed:', e));
           } catch (gapErr) {
             console.warn('[Navigation] Gap check failed (non-fatal):', gapErr);

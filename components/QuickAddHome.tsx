@@ -16,7 +16,7 @@ import FoodItemRow from '@/components/FoodItemRow';
 interface MyFood {
   id: string;
   name: string;
-  brand?: string;
+  brand?: string | null;
   serving_amount: number;
   serving_unit: string;
   calories: number;
@@ -24,7 +24,7 @@ interface MyFood {
   carbs: number;
   fats: number;
   fiber: number;
-  created_at: string;
+  created_at: string | null;
   serving_size?: number | null;
   macros_per?: string | null;
 }
@@ -373,7 +373,7 @@ export default function QuickAddHome({ mealType, date, returnTo, mode, planId, m
         <View style={{ flex: 1 }}>
           <FoodItemRow
             name={food.name}
-            brand={food.brand}
+            brand={food.brand ?? undefined}
             calories={food.calories}
             protein={food.protein}
             carbs={food.carbs}

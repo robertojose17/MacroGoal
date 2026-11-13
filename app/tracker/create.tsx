@@ -92,6 +92,7 @@ export default function CreateTrackerScreen() {
   const loadExisting = async () => {
     console.log('[CreateTracker] Loading existing tracker:', trackerId);
     try {
+      if (!trackerId) throw new Error('Tracker ID unavailable');
       const { data, error } = await supabase
         .from('trackers')
         .select('*')
@@ -106,10 +107,11 @@ export default function CreateTrackerScreen() {
 
       setEmoji(data.emoji ?? '🎯');
       setName(data.name ?? '');
-      setTrackerType(data.tracker_type ?? 'numeric');
+      if (!['binary', 'count', 'numeric', 'duration'].includes(data.tracker_type) || !['daily', 'weekly'].includes(data.frequency)) throw new Error('Tracker format needs review');
+      if (data.tracker_type === 'binary' || data.tracker_type === 'count' || data.tracker_type === 'numeric' || data.tracker_type === 'duration') setTrackerType(data.tracker_type);
       setUnit(data.unit ?? '');
       setGoalValue(data.goal_value != null ? String(data.goal_value) : '');
-      setFrequency(data.frequency ?? 'daily');
+      if (data.frequency === 'daily' || data.frequency === 'weekly') setFrequency(data.frequency);
     } catch (e) {
       console.error('[CreateTracker] Error loading tracker:', e);
       router.back();

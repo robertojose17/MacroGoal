@@ -1,3 +1,5 @@
+import type { Database, Json } from '@/lib/supabase/types';
+import { jsonRecord } from './jsonValue';
 import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 
@@ -12,7 +14,7 @@ export interface MealPlan {
   name: string;
   start_date: string;
   end_date: string;
-  created_at: string;
+  created_at: string | null;
 }
 
 export interface MealPlanItem {
@@ -35,7 +37,23 @@ export interface MealPlanItem {
   recipe_url?: string;
   food_item_id?: string | null;
   food_id?: string | null;
-  translations?: Record<string, any>;
+  translations?: { [key: string]: Json | undefined };
+}
+
+function mealType(value: string): MealPlanItem['meal_type'] {
+  if (value === 'breakfast' || value === 'lunch' || value === 'dinner' || value === 'snack') return value;
+  throw new Error('invalid_meal_type');
+}
+function mealPlanItem(row: Database['public']['Tables']['meal_plan_items']['Row']): MealPlanItem {
+  return { ...row, meal_type: mealType(row.meal_type), brand: row.brand ?? undefined,
+    grams: row.grams ?? undefined, serving_unit: row.serving_unit ?? undefined,
+    serving_description: row.serving_description ?? undefined, fiber: row.fiber ?? undefined,
+    dish_description: row.dish_description ?? undefined, recipe_url: row.recipe_url ?? undefined,
+    translations: jsonRecord(row.translations) };
+}
+function nutrient(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) throw new Error('nutrition_unavailable');
+  return value;
 }
 
 export interface MealPlanDetail extends MealPlan {
@@ -95,7 +113,15 @@ export async function listMealPlans(): Promise<{ plans: MealPlan[] }> {
   return { plans: data || [] };
 }
 
-export async function createMealPlan(body: { name: string; start_date: string; end_date: string }): Promise<MealPlan> {
+export type MealPlanWriteGuard = { expectedUserId: string; isCurrent: () => boolean };
+async function assertMealPlanWriter(guard: MealPlanWriteGuard): Promise<void> {
+  if (!guard.isCurrent()) throw Error('plan_write_cancelled');
+  const owner = await getCurrentUserId();
+  if (!guard.isCurrent()) throw Error('plan_write_cancelled');
+  if (owner !== guard.expectedUserId) throw Error('account_changed');
+}
+
+export async function createMealPlan(body: { name: string; start_date: string; end_date: string }, guard?: MealPlanWriteGuard): Promise<MealPlan> {
   console.log('[MealPlansApi] createMealPlan()', body);
   const userId = await getCurrentUserId();
 
@@ -108,6 +134,10 @@ export async function createMealPlan(body: { name: string; start_date: string; e
 
   console.log('[MealPlansApi] Inserting with dates:', startDate, endDate);
 
+  if (guard) {
+    await assertMealPlanWriter(guard);
+    if (userId !== guard.expectedUserId) throw Error('account_changed');
+  }
   const { data, error } = await supabase
     .from('meal_plans')
     .insert({ user_id: userId, name: body.name, start_date: startDate, end_date: endDate })
@@ -135,15 +165,7 @@ export async function getMealPlan(planId: string): Promise<MealPlanDetail> {
   }
   const { data: items, error: itemsError } = await supabase
     .from('meal_plan_items')
-    .select(`
-      *,
-      food_items!meal_plan_items_food_item_id_fkey (
-        id, calories, protein, carbs, fat, fiber, serving_size, macros_per
-      ),
-      foods!meal_plan_items_food_id_fkey (
-        id, calories, protein, carbs, fats, fiber, serving_amount
-      )
-    `)
+    .select('*')
     .eq('plan_id', planId)
     .order('date', { ascending: true })
     .order('created_at', { ascending: true });
@@ -152,40 +174,7 @@ export async function getMealPlan(planId: string): Promise<MealPlanDetail> {
     throw new Error(itemsError.message);
   }
 
-  const fixedItems = (items || []).map((item: any) => {
-    const fi = item.food_items;
-    const fd = item.foods;
-    const grams = Number(item.grams) || 0;
-
-    // Only recalculate if stored calories look wrong (< 10) and we have food data and grams
-    if (Number(item.calories) < 10 && grams > 0) {
-      console.log('[MealPlansApi] Fixing wrong macros for item:', item.food_name, 'stored calories:', item.calories, 'grams:', grams);
-      if (fi && fi.serving_size > 0) {
-        const divisor = fi.macros_per === '100g' ? 100 : fi.serving_size;
-        const ratio = grams / divisor;
-        return {
-          ...item,
-          calories: Math.round(fi.calories * ratio),
-          protein: Math.round(fi.protein * ratio * 10) / 10,
-          carbs: Math.round(fi.carbs * ratio * 10) / 10,
-          fats: Math.round(fi.fat * ratio * 10) / 10,
-          fiber: Math.round((fi.fiber ?? 0) * ratio * 10) / 10,
-        };
-      }
-      if (fd && fd.serving_amount > 0) {
-        const ratio = grams / fd.serving_amount;
-        return {
-          ...item,
-          calories: Math.round(fd.calories * ratio),
-          protein: Math.round(fd.protein * ratio * 10) / 10,
-          carbs: Math.round(fd.carbs * ratio * 10) / 10,
-          fats: Math.round((fd.fats ?? fd.fat ?? 0) * ratio * 10) / 10,
-          fiber: Math.round((fd.fiber ?? 0) * ratio * 10) / 10,
-        };
-      }
-    }
-    return item;
-  });
+  const fixedItems = (items ?? []).map(mealPlanItem);
 
   return { ...plan, items: fixedItems };
 }
@@ -204,25 +193,29 @@ export async function deleteMealPlan(planId: string): Promise<void> {
   }
 }
 
-export async function addMealPlanItem(planId: string, body: AddMealPlanItemBody): Promise<MealPlanItem> {
+export async function addMealPlanItem(planId: string, body: AddMealPlanItemBody, guard?: MealPlanWriteGuard): Promise<MealPlanItem> {
   console.log('[MealPlansApi] addMealPlanItem()', planId, body.food_name);
+  if (guard) await assertMealPlanWriter(guard);
+  const type = mealType(body.meal_type);
+  const nutrition = { calories: nutrient(body.calories), protein: nutrient(body.protein), carbs: nutrient(body.carbs), fats: nutrient(body.fats) };
+  if (body.fiber !== undefined) nutrient(body.fiber);
   const { data, error } = await supabase
     .from('meal_plan_items')
     .insert({
       plan_id: planId,
       date: body.date,
-      meal_type: body.meal_type,
+      meal_type: type,
       food_name: body.food_name,
       brand: body.brand || null,
-      quantity: body.quantity || 1,
-      grams: body.grams || null,
+      quantity: body.quantity ?? 1,
+      grams: body.grams ?? null,
       serving_unit: body.serving_unit || null,
       serving_description: body.serving_description || null,
-      calories: body.calories || 0,
-      protein: body.protein || 0,
-      carbs: body.carbs || 0,
-      fats: body.fats || 0,
-      fiber: body.fiber || 0,
+      calories: nutrition.calories,
+      protein: nutrition.protein,
+      carbs: nutrition.carbs,
+      fats: nutrition.fats,
+      fiber: body.fiber ?? null,
       dish_description: body.dish_description || null,
       recipe_url: body.recipe_url || null,
       food_item_id: body.food_item_id || null,
@@ -243,7 +236,7 @@ export async function addMealPlanItem(planId: string, body: AddMealPlanItemBody)
       target_languages: ['es'],
     },
   }).catch(() => {});
-  return data;
+  return mealPlanItem(data);
 }
 
 export async function updateMealPlan(planId: string, body: { name?: string; start_date?: string; end_date?: string }): Promise<void> {

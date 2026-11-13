@@ -903,7 +903,7 @@ export default function SocialProfileViewScreen() {
       <CalendarDateRangePicker
         visible={showRangePicker}
         onClose={() => setShowRangePicker(false)}
-        onSelect={handleCustomRangeSelect}
+        onSelectRange={handleCustomRangeSelect}
         initialStartDate={customStartDate}
         initialEndDate={customEndDate}
       />

@@ -1,3 +1,5 @@
+import { readActiveGoal } from '@/utils/activeGoal';
+import { subscribeGoalChanged } from '@/utils/goalChangeEvents';
 import * as React from "react";
 import { createContext, useCallback, useContext, useEffect, useRef } from "react";
 import { Platform, AppState, AppStateStatus } from "react-native";
@@ -18,6 +20,7 @@ try {
 }
 
 export interface WidgetMacroData {
+  available: boolean;
   calories: number;
   calorieGoal: number;
   protein: number;
@@ -38,6 +41,7 @@ const WidgetContext = createContext<WidgetContextType | null>(null);
 
 export function WidgetProvider({ children }: { children: React.ReactNode }) {
   const currentUserIdRef = useRef<string | null>(null);
+  const revision = useRef(0);
 
   const writeToWidget = useCallback((data: WidgetMacroData) => {
     if (Platform.OS !== "ios" || !ExtensionStorageClass) return;
@@ -51,18 +55,19 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const unavailable = useCallback(() => {
+    // Numeric slots are ignored by Swift when available is false; never displayed as targets.
+    writeToWidget({ available: false, calories: 0, calorieGoal: 0, protein: 0, proteinGoal: 0, carbs: 0, carbsGoal: 0, fat: 0, fatGoal: 0, streak: 0, date: '' });
+  }, [writeToWidget]);
+
   const fetchAndSync = useCallback(async (userId: string) => {
+    const ticket = ++revision.current;
     try {
       const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
 
       // Fetch goals and today's meals in parallel
       const [goalResult, mealsResult, xpResult] = await Promise.all([
-        supabase
-          .from("goals")
-          .select("daily_calories, protein_g, carbs_g, fats_g")
-          .eq("user_id", userId)
-          .eq("is_active", true)
-          .maybeSingle(),
+        readActiveGoal(userId),
         supabase
           .from("meals")
           .select("meal_items(calories, protein, carbs, fats)")
@@ -75,8 +80,9 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
           .maybeSingle(),
       ]);
 
-      console.log("[WidgetContext] fetchAndSync — goals:", goalResult.error ?? "ok", "meals:", mealsResult.error ?? "ok", "xp:", xpResult.error ?? "ok");
+      console.log("[WidgetContext] fetchAndSync — goals:", "verified", "meals:", mealsResult.error ?? "ok", "xp:", xpResult.error ?? "ok");
 
+      if (mealsResult.error) throw Error("meal_source_unavailable");
       let totalCals = 0, totalP = 0, totalC = 0, totalF = 0;
       if (mealsResult.data) {
         for (const meal of mealsResult.data as any[]) {
@@ -89,40 +95,48 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      const goalData = goalResult.data;
+      const goalData = goalResult;
       const xpData = xpResult.data as any;
 
       const widgetData: WidgetMacroData = {
+        available: true,
         calories: Math.round(totalCals),
-        calorieGoal: goalData?.daily_calories ?? 2000,
+        calorieGoal: goalData.daily_calories,
         protein: Math.round(totalP),
-        proteinGoal: goalData?.protein_g ?? 150,
+        proteinGoal: goalData.protein_g,
         carbs: Math.round(totalC),
-        carbsGoal: goalData?.carbs_g ?? 220,
+        carbsGoal: goalData.carbs_g,
         fat: Math.round(totalF),
-        fatGoal: goalData?.fats_g ?? 65,
+        fatGoal: goalData.fats_g,
         streak: xpData?.current_streak ?? 0,
         date: today,
       };
 
       console.log("[WidgetContext] Fetched widget data for user", userId, ":", JSON.stringify(widgetData));
+      const owner = await supabase.auth.getSession();
+      if (ticket !== revision.current || currentUserIdRef.current !== userId) return;
+      if (owner.error || owner.data.session?.user.id !== userId) { unavailable(); return; }
       writeToWidget(widgetData);
     } catch (err) {
+      if (ticket === revision.current && currentUserIdRef.current === userId) unavailable();
       console.warn("[WidgetContext] fetchAndSync error:", err);
     }
-  }, [writeToWidget]);
+  }, [writeToWidget, unavailable]);
 
   const syncWidget = useCallback(async () => {
     const userId = currentUserIdRef.current;
     console.log("[WidgetContext] syncWidget called, userId:", userId ?? "none");
-    if (!userId) return;
+    if (!userId) { unavailable(); return; }
     await fetchAndSync(userId);
-  }, [fetchAndSync]);
+  }, [fetchAndSync, unavailable]);
 
   // On mount: try to restore session directly from AsyncStorage (no timeout)
   useEffect(() => {
     if (Platform.OS !== "ios") return;
+    unavailable();
+    const ticket = revision.current;
     supabase.auth.getSession().then(({ data }) => {
+      if (ticket !== revision.current) return;
       const userId = data.session?.user?.id ?? null;
       console.log("[WidgetContext] getSession on mount, userId:", userId ?? "none");
       if (userId) {
@@ -132,7 +146,7 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
     }).catch((e) => {
       console.warn("[WidgetContext] getSession error:", e);
     });
-  }, [fetchAndSync]);
+  }, [fetchAndSync, unavailable]);
 
   // Listen for auth state — sync widget whenever a user session is available
   useEffect(() => {
@@ -141,14 +155,23 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const userId = session?.user?.id ?? null;
       console.log("[WidgetContext] Auth state change:", event, "userId:", userId ?? "none");
+      if (currentUserIdRef.current === userId) return;
+      revision.current++;
       currentUserIdRef.current = userId;
+      unavailable();
       if (userId && (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED")) {
         fetchAndSync(userId);
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, [fetchAndSync]);
+    const unsubscribe = subscribeGoalChanged(owner => {
+      if (owner && owner !== currentUserIdRef.current) return;
+      revision.current++; unavailable();
+      if (currentUserIdRef.current) void fetchAndSync(currentUserIdRef.current);
+    });
+    const invalidate = () => { revision.current++; };
+    return () => { invalidate(); subscription.unsubscribe(); unsubscribe(); };
+  }, [fetchAndSync, unavailable]);
 
   // Re-sync when app comes to foreground
   useEffect(() => {

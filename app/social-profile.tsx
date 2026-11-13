@@ -287,17 +287,17 @@ function LegacySocialProfileScreen() {
 
       console.log('[SocialProfile] loadNutrition — meals:', mealsRes.error?.message ?? 'ok', 'goals:', goalsRes.error?.message ?? 'ok');
 
+      if (mealsRes.error || !mealsRes.data) throw new Error('nutrition_unavailable');
       let totalCal = 0, totalProt = 0, totalCarbs = 0, totalFats = 0, totalFiber = 0;
-      if (mealsRes.data) {
-        for (const meal of mealsRes.data) {
-          const items = (meal as any).meal_items ?? [];
-          for (const item of items) {
-            totalCal += Number(item.calories ?? 0);
-            totalProt += Number(item.protein ?? 0);
-            totalCarbs += Number(item.carbs ?? 0);
-            totalFats += Number(item.fats ?? 0);
-            totalFiber += Number(item.fiber ?? 0);
-          }
+      for (const meal of mealsRes.data) {
+        if (!Array.isArray(meal.meal_items)) throw new Error('nutrition_incomplete');
+        for (const item of meal.meal_items) {
+          const values = [item.calories,item.protein,item.carbs,item.fats,item.fiber];
+          if (!values.every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0)) throw new Error('nutrition_incomplete');
+          // Explicit guards keep null unknown; zero is legitimate.
+          if (item.calories === null || item.protein === null || item.carbs === null || item.fats === null || item.fiber === null) throw new Error('nutrition_incomplete');
+          totalCal += item.calories; totalProt += item.protein; totalCarbs += item.carbs;
+          totalFats += item.fats; totalFiber += item.fiber;
         }
       }
 
@@ -310,16 +310,13 @@ function LegacySocialProfileScreen() {
         fiber: range === 'today' ? totalFiber : totalFiber / days,
       });
 
-      if (goalsRes.data) {
-        setGoalData({
-          calories: Number(goalsRes.data.calories ?? goalsRes.data.calorie_goal ?? 2000),
-          protein: Number(goalsRes.data.protein ?? goalsRes.data.protein_goal ?? 150),
-          carbs: Number(goalsRes.data.carbs ?? goalsRes.data.carbs_goal ?? 200),
-          fats: Number(goalsRes.data.fats ?? goalsRes.data.fat_goal ?? 65),
-          fiber: Number(goalsRes.data.fiber ?? goalsRes.data.fiber_goal ?? 30),
-        });
-      }
+      const goal = goalsRes.data;
+      const validTargets = goal && !goalsRes.error && goal.user_id === targetUserId && goal.is_active === true
+        && [goal.daily_calories,goal.protein_g,goal.carbs_g,goal.fats_g,goal.fiber_g].every(v=>typeof v==='number'&&Number.isFinite(v)&&v>=0)
+        && goal.daily_calories > 0;
+      setGoalData(validTargets ? {calories:goal.daily_calories,protein:goal.protein_g,carbs:goal.carbs_g,fats:goal.fats_g,fiber:goal.fiber_g} : null);
     } catch (err) {
+      setNutritionData(null); setGoalData(null);
       console.error('[SocialProfile] loadNutrition — error:', err);
     } finally {
       setNutritionLoading(false);
@@ -441,14 +438,14 @@ function LegacySocialProfileScreen() {
       )
     );
     try {
-      const result = await toggleLike(postId);
+      const result = await toggleLike(postId, liked, currentUserId);
       setPosts((prev) =>
         prev.map((p) => (p.id === postId ? { ...p, liked_by_me: result.liked, likes_count: result.likes_count } : p))
       );
     } catch (e) {
       console.error('[SocialProfile] toggleLike failed:', e);
     }
-  }, []);
+  }, [currentUserId]);
 
   // ─── Save ────────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async (postId: string, savedByMe: boolean) => {
@@ -688,7 +685,7 @@ function LegacySocialProfileScreen() {
             <Text style={[styles.sectionTitle, { color: textColor }]}>{t('localization.social.photo_progress')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoProgressScroll}>
               {stats.check_in_photos.map((photo) => {
-                const d = new Date(photo.date ?? photo.created_at ?? '');
+                const d = new Date(photo.created_at);
                 const dateLabel = d instanceof Date && !isNaN(d.getTime())
                   ? d.toLocaleDateString(getAppLocale(), { month: 'short', day: 'numeric' })
                   : '';

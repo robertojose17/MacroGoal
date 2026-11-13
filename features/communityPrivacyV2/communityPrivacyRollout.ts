@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { COMMUNITY_PRIVACY_PAIR_PILOT_OPT_IN, COMMUNITY_PRIVACY_V2_ENABLED, isCommunityPrivacyRolloutRequested } from './featureFlag';
 import { createSupabaseInboxAuthBinding } from './supabaseInboxAuth';
-import { createCommunityPrivacyRolloutController } from './communityPrivacyRolloutController';
+import { createCommunityPrivacyRolloutController, applyCommunityPrivacyAbort } from './communityPrivacyRolloutController';
 import type { CommunityPrivacyScope, CommunityPrivacyRequest } from './communityPrivacyRolloutController';
 export type { CommunityPrivacyActivation, CommunityPrivacyScope } from './communityPrivacyRolloutController';
 
@@ -19,8 +19,8 @@ const controller = createCommunityPrivacyRolloutController({
   requireGeneral: COMMUNITY_PRIVACY_V2_ENABLED,
   createAuthBinding: () => createSupabaseInboxAuthBinding(supabase.auth),
   async eligibility(session, signal) {
-    const result = await eligibilityClient.rpc('community_privacy_eligibility', {}, { get: false, head: false })
-      .setHeader('Authorization', `Bearer ${session.accessToken}`).abortSignal(signal);
+    const result = await applyCommunityPrivacyAbort(eligibilityClient.rpc('community_privacy_eligibility', {}, { get: false, head: false })
+      .setHeader('Authorization', `Bearer ${session.accessToken}`), signal);
     if (result.error) throw new Error('Community data is unavailable.');
     return result.data;
   },

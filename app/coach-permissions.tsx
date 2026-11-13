@@ -146,7 +146,7 @@ export default function CoachPermissionsScreen() {
       }
 
       const maxCal = parseInt(maxCalInput, 10);
-      const payload: CoachPermissions = {
+      const payload = {
         ...permissions,
         user_id: user.id,
         max_calorie_adjustment: isNaN(maxCal) ? 100 : maxCal,

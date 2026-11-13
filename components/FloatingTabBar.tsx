@@ -57,16 +57,17 @@ export default function FloatingTabBar({
 
     tabs.forEach((tab, index) => {
       let score = 0;
+      const routePath = typeof tab.route === 'string' ? tab.route : tab.route.pathname;
 
-      if (pathname === tab.route) {
+      if (pathname === routePath) {
         score = 100;
-      } else if (pathname.startsWith(tab.route as string)) {
+      } else if (pathname.startsWith(routePath)) {
         score = 80;
       } else if (pathname.includes(tab.name)) {
         score = 60;
       } else if (
-        tab.route.includes('/(tabs)/') &&
-        pathname.includes(tab.route.split('/(tabs)/')[1])
+        routePath.includes('/(tabs)/') &&
+        pathname.includes(routePath.split('/(tabs)/')[1])
       ) {
         score = 40;
       }

@@ -28,7 +28,6 @@ export function getPublishConfig(): PublishConfig {
   
   // If still empty, try to get from manifest
   if (!name || name.trim() === '') {
-    // @ts-expect-error - accessing manifest for fallback
     name = Constants.manifest?.name || Constants.manifest2?.name || '';
   }
 
