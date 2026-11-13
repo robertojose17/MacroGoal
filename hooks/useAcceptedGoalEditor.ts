@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
+import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/types';
 import { createNutritionGoalSaveController } from '@/utils/saveNutritionGoal';
@@ -18,6 +19,9 @@ type Session = AcceptedGoalSession;
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : 'Unable to verify saved goals. Please review again.'; }
 
 export function useAcceptedGoalEditor(autoLoad = true) {
+  // SecureStore recovery is a write prerequisite, not an authentication or
+  // profile-reading prerequisite. Browsers currently support read-only goals.
+  const nativeEditingSupported = Platform.OS === 'ios' || Platform.OS === 'android';
   const [snapshot, setSnapshot] = useState<GoalEditorSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -43,7 +47,7 @@ export function useAcceptedGoalEditor(autoLoad = true) {
       const auth = await supabase.auth.getUser();
       if (auth.error || !auth.data.user || !latestRead()) throw new Error('Account unavailable');
       const id = auth.data.user.id; const bound = bind(id);
-      await bound.recover(() => isCurrent(id, revision) && latestRead());
+      if (nativeEditingSupported) await bound.recover(() => isCurrent(id, revision) && latestRead());
       if (bound.save.pendingScope() === 'initial_onboarding') throw new Error('An onboarding request is unresolved. Reopen onboarding to retry or review that exact request.');
       const [profile, goal] = await Promise.all([
         supabase.from('users').select('*').eq('id', id).maybeSingle(),
@@ -58,7 +62,7 @@ export function useAcceptedGoalEditor(autoLoad = true) {
       if (latestRead()) { setSnapshot(null); setError(errorMessage(failure)); }
       throw failure;
     } finally { if (latestRead()) setLoading(false); }
-  }, [bind, isCurrent]);
+  }, [bind, isCurrent, nativeEditingSupported]);
   useFocusEffect(useCallback(() => {
     active.current = true; epoch.current += 1;
     if (autoLoad) void refresh().catch(() => {});
@@ -75,6 +79,7 @@ export function useAcceptedGoalEditor(autoLoad = true) {
     return () => { data.subscription.unsubscribe(); unsubscribe.current?.(); active.current = false; epoch.current += 1; };
   }, []);
   const run = useCallback(async (kind: 'save' | 'restart', input?: Parameters<SaveController['save']>[0] | Parameters<RestartController['save']>[0]) => {
+    if (!nativeEditingSupported) throw new Error('Goal editing is unavailable in this browser. Your current profile and targets can still be viewed.');
     const current = session.current, id = owner.current, revision = epoch.current;
     if (!current || !id || !isCurrent(id, revision)) throw new Error('Account changed. Reopen this screen.');
     const target = kind === 'save' ? current.save : current.restart;
@@ -97,8 +102,9 @@ export function useAcceptedGoalEditor(autoLoad = true) {
       return result;
     } catch (failure) { if (isCurrent(id, revision) && !(failure instanceof AcceptedGoalReadSuperseded)) setError(errorMessage(failure)); throw failure; }
     finally { notify(); }
-  }, [isCurrent, refresh]);
+  }, [isCurrent, refresh, nativeEditingSupported]);
   const review = useCallback(async () => {
+    if (!nativeEditingSupported) return false;
     const current = session.current, id = owner.current, revision = epoch.current;
     if (!current || !id || !isCurrent(id, revision) || current.save.isBusy() || current.restart.isBusy()) return false;
     await current.recover(() => isCurrent(id, revision));
@@ -108,13 +114,13 @@ export function useAcceptedGoalEditor(autoLoad = true) {
     }
     await current.recover(() => isCurrent(id, revision));
     await refresh(); return true;
-  }, [isCurrent, refresh]);
+  }, [isCurrent, refresh, nativeEditingSupported]);
   const capture = useCallback(() => { const id = owner.current, revision = epoch.current; return () => !!id && isCurrent(id, revision); }, [isCurrent]);
   const s = session.current;
-  return { snapshot, loading, error, refresh, run, review, isCurrent, capture,
+  return { snapshot, loading, error, refresh, run, review, isCurrent, capture, readOnly: !nativeEditingSupported,
     busy: !!s && (s.save.isBusy() || s.restart.isBusy()),
     pending: !!s && (s.save.hasPending() || s.restart.hasPending()),
-    canRetrySave: !!s && s.save.pendingScope() === 'manual_goal' && s.save.canRetry() && !s.restart.ownsPending() && !s.restart.isBusy(),
-    canRetryRestart: !!s && s.restart.canRetry() && !s.save.ownsPending() && !s.save.isBusy(),
+    canRetrySave: nativeEditingSupported && !!s && s.save.pendingScope() === 'manual_goal' && s.save.canRetry() && !s.restart.ownsPending() && !s.restart.isBusy(),
+    canRetryRestart: nativeEditingSupported && !!s && s.restart.canRetry() && !s.save.ownsPending() && !s.save.isBusy(),
   };
 }

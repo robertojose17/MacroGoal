@@ -10,7 +10,7 @@ const newId = '00000000-0000-4000-8000-000000000003';
 const requestId = '00000000-0000-4000-8000-000000000004';
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function goal() { return { id: oldId, user_id: owner, is_active: true, created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-01T00:00:00.123456+00:00', goal_type: 'lose', goal_intensity: 1, target_weight: 70, daily_calories: 2000, protein_g: 150, carbs_g: 200, fats_g: 67, fiber_g: 0, loss_rate_lbs_per_week: 1, macro_preset: 'balanced', start_date: '2026-11-01', start_journey_date: '2026-11-01', base_daily_calories: 2000, last_adaptive_update: null }; }
-function fixture({ reject = null } = {}) {
+function fixture({ reject = null, platform = 'ios', secureUnavailable = false } = {}) {
   const secure = new Map(), witness = new Map(), calls = [], authListeners = new Set();
   let actor = owner, row = goal(), lose = true, paused = null;
   const profile = { id: owner, updated_at: '2026-11-01T01:02:03.123456+00:00', activity_level: 'moderate', goal_weight: 70, onboarding_completed: false };
@@ -31,7 +31,7 @@ function fixture({ reject = null } = {}) {
   };
   const storage = {
     WHEN_UNLOCKED_THIS_DEVICE_ONLY: 9, isAvailableAsync: async () => true,
-    async getItemAsync(key) { if (paused) await paused.promise; return secure.get(key) ?? null; },
+    async getItemAsync(key) { if (secureUnavailable) throw Error('secure_storage_unavailable'); if (paused) await paused.promise; return secure.get(key) ?? null; },
     async setItemAsync(key, value) { secure.set(key, value); }, async deleteItemAsync(key) { secure.delete(key); },
   };
   function process() {
@@ -52,7 +52,7 @@ function fixture({ reject = null } = {}) {
         if (id === '@/lib/supabase/client') return { supabase: client, SUPABASE_PROJECT_URL: 'https://esgptfiofoaeguslgvcq.supabase.co' };
         if (id === 'expo-secure-store') return storage;
         if (id === '@react-native-async-storage/async-storage') return { getItem: async key => witness.get(key) ?? null, setItem: async (key, value) => { witness.set(key, value); }, removeItem: async key => { witness.delete(key); } };
-        if (id === 'react-native') return { Platform: { OS: 'ios' } };
+        if (id === 'react-native') return { Platform: { OS: platform } };
         if (id === 'expo-crypto') return { randomUUID: () => requestId, CryptoDigestAlgorithm: { SHA256: 'SHA256' }, digestStringAsync: async (_, value) => crypto.createHash('sha256').update(value).digest('hex') };
         if (id === './goalChangeEvents') return { emitGoalChanged() {} };
         if (id.startsWith('@/')) return load(id.slice(2) + '.ts');
@@ -89,6 +89,26 @@ test('cold session hydration reads durable request without RPC and shares one co
   const f = fixture(); await f.seed(); const cold = f.process(), session = cold.session();
   assert.strictEqual(cold.session(), session); await session.recover(() => true);
   assert.equal(f.calls.length, 1); assert.equal(session.save.ownsPending(), true); assert.equal(session.restart.hasPending(), true); assert.equal(session.restart.ownsPending(), false);
+});
+test('authenticated web editor reads profile without native SecureStore and blocks all goal mutations', async () => {
+  const f = fixture({platform:'web',secureUnavailable:true});
+  const h = f.process().hook('editor'); await flush();
+  assert.equal(h.render().snapshot.profile.id,owner); assert.equal(h.render().snapshot.goal.id,oldId);
+  assert.equal(h.render().error,''); assert.equal(h.render().readOnly,true);
+  assert.equal(h.render().canRetrySave,false); assert.equal(h.render().canRetryRestart,false);
+  await assert.rejects(h.render().run('save'),/browser/);
+  await assert.rejects(h.render().run('restart'),/browser/);
+  assert.equal(await h.render().review(),false); assert.equal(f.calls.length,0);
+});
+test('web read still rejects missing authenticated actor and clears account switches', async () => {
+  const f = fixture({platform:'web'}), h=f.process().hook('editor'); await flush();
+  assert.equal(h.render().snapshot.profile.id,owner);
+  f.actor(null); assert.equal(h.render().snapshot,null);
+  await assert.rejects(h.render().refresh()); assert.equal(h.render().snapshot,null); assert.equal(f.calls.length,0);
+});
+test('native storage failure remains fail closed and is not treated as web read-only', async () => {
+  const f=fixture({secureUnavailable:true}),h=f.process().hook('editor');await flush();
+  assert.equal(h.render().snapshot,null);assert.match(h.render().error,/storage/);assert.equal(f.calls.length,0);
 });
 test('editor explicit retry ignores mirror lock, preserves exact UUID/CAS and clears both controllers', async () => {
   const f = fixture(), original = await f.seed(); const cold = f.process(), h = cold.hook('editor'); await flush();
