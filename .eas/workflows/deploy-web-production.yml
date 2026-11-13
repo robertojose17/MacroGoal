@@ -1,0 +1,14 @@
+name: Deploy Macro Goal production web
+on:
+  workflow_dispatch: {}
+jobs:
+  deploy_web:
+    name: Deploy existing Macro Goal production website
+    if: ${{ github.ref_name == 'main' }}
+    type: deploy
+    environment: production
+    env:
+      EXPO_PUBLIC_TDEE_MODE: observation-v1
+    params:
+      prod: true
+      source_maps: false
