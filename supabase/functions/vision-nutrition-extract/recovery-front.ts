@@ -54,8 +54,8 @@ export async function readFrontIdentity(url:string,{apiKey,projectUrl,providerFe
 
 // Namespacing prevents request IDs colliding with correction sessions/other owners.
 // Raw client request IDs are never used as the submission IDs logged by receipts.
-export async function frontRecoverySubmission(owner:string,barcode:string,requestId:string) {
-  const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(['unknown-front-v1',owner,barcode,requestId.toLowerCase()]))));
+export async function frontRecoverySubmission(owner:string,barcode:string,requestId:string,scope:'unknown-front-v1'|'unknown-web-v1'='unknown-front-v1') {
+  const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([scope,owner,barcode,requestId.toLowerCase()]))));
   digest[6]=(digest[6]&15)|64;digest[8]=(digest[8]&63)|128;
   const h=Array.from(digest.slice(0,16),n=>n.toString(16).padStart(2,'0')).join('');
   return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;

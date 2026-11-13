@@ -1,0 +1,197 @@
+{
+  "project": "esgptfiofoaeguslgvcq",
+  "status": "source consolidation only; NOT DEPLOYED from this checkout",
+  "lookup-barcode": {
+    "live_version": 49,
+    "live_sha256": "bf1ae3e1daf6ed828c331b9688b392cbe8ad7dcc0871cc66cd991be03de9366b",
+    "sole_deploy_source": "supabase/functions/lookup-barcode",
+    "entrypoint": "index.ts",
+    "import_map": "deno.json",
+    "verify_jwt": true,
+    "files": {
+      "lookup-barcode/index.ts": {
+        "path": "supabase/functions/lookup-barcode/index.ts",
+        "live_sha256": "c77f5d4e50e1280641e0c45e452e476213d39905d19c5d376cbdd8b36132cf8e",
+        "source_sha256": "0bb1c515a9af135f9553e54bf7b710460c17dd5485b83740441ab7aabb223291",
+        "transformation": "entrypoint import '../_shared/' \u2192 './_shared/'; remove trailing blank lines at EOF"
+      },
+      "_shared/offSourceDisplay.mjs": {
+        "path": "supabase/functions/lookup-barcode/_shared/offSourceDisplay.mjs",
+        "live_sha256": "b7adf62a4ac01679a26f9bf3bddc0547c78c9b74bda1db4f84da94159192b306",
+        "source_sha256": "b7adf62a4ac01679a26f9bf3bddc0547c78c9b74bda1db4f84da94159192b306",
+        "transformation": "identical bytes"
+      },
+      "_shared/offMass.mjs": {
+        "path": "supabase/functions/lookup-barcode/_shared/offMass.mjs",
+        "live_sha256": "4c965d26b4dd60bf24b8e268de3ea667a178b3b0fd95909e964bb434f4d96f46",
+        "source_sha256": "d6ce3807cdcf32d16cb487cab25759bb6b45b8cd31c61462a8df4a6dd2a0c25d",
+        "transformation": "remove trailing blank lines at EOF only"
+      },
+      "_shared/off100gV4.mjs": {
+        "path": "supabase/functions/lookup-barcode/_shared/off100gV4.mjs",
+        "live_sha256": "f702e4590f21c4a9974808b212ef01df6fdbac23793f3b3505640094c099bec5",
+        "source_sha256": "f702e4590f21c4a9974808b212ef01df6fdbac23793f3b3505640094c099bec5",
+        "transformation": "identical bytes"
+      },
+      "_shared/nutritionRefresh.mjs": {
+        "path": "supabase/functions/lookup-barcode/_shared/nutritionRefresh.mjs",
+        "live_sha256": "ba05b7fcbc1528c1aa6b4ebe05fb70432a0e0749b9f59abf9feda0a969746b84",
+        "source_sha256": "de26d038052df083fb30ae8509d726204d9d197b8af3e84f1d3e821fc35597fd",
+        "transformation": "remove trailing blank lines at EOF only"
+      },
+      "_shared/nutritionProvider.mjs": {
+        "path": "supabase/functions/lookup-barcode/_shared/nutritionProvider.mjs",
+        "live_sha256": "130181ef4540751d26044dcf17ed83816dc85e301c01013131e015fda038269c",
+        "source_sha256": "f7ab73c7c7d095f2f99ef428430a3fcdd72583c2667a8b08f9f2ebce6540083b",
+        "transformation": "remove trailing blank lines at EOF only"
+      },
+      "_shared/catalogPortionBatch.mjs": {
+        "path": "supabase/functions/lookup-barcode/_shared/catalogPortionBatch.mjs",
+        "live_sha256": "cb07d7e67a284203224bae68016e543b4a7ef378eee7eefcdcb89e7f552aa491",
+        "source_sha256": "cb07d7e67a284203224bae68016e543b4a7ef378eee7eefcdcb89e7f552aa491",
+        "transformation": "identical bytes"
+      },
+      "_shared/searchHydration.mjs": {
+        "path": "supabase/functions/lookup-barcode/_shared/searchHydration.mjs",
+        "live_sha256": "76029d8f3a758bb399dcf19aea784759eb511dfa5a8fac5b841c9607740565f6",
+        "source_sha256": "76029d8f3a758bb399dcf19aea784759eb511dfa5a8fac5b841c9607740565f6",
+        "transformation": "identical bytes"
+      },
+      "_shared/catalogPortionEvidence.mjs": {
+        "path": "supabase/functions/lookup-barcode/_shared/catalogPortionEvidence.mjs",
+        "live_sha256": "066a26e8cd910bb8aef889cf462808d63a65beb67c8bbd329f5c251411d239d7",
+        "source_sha256": "066a26e8cd910bb8aef889cf462808d63a65beb67c8bbd329f5c251411d239d7",
+        "transformation": "identical bytes"
+      },
+      "_shared/foodPortions.mjs": {
+        "path": "supabase/functions/lookup-barcode/_shared/foodPortions.mjs",
+        "live_sha256": "4e35b3395b0f0ea5c1fe75f3736c276feeecbac250e3cb8f0bdfba36258d46af",
+        "source_sha256": "4e35b3395b0f0ea5c1fe75f3736c276feeecbac250e3cb8f0bdfba36258d46af",
+        "transformation": "identical bytes"
+      },
+      "lookup-barcode/identity.mjs": {
+        "path": "supabase/functions/lookup-barcode/identity.mjs",
+        "live_sha256": "b70394495d826c51667923cb5d32598c9ae0caa2aa2ea4a4efeae3bb558d9863",
+        "source_sha256": "b70394495d826c51667923cb5d32598c9ae0caa2aa2ea4a4efeae3bb558d9863",
+        "transformation": "identical bytes"
+      },
+      "_shared/selectedNutritionEndpoint.ts": {
+        "path": "supabase/functions/lookup-barcode/_shared/selectedNutritionEndpoint.ts",
+        "live_sha256": "1438e4ace36f0e40dbb6e36777a5dcedc106e4271e5987476cf4aae75cf5e76a",
+        "source_sha256": "3c64f90bc9fd7e9f43537be7d18f7f3a3f41ab064fde8706d2e60b8fcc161aa3",
+        "transformation": "remove trailing blank lines at EOF only"
+      },
+      "_shared/selectedNutrition.mjs": {
+        "path": "supabase/functions/lookup-barcode/_shared/selectedNutrition.mjs",
+        "live_sha256": "e791272704022c7e2c2bf30bc5498c2506803b401d1cc2a43f1da07a3c659b57",
+        "source_sha256": "33c8d5854a5ffa838a003fea061ee3abd7ab67ff1c7209c2defc8258b7a9eaec",
+        "transformation": "remove trailing blank lines at EOF only"
+      },
+      "_shared/selectedNutritionHooks.ts": {
+        "path": "supabase/functions/lookup-barcode/_shared/selectedNutritionHooks.ts",
+        "live_sha256": "aabd06a17f9acdbdfc964dfc049ae3ee8a99c316c19c9083160d6dc8541e9167",
+        "source_sha256": "aabd06a17f9acdbdfc964dfc049ae3ee8a99c316c19c9083160d6dc8541e9167",
+        "transformation": "identical bytes"
+      },
+      "_shared/portionEndpoint.ts": {
+        "path": "supabase/functions/lookup-barcode/_shared/portionEndpoint.ts",
+        "live_sha256": "3ecc3fea5a5772fb014e783f71c3adae4fc6ea202855ddcb5ba5af2b024b9c69",
+        "source_sha256": "39abe175ba92b82c64ad99545b202be76ac821fc0a3ed0bc2132b72654cc5454",
+        "transformation": "remove trailing blank lines at EOF only"
+      },
+      "_shared/portionCache.mjs": {
+        "path": "supabase/functions/lookup-barcode/_shared/portionCache.mjs",
+        "live_sha256": "c98020b0cb3deba3e9eec2fd18d61728fbc76babb70075009bc656b874e7d397",
+        "source_sha256": "8649f3accfa8be5f4bc82b1ee89b224b56aff4ef3c711fb3118e0d78b13fe59c",
+        "transformation": "remove trailing blank lines at EOF only"
+      },
+      "lookup-barcode/deno.json": {
+        "path": "supabase/functions/lookup-barcode/deno.json",
+        "live_sha256": "027c5aef22b0c280c56da9237e6f015a52326b2d47258b38b573bb5aa9440787",
+        "source_sha256": "027c5aef22b0c280c56da9237e6f015a52326b2d47258b38b573bb5aa9440787",
+        "transformation": "identical bytes"
+      }
+    },
+    "dependency_isolation": "All14_shared dependencies private under lookup-barcode/_shared; global _shared untouched",
+    "lock_note": "Live deno.json declares frozen deno.lock; get_edge_function returns no lock. No lock fabricated; actual Deno lock gate pending.",
+    "lock_validation": {
+      "status": "blocked_registry_transport",
+      "deno_version": "2.9.6",
+      "frozen_preserved": true,
+      "tls_verification_preserved": true,
+      "pinned_versions_unchanged": true,
+      "attempts": [
+        "default Deno check",
+        "Deno check using system trusted CA store",
+        "approved elevated bounded Deno check"
+      ],
+      "observed_error": "JSR package manifest for @supabase/functions-js failed to load; debug: client error (Connect): Connection refused",
+      "registry_urls": [
+        "https://jsr.io/@supabase/functions-js/meta.json",
+        "https://jsr.io/@supabase/supabase-js/meta.json"
+      ],
+      "curl_metadata": "HTTP200 observed for functions-js metadata, but Deno resolver transport failed",
+      "lock_created": false,
+      "typecheck_executed": false,
+      "next_step": "Run same frozen config resolution/check in authorized runner with functioning Deno registry transport; generate official lock through Deno, not fabricated hashes."
+    }
+  },
+  "vision-nutrition-extract": {
+    "live_version": 82,
+    "candidate_version_label": "v83 candidate, not installed",
+    "sole_deploy_source": "supabase/functions",
+    "entrypoint": "vision-nutrition-extract/index.ts",
+    "import_map": "vision-nutrition-extract/deno.json",
+    "verify_jwt": true,
+    "changes": [
+      "vision-nutrition-extract/recovery.ts",
+      "vision-nutrition-extract/recovery-front.ts"
+    ],
+    "client_dependency": "Web-first sends independent webRequestId. Candidate backend adds deterministic unknown-web-v1 submission claims; deploy and verify before releasing client to retain durable no-double-billing guard.",
+    "live_sha256": "9ba63b42e0677b4647dc8ced93f5032d4a5f7bf0254ab7d8c2487e14626df1e5",
+    "files": {
+      "vision-nutrition-extract/index.ts": "8735f2e89660236f55ef6f4da18656c3fb875a9cc11a1fb3d7c6c62caf9f32a1",
+      "vision-nutrition-extract/label-all-rows.mjs": "a896a42c59eb3f644d49b3c19067b16ae9fd8e169012ecf89bdc1a0615e0e517",
+      "vision-nutrition-extract/recovery-front.ts": "14f02db6a56151431e670fc8d740e18657f9fc3220c90a0a18c4e9c0e74256ef",
+      "vision-nutrition-extract/recovery-images.ts": "48729b9f3153f4bdb5d8d4621bbb97c2b33a1152097bd8daa3b856bfcf969a06",
+      "vision-nutrition-extract/declared-column-v2.mjs": "1f4da588c731b0d7e8dcb4ceaa1c0360b3966c4959d68d54e92853d641388ef7",
+      "vision-nutrition-extract/declared-column-read.mjs": "59e95e26158428a231ad7faa1a170b8c2321522e38fd39d93ba4637c5ddaa275",
+      "vision-nutrition-extract/nutritionReadGate.mjs": "9feed43419f6b54e3c31556d89828f84f9041e223fd26aa516912b9b5f91188b",
+      "vision-nutrition-extract/serving-association.mjs": "baf5431b24da0d1176998ef7f3d75b31804c7dd330bf20211e18e5945ff01daa",
+      "vision-nutrition-extract/identity.mjs": "2db37bf4d80d3a25ae6212475e517be32590b7af49444c8917eaa37640b3759b",
+      "vision-nutrition-extract/recovery.ts": "9ef0240c95d6d8af126e543b0677cf152b0c422e20f287ff9a9453b0f0aba006",
+      "vision-nutrition-extract/recovery-manual.mjs": "c923e705514d0b81db4d75b92f50f671b31acaa88489a6e5f2af8864ff3e286e",
+      "vision-nutrition-extract/recovery-contract.mjs": "24ee210bd61dd0a524738a8f2125573eefdb5923f7fd5bad320ebf001dd28636",
+      "vision-nutrition-extract/recovery-search-diagnostics.mjs": "cb08797f3caab062cf60b3063176e5664f7b40fb9105db28e740dc74e03bb2aa",
+      "vision-nutrition-extract/recovery-general.ts": "0d3361f334e28a4d17b15c21fc15fdd0aba567d1fd50cd5a5931774332ae2b6a",
+      "vision-nutrition-extract/recovery-discovery.ts": "fc82c95ca84542a7df1a1455e0e965c08bf40f87a96670ad4e89a47066e2e575",
+      "vision-nutrition-extract/recovery-budget.mjs": "d5eeada486b2311c9e163df01df02cf808a021162272645f7b686de281728409",
+      "vision-nutrition-extract/serving-mass.mjs": "df80ca685c5654ecc2f7681d88b1a53553c0bc8797961cc73037c9f818ea1c79",
+      "vision-nutrition-extract/source-gallery.mjs": "d1f68d935a2c2da6b235473dc2b2833d485249a5d928059266b048860af44849",
+      "vision-nutrition-extract/target-source.mjs": "4d466911a8ad4febccbefa99c534730370d346255d3d5220ce6b5171f5b16c02",
+      "vision-nutrition-extract/natures-own-source.mjs": "b3b1d47c114fb84791b059d6c418cc478796386c379dfca09d0e382eb593b704",
+      "vision-nutrition-extract/smartlabel-source.mjs": "54843d5702e34417c8146059e4797a3242da272edbcde68eb060484b1216be72",
+      "ai-coach/coach-source-pages.ts": "b0478ec038fde04f47d73ba2fa195714e2e45fc1d4af6b472c2d20883e9e512d",
+      "ai-coach/coach-official-capabilities.ts": "f5364e042140a4414b7283b18abae583527b41b8b18c7b00b9a9f260790e03a1",
+      "ai-coach/coach-dish-json.ts": "d563f05d327377f331327fcd48b42f1d0ccbd28db6ceba8576f90d99319ff0f8",
+      "ai-coach/coach-lookup-intent.ts": "084aa1165aaa704db9cc1cbb53a4c5604fd6e41bb0d815c5c52f33d1ae964bca",
+      "ai-coach/coach-mcdonalds-api.ts": "70e144aa831af6b083c6810cd93ac507a37dfe217609b8b394fb56877036b456",
+      "ai-coach/coach-sources.ts": "a4835668afd2ec17ed26184267447ee96ba27750e0309e79fab94e9456b2c436",
+      "vision-nutrition-extract/recovery-source-selection.mjs": "ef5f30f30024cbdd2ed107e78edeeaf0df5ee7374d71366da4fdc3f953351e2c",
+      "vision-nutrition-extract/recovery-web-search.mjs": "c3dbb7a2436894092372e5e6a93c628954c78264a2b806db68a25d3f925b2351",
+      "vision-nutrition-extract/recovery-web-evidence.mjs": "c5513c84b2df113a1a0c5d159c6bec89018a5e04faff406f82f029abde1d491d",
+      "vision-nutrition-extract/recovery-text-evidence.mjs": "148b5faa2998d059d9fffdfa53dbdc01cd1956cd814643d80c7d1e59848bbee2",
+      "vision-nutrition-extract/recovery-release-policy.mjs": "6cf11273cb55dec50a2340b573792378eade23afd5d686c329ca060ff5c33358",
+      "vision-nutrition-extract/recovery-receipts.mjs": "6875e51c9ca08237f6dd6ee8c2381834dd3527a0c104e5a9771b29b98cfa73c5",
+      "vision-nutrition-extract/deno.json": "7a801f1b594ae036ae1e3089ae0ae8f095473af95afcfe1bce3a01126f18c809"
+    }
+  },
+  "client": {
+    "source": "components/BarcodeRecoveryScreen.tsx + utils/unknownBarcodeAttempt.ts; same-detail already768353c",
+    "runtime_validation": "pending signed-in real application; no TestFlight authorized"
+  },
+  "weekly": {
+    "status": "NOT ACTIVATED, NOT INTEGRATED; isolated proposal requires SQL/endpoint/dispatcher validation"
+  },
+  "cancelled_ui": "BarcodeSourceResult separate screen must not be integrated or deployed"
+}

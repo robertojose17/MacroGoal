@@ -1,2 +1,8 @@
 
 project_id = "esgptfiofoaeguslgvcq"
+
+# Canonical observed production source; do not deploy the historical central index.
+# This changes source selection only. It does not publish a function.
+[functions.progress-intelligence]
+verify_jwt = true
+entrypoint = "./functions/observed-snapshot-release/functions/progress-intelligence/index.ts"

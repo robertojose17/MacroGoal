@@ -1,5 +1,7 @@
 # Deployed checkpoint receiver
 
+Current extension: track-onboarding v23 ACTIVE on 2026-11-11, SHA-256 e84b205132b355b774c49a27b92abb0257e28e6453f9ffa4feb0401de2cd5a0d. See `../HOST-SCREEN-DEPLOYED.md`. The following v20 record is historical; do not treat its version/hash as the current deployment.
+
 Existing project esgptfiofoaeguslgvcq; existing function track-onboarding version 20 ACTIVE. Updated 2026-11-01T00:25:50.764Z. Bundle SHA-256: 6565a4b0d92c94bad6f919e1f3351355eb031213a7fd52d6aab6089f9322f53e. Reviewed source commit: 7b58e0bb54629a36d3c7d168557e3fa3c67bddcc.
 
 The deployed entrypoint is supabase/premium-checkpoints-rollout/track-onboarding/index.ts. Bundle files are track-onboarding/index.ts, router.ts, legacy.ts, checkpoint.ts and edge/protocol.ts, relative to this rollout directory's parent. Preserve these relative imports. The backup is not a deployed module. Gateway verify_jwt=false preserves pre-auth legacy onboarding; the private handler independently requires getUser JWT verification before any write.

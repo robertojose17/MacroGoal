@@ -35,7 +35,6 @@ import { Sex, GoalType, ActivityLevel } from '@/types';
 import Purchases, { isPurchasesAvailable } from '@/utils/purchases';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const ONESIGNAL_PROMPT_KEY = 'onesignal_prompt_shown_v1';
 
 const BG_IMAGE = require('../../assets/images/3ce4e800-3062-4acc-9a7a-16575bc5185c.jpeg');
 const PRIMARY = '#4CAF50';
@@ -238,47 +237,21 @@ export default function CompleteOnboardingScreen() {
     await onboarding.review();
   };
 
-  // ─── Notification permission helper ───────────────────────────────────────
-
-  const requestOneSignalPermission = async () => {
-    if (Platform.OS === 'web') return;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const OneSignal = require('react-native-onesignal').OneSignal;
-      console.log('[Onboarding] Requesting OneSignal notification permission');
-      await OneSignal.Notifications.requestPermission(true);
-      await AsyncStorage.setItem(ONESIGNAL_PROMPT_KEY, 'true');
-    } catch (e) {
-      console.warn('[Onboarding] OneSignal permission request failed (non-fatal):', e);
-    }
-  };
-
-  const showNotifPromptThen = async (nav: () => void) => {
-    if (Platform.OS === 'web') {
-      nav();
-      return;
-    }
-    await requestOneSignalPermission();
-    nav();
-  };
-
   // ─── Purchase / finish ─────────────────────────────────────────────────────
 
   const handleStartTrial = async (premiumFlow: PremiumFlow) => {
     console.log('[Onboarding] Start Free Trial pressed');
     await trackPaywallActionOnce('trial', sessionIdRef.current ?? undefined);
-    await showNotifPromptThen(() => router.push(premiumEntry('onboarding_complete', true, premiumFlow)));
+    router.push(premiumEntry('onboarding_complete', false, premiumFlow));
   };
 
   const handleSkipTrial = async () => {
     console.log('[Onboarding] Skip trial pressed');
     await trackPaywallActionOnce('skip', sessionIdRef.current ?? undefined);
-    await showNotifPromptThen(async () => {
-      console.log('[Onboarding] Skip trial → navigating to coach tab for first launch');
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) await AsyncStorage.setItem(`first_launch_done_${user.id}`, 'true');
-      router.replace('/(tabs)/coach');
-    });
+    console.log('[Onboarding] Skip trial → navigating to coach tab for first launch');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) await AsyncStorage.setItem(`first_launch_done_${user.id}`, 'true');
+    router.replace('/(tabs)/coach');
   };
 
   // ─── Helpers ───────────────────────────────────────────────────────────────

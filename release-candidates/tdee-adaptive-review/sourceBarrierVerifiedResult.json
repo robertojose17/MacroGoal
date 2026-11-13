@@ -1,0 +1,47 @@
+{
+  "status": "private-core-overlap-verified-not-source-matrix",
+  "source_sha256": "84f9196fa95e34d48f00fc051600af8b28caa68d9b27b732e8a9e8590aa24b5d",
+  "holder_probe_sha256": "a2cb34a063a0be8ffe34d3459af544377ec49c3a2256c3b2c0bbea1e32d0dc05",
+  "observer_probe_sha256": "8ff32cfbb52888f26d11b42dd36ec62afc9a9412015ae816458b52c43d60a421",
+  "holder": {
+    "pid": 4154378,
+    "ended": "2026-11-13T15:49:28.555574+00:00",
+    "checks": 14,
+    "core_only": true,
+    "hold_started": "2026-11-13T15:49:28.304244+00:00",
+    "observer_ack": "2026-11-13 15:49:28.555383+00",
+    "observer_pid": 4154373,
+    "persistent_objects": 0,
+    "public_source_writes": 0
+  },
+  "observer": {
+    "ended": "2026-11-13T15:49:31.350655+00:00",
+    "seen_at": "2026-11-13T15:49:28.345348+00:00",
+    "started": "2026-11-13T15:48:56.261643+00:00",
+    "acquired": false,
+    "observed": true,
+    "attempt_at": "2026-11-13T15:49:28.345361+00:00",
+    "holder_pid": 4154378,
+    "observer_pid": 4154373
+  },
+  "cleanup": {
+    "checked_at": "2026-11-13 15:49:54.463438+00",
+    "barrier_absent": true,
+    "probe_migrations": 0,
+    "owner_and_handshake_locks": 0,
+    "probe_connections": 0,
+    "legacy_cron_active": 0,
+    "observation_settings_count": 0,
+    "snapshot_md5": "8a16cf042d8b6eed72de336e26f5c14d"
+  },
+  "not_verified": [
+    "actual-source-row-cascades-and-owner-moves",
+    "ordinary-commit-and-real-profile-lifecycle",
+    "legacy-source-writer-concurrency",
+    "authenticated-native-account-e2e",
+    "clinical-policy-and-model-validation",
+    "acceptance-endpoint-and-journal-binding"
+  ],
+  "installed": false,
+  "recommendations_activated": false
+}

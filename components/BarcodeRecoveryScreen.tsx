@@ -10,7 +10,7 @@ import { supabase, SUPABASE_PROJECT_URL } from '@/lib/supabase/client';
 import { buildSyntheticOffData } from '@/utils/servingParser';
 import { recoveryDiscoveryOnce, recoveryRefine, expireRecovery } from '@/utils/recoveryDiscoveryOnce';
 import { webCameraJpegBytes } from '@/utils/cameraCaptureBytes';
-import { unknownBarcodeAttempt, runUnknownAttempt, type UnknownAttempt } from '@/utils/unknownBarcodeAttempt';
+import { unknownBarcodeAttempt, runUnknownAttempt, runUnknownWebAttempt, type UnknownAttempt } from '@/utils/unknownBarcodeAttempt';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 type Candidate = {
@@ -34,7 +34,7 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
   const owner=useRef('');
   const attempt=useRef<(UnknownAttempt & {manualRequestId?:string;manualDraft?:ManualFields})|null>(null),generation=useRef(0),focused=useRef(false);
   useFocusEffect(React.useCallback(()=>{focused.current=true;generation.current++;return()=>{focused.current=false;generation.current++;};},[]));
-  const [stage,setStage]=useState<Stage>(unknown?'front_prompt':'search'),[busy,setBusy]=useState(!unknown),[error,setError]=useState('');
+  const [stage,setStage]=useState<Stage>('search'),[busy,setBusy]=useState(true),[error,setError]=useState('');
   const [review,setReview]=useState<Review>({}),[selected,setSelected]=useState<Candidate|null>(null);
   const [permission,requestPermission]=useCameraPermissions();
   const recoveryKey=useRef('');
@@ -98,10 +98,10 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
     setBusy(false);
     if(!unknown)void discover(false,active);
     else void (async()=>{
-      setReview({});setSelected(null);setStage('front_prompt');setError('');front.current=null;owner.current='';attempt.current=null;setManual(emptyManual());setManualSessionExpired(false);
+      setReview({});setSelected(null);setStage('search');setBusy(true);setError('');front.current=null;owner.current='';attempt.current=null;setManual(emptyManual());setManualSessionExpired(false);
       const {data:{session}}=await supabase.auth.getSession();
       if(!active())return;
-      if(!session){setError(message('auth'));setStage('unavailable');return;}
+      if(!session){setError(message('auth'));setStage('unavailable');setBusy(false);return;}
       owner.current=session.user.id;
       attempt.current=unknownBarcodeAttempt(session.user.id,param('barcode'));
       manualRequestId.current=attempt.current.manualRequestId||'';
@@ -113,8 +113,23 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
         if(!active())return;
         setBusy(false);
       }
-      if(attempt.current.review)applyUnknownReview(attempt.current.review);
-      else if(attempt.current.frontUrl)setStage('unavailable');
+      const a=attempt.current;
+      if(a.review)applyUnknownReview(a.review);
+      else if(a.frontUrl)setStage('unavailable');
+      else if(!unknownEnabled)setStage('unavailable');
+      else if(a.webAttempted)setStage('front_prompt');
+      else {
+        try {
+          const data=await runUnknownWebAttempt(a,()=>request({action:'recovery_discover',barcode:param('barcode'),name,brand,request_id:a.webRequestId},active));
+          if(!active())return;
+          if(data)applyUnknownReview(data);else setStage('front_prompt');
+        } catch(e) {
+          if(!active())return;
+          if(e instanceof Error && e.message==='auth'){setError(message('auth'));setStage('unavailable');}
+          else setStage('front_prompt'); // Explicit front capture is next; never replay this uncertain web request.
+        }
+      }
+      if(active())setBusy(false);
     })().catch(()=>{if(active()){setError(message('auth'));setStage('unavailable');setBusy(false);}});
     return()=>{mounted=false;};
   },[unknown,param('barcode')]));
@@ -122,7 +137,7 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
     setReview(data);setSelected(attempt.current?.selected||null);
     if(data.code==='barcode_now_known'||data.next_step==='reload_product'){setStage('search');return;}
     if(data.next_step==='manual'){setStage('manual');return;}
-    setStage((data.candidates||[]).some(c=>c.can_confirm)||data.photo?.can_confirm?'results':attempt.current?.rearAttempted?'manual':'label_prompt');
+    setStage((data.candidates||[]).some(c=>c.can_confirm)||data.photo?.can_confirm?'results':!attempt.current?.frontUrl?'front_prompt':attempt.current?.rearAttempted?'manual':'label_prompt');
   }
   function manualEntry(candidate?:Candidate) {
     if(!unknown||inFlight.current||selected)return;
@@ -357,7 +372,7 @@ export default function FoodPhotoCaptureScreen({unknownEnabled=true}:{unknownEna
           ?tr('The analysis service could not finish. This does not mean your label is wrong. Please try a new photo attempt later.','El servicio de análisis no pudo terminar. Esto no significa que tu etiqueta esté mal. Intenta otra lectura más tarde.')
           :tr('Please show clearly: ','Muestra claramente: ')+(issue.field==='front'?tr('the product name, brand and exact variant','el nombre, marca y variante exactos'):fieldNames[issue.field]||fieldNames.label)+(issue.reason==='reads_disagree'?tr(' — the two readings disagree.',' — las dos lecturas no coinciden.'):'.')}</Text>)}
         {!unknown&&button(review.photo?tr('Retake package photos','Volver a tomar fotos'):usableCandidates.length?tr('None of these — take package photos','Ninguno de estos — tomar fotos del empaque'):tr('Take package photos','Tomar fotos del empaque'),()=>void beginPhotos(),!review.session||!!selected,true)}
-        {unknown&&review.photo?.provenance.kind!=='user_entered'&&button(attempt.current?.rearAttempted?tr('These values are not usable — enter manually','Estos valores no sirven — ingresar manualmente'):tr('None of these — photograph rear label','Ninguno de estos — fotografiar etiqueta de atrás'),()=>{if(attempt.current?.rearAttempted)manualEntry(review.photo||undefined);else setStage('label_prompt');},!!selected,true)}
+        {unknown&&review.photo?.provenance.kind!=='user_entered'&&button(!attempt.current?.frontUrl?tr('None of these — photograph package front','Ninguno de estos — fotografiar el frente'):attempt.current?.rearAttempted?tr('These values are not usable — enter manually','Estos valores no sirven — ingresar manualmente'):tr('None of these — photograph rear label','Ninguno de estos — fotografiar etiqueta de atrás'),()=>{if(!attempt.current?.frontUrl)setStage('front_prompt');else if(attempt.current?.rearAttempted)manualEntry(review.photo||undefined);else setStage('label_prompt');},!!selected,true)}
       </>}
     </ScrollView>}
   </SafeAreaView>;

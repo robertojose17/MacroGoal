@@ -130,3 +130,83 @@ test('wired auth verifier preserves token refresh and rejects account or session
  session={user:{id:'actor-a'},access_token:token('22222222-2222-4222-8222-222222222222',4)};assert.equal(await verify(actor),false);
  listener('SIGNED_OUT',null);assert.equal(current(),null);assert.equal(await verify(actor),false);assert.ok(invalidations>=2);
 });
+
+test('host screen is a closed label and never persists raw paths or route data',()=>{
+ const cases=[['/','home'],['/(tabs)/(home)','home'],['/dashboard','dashboard'],['/check-ins/','check_ins'],['/profile?email=private@example.test#secret','profile'],['/profile/private-user-id','unknown'],['/reset-password/token','unknown'],['https://example.test/profile','unknown'],['','unknown'],['?token=secret','unknown'],['//','unknown'],[null,'unknown']];
+ for(const [input,want]of cases)assert.equal(protocol.premiumHostScreen(input),want);
+ for(const value of ['home','dashboard','check_ins','profile','unknown']){
+  const e=event();e.flow.screen=value;assert.equal(protocol.validCheckpoint(e),true);
+ }
+ for(const value of ['/profile/private-user-id','private@example.test','',null,{},[],1]){
+  const e=event();e.flow.screen=value;assert.equal(protocol.validCheckpoint(e),false);
+ }
+ const legacy=event();assert.equal(protocol.validCheckpoint(legacy),true);assert.equal('screen' in legacy.flow,false);
+});
+test('origin screen stays immutable through subscription navigation and does not alter historical flow shape',()=>{
+ const initial=protocol.newPremiumFlow('floating_badge','profile');
+ const route=protocol.premiumRoute(initial);assert.equal(route.params.originScreen,'profile');
+ const restored=protocol.capturePremiumFlow(route.params.source,route.params.flowId,route.params.originScreen);
+ assert.deepEqual(JSON.parse(JSON.stringify(restored)),JSON.parse(JSON.stringify(initial)));assert.equal(Object.isFrozen(restored),true);
+ const legacy=protocol.capturePremiumFlow('floating_badge','flow_0001');assert.equal('screen' in legacy,false);assert.equal('originScreen' in protocol.premiumRoute(legacy).params,false);
+ assert.equal(protocol.capturePremiumFlow('floating_badge','flow_0001','/profile/private').screen,'unknown');
+});
+test('exact payment attribution preserves origin screen while historical payments remain matched with null screen',()=>{
+ for(const screen of [undefined,'home','profile','unknown']){
+  const f=reconciliationFixture();
+  if(screen!==undefined){f.attempt.payload.flow.screen=screen;f.result.payload.flow.screen=screen;}
+  const r=reconcileObservedPayments([f.provider],[f.attempt,f.result],f.start,f.verified);
+  assert.equal(r.payments[0].status,'matched');assert.equal(r.payments[0].flow.screen,screen??null);
+ }
+});
+test('conflicting, missing versus present, or unsafe screen claims never get a fabricated screen attribution',()=>{
+ for(const [a,b]of [['home','profile'],[undefined,'home'],['profile',undefined],[null,null],['/profile/private','/profile/private']]){
+  const f=reconciliationFixture();if(a!==undefined)f.attempt.payload.flow.screen=a;if(b!==undefined)f.result.payload.flow.screen=b;
+  const r=reconcileObservedPayments([f.provider],[f.attempt,f.result],f.start,f.verified);
+  assert.equal(r.payments[0].status,'ambiguous');assert.equal(r.payments[0].flow,null);
+ }
+});
+test('persistent inline badge replaces flow synchronously when the host screen changes',()=>{
+ const contract=load('utils/premiumCheckpointContract.ts');let focused=true,states=[],refs=[],effects=[],index=0,refIndex=0;
+ const react={useState:init=>{const n=index++;if(!(n in states))states[n]=typeof init==='function'?init():init;return [states[n],v=>{states[n]=typeof v==='function'?v(states[n]):v;}];},useRef:init=>{const n=refIndex++;return refs[n]??(refs[n]={current:init});},useEffect:f=>effects.push(f)};
+ const jsx=(type,props,key)=>({type,props,key});
+ const source=fs.readFileSync(path.join(root,'components/PremiumCheckpointInline.tsx'),'utf8');
+ const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
+ const exports={};vm.runInNewContext(code,{exports,require:n=>({'react':react,'react/jsx-runtime':{jsx,jsxs:jsx},'@react-navigation/native':{useIsFocused:()=>focused},'@/utils/premiumCheckpointContract':contract,'@/hooks/usePremiumCheckpointVisibility':{usePremiumCheckpointVisibility:()=>()=>()=>{}}}[n])});
+ let activeKey;const render=screen=>{const outer=exports.PremiumCheckpointInline({source:'floating_badge',screen,children:flow=>({flow})});if(outer.key!==activeKey){states=[];refs=[];activeKey=outer.key;}index=0;refIndex=0;effects=[];const result=outer.type(outer.props);for(const effect of effects)effect();return result;};
+ const first=render('home');assert.equal(first.props.flow.screen,'home');assert.equal(render('home').props.flow.flowId,first.props.flow.flowId);
+ const second=render('profile');assert.equal(second.props.flow.screen,'profile');assert.notEqual(second.props.flow.flowId,first.props.flow.flowId);
+ second.props.consumed();focused=false;render('profile');focused=true;render('profile');const returned=render('profile');
+ assert.equal(returned.props.flow.screen,'profile');assert.notEqual(returned.props.flow.flowId,second.props.flow.flowId);
+});
+test('badge source uses the normalizer and subscription captures originScreen once for every checkpoint',()=>{
+ const badge=fs.readFileSync(path.join(root,'components/GoPremiumFloatingBadge.tsx'),'utf8');
+ const subscription=fs.readFileSync(path.join(root,'app/subscription.tsx'),'utf8');
+ assert.match(badge,/source="floating_badge" screen=\{premiumHostScreen\(pathname\)\}/);
+ assert.match(subscription,/useState\(\(\) => capturePremiumFlow\(source, flowId, originScreen\)\)/);
+ assert.match(subscription,/checkpoint\(checkpointFlow, \{ name: 'purchase_attempt'/);
+ assert.match(subscription,/checkpoint\(checkpointFlow, \{ name: 'purchase_result'/);
+});
+
+test('screened results without an attempt remain unattributed rather than ambiguous',()=>{
+ const f=reconciliationFixture();f.result.payload.flow.screen='home';
+ const r=reconcileObservedPayments([f.provider],[f.result],f.start,f.verified);assert.equal(r.payments[0].status,'unattributed');
+});
+
+test('tracker consolidation preserves onboarding explicit-purchase guard even for stale autoStart links',()=>{
+ const text=fs.readFileSync(path.join(root,'app/subscription.tsx'),'utf8');
+ const sourceFile=ts.createSourceFile('subscription.tsx',text,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+ let effect;
+ const walk=node=>{if(ts.isCallExpression(node)&&node.expression.getText(sourceFile)==='useEffect'&&node.arguments[0]?.getText(sourceFile).includes("handlePurchase(resolvedYearlyPkg, 'auto_start')"))effect=node.arguments[0];ts.forEachChild(node,walk);};
+ walk(sourceFile);assert.ok(effect,'annual autoStart effect remains identifiable');
+ const run=source=>{
+  const calls=[],autoStartFiredRef={current:false};
+  const context={source,autoStart:'true',loading:false,premiumLoading:false,errorMessage:null,isPremium:false,resolvedYearlyPkg:{identifier:'fixture-yearly'},autoStartFiredRef,setActivePlan:plan=>calls.push(['plan',plan]),handlePurchase:(pkg,trigger)=>calls.push(['purchase',pkg,trigger]),console:{log(){}}};
+  const callback=vm.runInNewContext('('+effect.getText(sourceFile)+')',context);
+  callback();callback();return {calls,fired:autoStartFiredRef.current};
+ };
+ assert.deepEqual(run('onboarding_complete'),{calls:[],fired:false});
+ const legacy=run('settings_upgrade');assert.equal(legacy.calls.filter(call=>call[0]==='purchase').length,1);
+ assert.equal(legacy.calls[1][2],'auto_start');
+ assert.match(text,/onPress=\{handleSubscribe\}/,'manual purchase is still bound to the subscribe action');
+ assert.match(text,/const handleSubscribe = \(\) => \{[\s\S]*?handlePurchase\(selectedPkg\)/,'explicit subscribe preserves the selected package purchase');
+});

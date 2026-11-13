@@ -127,8 +127,8 @@ export default function SubscriptionScreen() {
   const [activePlan, setActivePlan] = useState<'monthly' | 'yearly'>('yearly');
   const [selectedFeature, setSelectedFeature] = useState<FeatureKey | null>(null);
   const [showAllFeatures, setShowAllFeatures] = useState(false);
-  const { autoStart, source, flowId } = useLocalSearchParams<{ autoStart?: string; source?: string; flowId?: string }>();
-  const [checkpointFlow] = useState(() => capturePremiumFlow(source, flowId));
+  const { autoStart, source, flowId, originScreen } = useLocalSearchParams<{ autoStart?: string; source?: string; flowId?: string; originScreen?: string }>();
+  const [checkpointFlow] = useState(() => capturePremiumFlow(source, flowId, originScreen));
   const purchaseBusyRef = React.useRef(false);
   const restoreBusyRef = React.useRef(false);
   const configuredActorRef = React.useRef<string | null>(null);
@@ -223,14 +223,14 @@ export default function SubscriptionScreen() {
   // annual card, and leave any other available plan for an explicit selection.
   useEffect(() => {
     if (
-      autoStart !== 'true' || loading || premiumLoading || errorMessage || isPremium ||
+      source === 'onboarding_complete' || autoStart !== 'true' || loading || premiumLoading || errorMessage || isPremium ||
       !resolvedYearlyPkg || autoStartFiredRef.current
     ) return;
     autoStartFiredRef.current = true;
     setActivePlan('yearly');
     console.log('[Subscription] Auto-starting yearly purchase from onboarding:', resolvedYearlyPkg.identifier);
     handlePurchase(resolvedYearlyPkg, 'auto_start');
-  }, [autoStart, loading, premiumLoading, errorMessage, isPremium, resolvedYearlyPkg]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoStart, source, loading, premiumLoading, errorMessage, isPremium, resolvedYearlyPkg]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle purchase
   const handlePurchase = async (pkg: PurchasesPackage, trigger: 'manual' | 'auto_start' = 'manual') => {

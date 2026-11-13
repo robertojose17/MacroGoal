@@ -9,7 +9,7 @@ Do not merge, deploy, build, or distribute it without completing its open gates.
 - Existing iOS 23.0.2 (613) source: `5b4ef5976139a793a3c38a98811bae6ce0b7cab9`.
 - Existing Android 23.0.1 (28) source: `bf103da59a54db060d66a8f020a06567d8885014`.
 - This is a new reconstruction. It does not inherit test results from an unavailable earlier local candidate.
-- The separate onboarding/paywall work has not been merged. Step10 remains byte-identical to the source base.
+- The approved onboarding paywall, notification timing, purchase-source tracking, and barcode client flows are consolidated in the local candidate. They are not deployed or native-E2E verified.
 
 ## Current scope
 
@@ -19,8 +19,8 @@ Observation remains opt-in through the explicit build configuration `EXPO_PUBLIC
 
 ## Release blockers
 
-- Absolute application typecheck still has 5 diagnostics outside the TDEE recovery core. No type-pass claim is made, and the account-deletion route is intentionally untouched.
-- The latest maintained combined CI run passed 403/403, with no skips. This includes actual session/controller/hook code running against simulated auth/database/storage, not a native account E2E run.
+- Absolute application typecheck still has 1 diagnostic outside the TDEE recovery core. No type-pass claim is made, and the account-deletion route is intentionally untouched.
+- The latest maintained combined CI run passed 695/695, with no skips. This includes actual session/controller/hook code running against simulated auth/database/storage, not a native account E2E run.
 - The incompatible prebuild override was removed: CLI and SplashScreen now resolve official @expo/prebuild-config 54.0.9 within their declared ranges. Frozen install and 7 dependency checks pass; all importer versions are unchanged. Router/RN and other bundled-version differences still require review. No mass upgrade was performed.
 - Native onboarding and editors are now wired to encrypted durable recovery with explicit replay. The source declares SecureStore backup exclusions; effective native configuration, process-kill and hardware-key recovery still require artifact/device tests. A non-sensitive presence witness detects a missing encrypted head; losing both storage domains still requires server/device reconciliation. See the durable journal document for exact limits.
 - Planner/diary writes are not a single database transaction. Partial or uncertain results block automatic retry; cross-process recovery remains incomplete.
@@ -28,4 +28,4 @@ Observation remains opt-in through the explicit build configuration `EXPO_PUBLIC
 - No native device compilation, installation, or authenticated E2E validation of this client has occurred. Existing build success is not proof this client is installed.
 - Historical rollback SQL results are not a substitute for current application tests. Recipe-social/calendar runtime QA was not rerun.
 
-There has been no client deployment, paid generation, account-data mutation, build, or TestFlight distribution during this recovery pass. One authorized production maintenance change paused only the broken TDEE cron job; see `release-candidates/tdee-cron-containment/README.md`. The dynamic calculation and recommendation limits are recorded in `docs/testing/dynamic-calculation-release-gates-20261112.md`. The isolated remote branch has been created but still points to the original base; it does not yet contain the candidate. A partial unreferenced tree is not a completed backup. Source upload was denied and is paused pending specific publication authorization. This remains a local checkpoint until an exact remote tree/commit receipt is recorded.
+There has been no client deployment, paid generation, account-data mutation, build, or TestFlight distribution during this recovery pass. One authorized production maintenance change paused only the broken TDEE cron job; see `release-candidates/tdee-cron-containment/README.md`. The dynamic calculation and recommendation limits are recorded in `docs/testing/dynamic-calculation-release-gates-20261112.md`. The existing remote backup was verified on 2026-11-13 at `4b000035d57aae9e85344f9b0a9a5a5892088c1a` (tree `d0be5c90956d9381ca834461fc580163d81fcc9b`). The subsequent consolidated candidate is pending upload to that same backup branch; no new branch is required. The production `main` was independently verified at `5c3c2ac0d6ffd3d8f523307737a0147f7f5703eb`. Neither source backup nor source publication establishes deployment, feature activation, or successful account/device validation.

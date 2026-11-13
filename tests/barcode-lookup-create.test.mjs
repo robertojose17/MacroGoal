@@ -1,0 +1,13 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
+import {createOffMass,captureOffMassSupported} from '../supabase/functions/lookup-barcode/_shared/offMass.mjs';
+const product=JSON.parse(fs.readFileSync(new URL('./fixtures/barcode/observed-products.json',import.meta.url))).find(x=>x.source_id==='0044000060114').product;
+const request=new Request('https://example.invalid',{headers:{authorization:'Bearer synthetic'}});
+const args={request,product,expectedId:product.code,requestId:'ee35bb70-3d43-4ae2-a031-27158b581c64',enabled:true};
+const admin=(rpc,auth={data:{user:{id:'synthetic'}}})=>({auth:{getUser:async()=>auth},rpc});
+test('creation stores original per100g payload without fabricated serving data',async()=>{const original=structuredClone(product);let called=0;const a=admin((name,p)=>{called++;assert.equal(p.p_evidence.version,4);assert.deepEqual(p.p_evidence.snapshot.nutriments,original.nutriments);return{abortSignal:async()=>({data:{status:'created',food_item:{id:'canonical'}}})}});assert.equal((await createOffMass({...args,admin:a})).status,'created');assert.equal(called,1);assert.deepEqual(product,original)});
+test('disabled capture performs no RPC/auth',async()=>{assert.equal((await createOffMass({...args,enabled:false,admin:null})).status,'disabled')});
+test('unauthenticated denied before RPC',async()=>{assert.equal((await createOffMass({...args,admin:admin(()=>{throw Error('write forbidden')},{error:'denied'})})).status,'unauthenticated')});
+test('invalid mass rejected before auth/write',async()=>{assert.equal((await createOffMass({...args,product:{...product,serving_quantity_unit:'ml'},admin:null})).status,'unsupported_mass_capture')});
+test('uncertain RPC never falls back or retries',async()=>{let calls=0;const a=admin(()=>{calls++;return{abortSignal:async()=>{throw Error('network')}}});assert.equal((await createOffMass({...args,admin:a})).status,'create_outcome_uncertain');assert.equal(calls,1)});
+test('ambiguous existing aliases returned as review status',async()=>{assert.equal((await createOffMass({...args,admin:admin(()=>({abortSignal:async()=>({data:{status:'ambiguous_existing'}})}))})).status,'ambiguous_existing')});
+test('v3 serving rules stay strict (100g declaration never changed)',()=>{assert.throws(()=>captureOffMassSupported({...product,nutrition_data_per:'serving'},{expectedId:product.code}));assert.equal(captureOffMassSupported(product,{expectedId:product.code}).version,4)});

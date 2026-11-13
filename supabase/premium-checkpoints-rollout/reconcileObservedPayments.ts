@@ -6,6 +6,8 @@ const obj=(v:unknown):v is Obj=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const str=(v:unknown)=>typeof v==='string'&&v.length>0?v:null;
 const uuid=(v:unknown)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)?v.toLowerCase():null;
 const millis=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)&&v>0?v:null;
+const hostScreens=['home','dashboard','check_ins','profile','unknown'];
+const validScreen=(flow:Obj)=>!Object.prototype.hasOwnProperty.call(flow,'screen')||(typeof flow.screen==='string'&&hostScreens.includes(flow.screen));
 const purchaseKinds=['INITIAL_PURCHASE','RENEWAL','NON_RENEWING_PURCHASE'];
 const canonical=(v:unknown):unknown=>Array.isArray(v)?v.map(canonical):obj(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
 export type ProviderRow={raw_event:unknown;event_data:unknown;user_id:string|null;created_at:string};
@@ -49,7 +51,7 @@ export function reconcileObservedPayments(providerRows:ProviderRow[],checkpoints
    e.period_type==='TRIAL'||typeof price!=='number'||!Number.isFinite(price)||price<=0||purchasedAt<start||eventTime<start){excluded+=rows.length;continue;}
   facts.push({key,vendorId:v.vendorId,userId:v.userId,productId,transactionId,store,environment,purchasedAt,price,currency,kind});
  }
- const candidates=new Map<string,Set<string>>(),attemptSource=new Map<string,{flowId:string;source:string}>();
+ const candidates=new Map<string,Set<string>>(),attemptSource=new Map<string,{flowId:string;source:string;screen:string|null}>();
  const ambiguousSources=new Set<string>();let unmatchedClaims=0;
  const usable=checkpoints.filter(row=>Number.isFinite(Date.parse(row.received_at))&&Date.parse(row.received_at)>=start&&obj(row.payload));
  for(const result of usable){
@@ -67,11 +69,13 @@ export function reconcileObservedPayments(providerRows:ProviderRow[],checkpoints
     ad.attemptId===d.attemptId&&af.flowId===flow.flowId&&af.source===flow.source&&obj(ad.offer)&&ad.offer.productId===fact.productId;
   });
   if(attempts.length!==1){if(attempts.length>1)ambiguousSources.add(fact.key);unmatchedClaims++;continue;}
+  const attemptFlow=(attempts[0].payload as Obj).flow as Obj;
+  if(!validScreen(flow)||!validScreen(attemptFlow)||(flow.screen??null)!==(attemptFlow.screen??null)){ambiguousSources.add(fact.key);continue;}
   const attemptTime=Date.parse(attempts[0].received_at),resultTime=Date.parse(result.received_at);
   if(attemptTime>resultTime||fact.purchasedAt<attemptTime-120000||fact.purchasedAt>attemptTime+1800000){unmatchedClaims++;continue;}
   const attemptKey=JSON.stringify([actor,flow.flowId,d.attemptId]);
   const set=candidates.get(fact.key)||new Set<string>();set.add(attemptKey);candidates.set(fact.key,set);
-  attemptSource.set(attemptKey,{flowId:String(flow.flowId),source:String(flow.source)});
+  attemptSource.set(attemptKey,{flowId:String(flow.flowId),source:String(flow.source),screen:typeof flow.screen==='string'?flow.screen:null});
  }
  const payments=facts.map(f=>{const attempts=candidates.get(f.key)||new Set<string>();
   const status=ambiguousSources.has(f.key)||attempts.size>1?'ambiguous':attempts.size===1?'matched':'unattributed';

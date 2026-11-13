@@ -1,5 +1,6 @@
 // Memory only. Never retain image bytes or tokens; never reuse an attempt across accounts.
 export type UnknownAttempt = {
+  webRequestId: string; webAttempted: boolean;
   requestId: string; selected?: any; frontUrl?: string; review?: any; rearAttempted: boolean;
   pending?: Promise<any>; expires: number;
 };
@@ -16,7 +17,7 @@ export function unknownBarcodeAttempt(owner: string, barcode: string, now = Date
   for (const [id, attempt] of attempts) if (now >= attempt.expires) attempts.delete(id);
   let attempt = attempts.get(key);
   if (!attempt) {
-    attempt = { requestId: nonce(), rearAttempted: false, expires: now + 20 * 60 * 1000 };
+    attempt = { webRequestId: nonce(), webAttempted:false, requestId: nonce(), rearAttempted: false, expires: now + 20 * 60 * 1000 };
     attempts.set(key, attempt);
   }
   return attempt;
@@ -30,4 +31,12 @@ export function runUnknownAttempt(attempt: UnknownAttempt, work: () => Promise<a
   }).finally(() => { if (attempt.pending === pending) attempt.pending = undefined; });
   attempt.pending = pending;
   return pending;
+}
+
+/** The initial barcode-only discovery gets one nonce and one attempt, separate from the front photo. */
+export function runUnknownWebAttempt(attempt: UnknownAttempt, work: () => Promise<any>) {
+  if (attempt.pending) return attempt.pending;
+  if (attempt.webAttempted) return Promise.resolve(attempt.review);
+  attempt.webAttempted = true;
+  return runUnknownAttempt(attempt, work);
 }

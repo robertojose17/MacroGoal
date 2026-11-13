@@ -1,5 +1,7 @@
 # Premium checkpoint rollout candidate
 
+Host-screen extension consolidated into the single production candidate on 2026-11-13. Live RPC and receiver v23 were reverified read-only; client distribution and authenticated native acceptance are not established. See `HOST-SCREEN-CONSOLIDATION.md` for current scope and checks. The dated deployment/candidate records below are historical, not competing release branches. Existing clients do not gain screen tracking from the server change alone.
+
 Deployment status (2026-11-01): the private migration and shared track-onboarding v20 endpoint are LIVE. See track-onboarding/DEPLOYED.md for exact deployed source paths, hashes, postflight and rollback. Client transport is wired only on the implementation branch for a future native release; main and published binaries are unchanged. The original candidate/approval discussion below is historical, not a statement that the production objects are absent. This directory is outside automatic migration/function paths; do not redeploy the divergent canonical legacy function over v20.
 
 ## Exact proposed scope

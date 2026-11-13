@@ -42,7 +42,7 @@ export async function handleRecovery(body:any,deps:Dependencies) {
     if(frontIdentity&&!ownerRecoveryPhoto(body.photo_front_url,deps.projectUrl,userId))throw Error('invalid_photo');
     if((frontIdentity||body.request_id!==undefined)&&(typeof body.request_id!=='string'||! /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.request_id)))throw Error('invalid_request_id');
     session={version:1,kind:'session',owner:userId,expires:Date.now()+ttl,
-      submission:frontIdentity?await frontRecoverySubmission(userId,sessionBarcode(body.barcode),body.request_id):crypto.randomUUID(),...(frontIdentity?{front_photo_url:body.photo_front_url,unknown_front:true}:{}),binding:{barcode:body.barcode,id:identity.row?.id||null,nutrition_revision:identity.row?._nutrition_revision??null},
+      submission:frontIdentity?await frontRecoverySubmission(userId,sessionBarcode(body.barcode),body.request_id):identity.isNew&&body.request_id!==undefined?await frontRecoverySubmission(userId,sessionBarcode(body.barcode),body.request_id,'unknown-web-v1'):crypto.randomUUID(),...(frontIdentity?{front_photo_url:body.photo_front_url,unknown_front:true}:{}),binding:{barcode:body.barcode,id:identity.row?.id||null,nutrition_revision:identity.row?._nutrition_revision??null},
       name:String(identity.row?.name||body.name||'').slice(0,160),brand:String(identity.row?.brand||body.brand||'').slice(0,100)};
   } else {
     session=await openDraft(body.session,deps.secret,userId);

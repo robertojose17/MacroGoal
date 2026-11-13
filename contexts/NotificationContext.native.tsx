@@ -126,25 +126,14 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         const permissionStatus = await os.OneSignal.Notifications.getPermissionAsync();
         setHasPermission(permissionStatus);
 
-        // Auto-request permission if not yet granted
-        // Always request if permission is false — don't gate on AsyncStorage flag
-        // (the OS itself will only show the system dialog once; subsequent calls are no-ops)
-        if (!permissionStatus) {
-          console.log("[OneSignal] Permission not granted — requesting...");
-          const granted = await os.OneSignal.Notifications.requestPermission(true);
-          console.log("[OneSignal] Permission result:", granted);
-          setHasPermission(granted);
-          setPermissionDenied(!granted);
-        } else {
-          console.log("[OneSignal] Permission already granted");
-        }
-
-        // Ensure push subscription is active (re-registers token if needed)
-        try {
-          await os.OneSignal.User.pushSubscription.optIn();
-          console.log("[OneSignal] pushSubscription.optIn() called on init");
-        } catch (optInErr) {
-          console.warn("[OneSignal] pushSubscription.optIn() not available (non-fatal):", optInErr);
+        // Permission is requested only on the first eligible Food/Coach entry.
+        // optIn may prompt if permission is absent, so never call it in that case.
+        if (permissionStatus) {
+          try {
+            await os.OneSignal.User.pushSubscription.optIn();
+          } catch (error) {
+            console.warn("[OneSignal] optIn unavailable", error);
+          }
         }
 
         // Foreground notification handler — always display
@@ -206,19 +195,14 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
             if (session.user.email) {
               os.OneSignal.User.addEmail(session.user.email);
             }
-            // After login, check permission and request if needed
+            // After login, observe permission without prompting
             // This ensures the push token gets linked to the external_id
             setTimeout(async () => {
               try {
                 const hasPerm = await os.OneSignal.Notifications.getPermissionAsync();
                 console.log("[OneSignal] Permission after login:", hasPerm);
-                if (!hasPerm) {
-                  console.log("[OneSignal] Requesting permission after login...");
-                  const granted = await os.OneSignal.Notifications.requestPermission(true);
-                  console.log("[OneSignal] Permission granted after login:", granted);
-                  setHasPermission(granted);
-                  setPermissionDenied(!granted);
-                } else {
+                setHasPermission(hasPerm);
+                if (hasPerm) {
                   // Permission already granted — re-trigger opt-in to ensure token is linked
                   // This is a no-op if already subscribed, but forces re-registration if not
                   try {

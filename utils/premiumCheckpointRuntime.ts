@@ -1,4 +1,4 @@
-import { CHECKPOINT_ID_PATTERN, PREMIUM_SOURCES } from './premiumCheckpointContract';
+import { CHECKPOINT_ID_PATTERN, PREMIUM_SOURCES, PREMIUM_HOST_SCREENS } from './premiumCheckpointContract';
 import type { PremiumCheckpoint } from './premiumCheckpointContract';
 
 type Obj = Record<string, unknown>;
@@ -25,8 +25,9 @@ export function validCheckpoint(v: unknown): v is PremiumCheckpoint {
       !oneOf(v.platform, ['ios','android','web']) || typeof v.occurredAt !== 'string' ||
       !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v.occurredAt) ||
       !Number.isFinite(Date.parse(v.occurredAt)) || new Date(v.occurredAt).toISOString() !== v.occurredAt ||
-      !object(v.flow) || !exact(v.flow, ['flowId','source']) || !id(v.flow.flowId) ||
-      !oneOf(v.flow.source, PREMIUM_SOURCES) || !object(v.detail)) return false;
+      !object(v.flow) || !exact(v.flow, ['flowId','source'], ['screen']) || !id(v.flow.flowId) ||
+      !oneOf(v.flow.source, PREMIUM_SOURCES) ||
+      (Object.prototype.hasOwnProperty.call(v.flow, 'screen') && !oneOf(v.flow.screen, PREMIUM_HOST_SCREENS)) || !object(v.detail)) return false;
   const d = v.detail;
   switch (d.name) {
     case 'inline_impression': case 'entrypoint_clicked': return exact(d, ['name']);

@@ -1,0 +1,35 @@
+{
+  "status": "subscription-source-single-transaction-rollback-verified",
+  "source_sha256": "84f9196fa95e34d48f00fc051600af8b28caa68d9b27b732e8a9e8590aa24b5d",
+  "probe_sha256": "2a2229869940761fd868936c2ef48e9b0ba4495cc67350844948b79d75a1d109",
+  "result": {
+    "pid": 4164742,
+    "checks": 11,
+    "source": "subscriptions",
+    "committed_source_rows": 0,
+    "owner_profiles_created": 0
+  },
+  "cleanup": {
+    "catalogMatches": true,
+    "barrier_absent": true,
+    "probe_migrations": 0,
+    "fixture_rows": 0,
+    "probe_triggers": 0,
+    "owner_locks": 0,
+    "legacy_cron_active": 0,
+    "observation_settings_count": 0,
+    "snapshot_md5": "8a16cf042d8b6eed72de336e26f5c14d",
+    "checked_at": "2026-11-13 18:05:34.035223+00"
+  },
+  "not_verified": [
+    "other-eight-source-row-fixtures",
+    "real-source-cascades",
+    "cross-session-legacy-writer-concurrency",
+    "normal-commit",
+    "verified-account-entitlement-or-acceptance",
+    "native-account-e2e",
+    "clinical-policy-validation"
+  ],
+  "installed": false,
+  "recommendations_activated": false
+}
