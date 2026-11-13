@@ -22,6 +22,15 @@ import { translateDynamic } from '@/utils/translateDynamic';
 import { colors, spacing, borderRadius } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 
+// completed_days contains civil dates, never one-based step numbers.
+function challengeDayDate(startDate: string, day: number): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !Number.isInteger(day) || day < 1 || day > 7) return null;
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  if (!Number.isFinite(start.getTime()) || start.toISOString().slice(0, 10) !== startDate) return null;
+  start.setUTCDate(start.getUTCDate() + day - 1);
+  return start.toISOString().slice(0, 10);
+}
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface ChallengeDashboardCardProps {
@@ -244,7 +253,8 @@ export default function ChallengeDashboardCard({
   // Build step nodes array: [node, connector, node, connector, ..., node]
   const stepItems: React.ReactNode[] = [];
   for (let d = 1; d <= totalDays; d++) {
-    const isCompletedDay = challenge.completed_days.includes(d);
+    const date = challengeDayDate(challenge.start_date, d);
+    const isCompletedDay = date !== null && challenge.completed_days.includes(date);
     const isCurrent = d === challenge.current_day && !isCompletedDay;
     const isDay7 = d === 7 && !isCompletedDay && !isCurrent;
     stepItems.push(
@@ -258,8 +268,8 @@ export default function ChallengeDashboardCard({
       />
     );
     if (d < totalDays) {
-      const bothCompleted =
-        challenge.completed_days.includes(d) && challenge.completed_days.includes(d + 1);
+      const nextDate = challengeDayDate(challenge.start_date, d + 1);
+      const bothCompleted = isCompletedDay && nextDate !== null && challenge.completed_days.includes(nextDate);
       stepItems.push(
         <View
           key={'connector-' + d}

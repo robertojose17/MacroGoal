@@ -1,8 +1,8 @@
 # Coherent observation source contract and QA plan
 
-**Design only, not deployed. No prescription or recommendation is enabled.** Prepared 2026-11-13 against the downloaded production Progress v14 reader and read-only production catalog metadata. No account rows, writes, synthetic live fixtures or new environment were used.
+**Read-only RPC and Progress v15 integration installed 2026-11-13. No prescription or recommendation is enabled.** This document began as a design against production Progress v14. See `IMPLEMENTATION_STATUS.md` for the current, separately verified implementation status. No account rows, synthetic live fixtures or new environment were used.
 
-## Verified current gap
+## Verified v14 gap (reader replaced in v15)
 
 Progress v14 queries profile, tracker, paginated check-ins/tracker entries/meals, and then meal items separately. Exact row counts and duplicate-ID checks detect some truncation/races but not updates with unchanged row counts. Its context fingerprint covers profile/goal/settings, not the food/weight content.
 

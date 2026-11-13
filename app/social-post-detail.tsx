@@ -114,6 +114,7 @@ function LegacySocialPostDetailScreen() {
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const likeBusy = useRef(false);
 
   const bg = isDark ? colors.backgroundDark : colors.background;
   const textColor = isDark ? colors.textDark : colors.text;
@@ -159,26 +160,24 @@ function LegacySocialPostDetailScreen() {
   }, [post_id]);
 
   const handleLike = useCallback(async (postId: string) => {
-    console.log('[PostDetail] Like pressed — post_id:', postId);
-    setPost((prev) =>
-      prev
-        ? { ...prev, liked_by_me: !prev.liked_by_me, likes_count: prev.liked_by_me ? prev.likes_count - 1 : prev.likes_count + 1 }
-        : prev
-    );
+    if (!post || post.id !== postId || post_id !== postId || likeBusy.current) return;
+    const before = post;
+    const optimistic = { ...before, liked_by_me: !before.liked_by_me,
+      likes_count: before.liked_by_me ? Math.max(0, before.likes_count - 1) : before.likes_count + 1 };
+    likeBusy.current = true;
+    setPost(prev => prev === before ? optimistic : prev);
     try {
-      const result = await toggleLike(postId);
-      setPost((prev) =>
-        prev ? { ...prev, liked_by_me: result.liked, likes_count: result.likes_count } : prev
-      );
+      const result = await toggleLike(postId, before.liked_by_me);
+      setPost(prev => prev === optimistic
+        ? { ...prev, liked_by_me: result.liked, likes_count: result.likes_count } : prev);
     } catch (e) {
       console.error('[PostDetail] toggleLike failed:', e);
-      setPost((prev) =>
-        prev
-          ? { ...prev, liked_by_me: !prev.liked_by_me, likes_count: prev.liked_by_me ? prev.likes_count - 1 : prev.likes_count + 1 }
-          : prev
-      );
+      // Do not invert a newer post/read after a delayed or failed request.
+      setPost(prev => prev === optimistic ? before : prev);
+    } finally {
+      likeBusy.current = false;
     }
-  }, []);
+  }, [post, post_id]);
 
   const handleSubmitComment = useCallback(async () => {
     if (!post_id || !commentText.trim()) return;
