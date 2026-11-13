@@ -2,6 +2,8 @@ import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
 function getAmountUSD(event) {
+  // Official RevenueCat promotional grants are free, never sales.
+  if (event.store === 'PROMOTIONAL' || event.period_type === 'PROMOTIONAL') return 0;
   const raw = event.price_in_purchased_currency;
   const currency = (event.currency || 'USD').toUpperCase();
   if (raw && raw > 0) return Number(raw);
