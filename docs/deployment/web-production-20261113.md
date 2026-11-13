@@ -27,3 +27,20 @@ Open release gates include authenticated application checks, native build/device
 validation, and the separate adaptive proposal/acceptance infrastructure and
 policy. Source publication and observational display are not completion of
 adaptive recommendations.
+
+## Verified follow-up: Settings session recovery
+
+Production run `01a1d71e-382c-748c-98ae-f32111500934` completed successfully
+in 1m55s from main `2e26664ee8229b151ff272e22e08d0e7697da56a`, deployment
+`vnw9v2i6cc`. The existing authenticated owner session remained active.
+Settings now displays the same profile and accepted targets as Foods/Profile:
+2015 kcal, 196 g protein, 132 g carbs, 78 g fat (fiber 28 g).
+The observation switch remained OFF and was not changed during this check.
+Daily Burn still displays Estimate unavailable. This is not a successful
+adaptive recommendation/acceptance test. No grant, purchase or TestFlight
+submission was part of this deployment verification.
+
+Inert adaptive infrastructure was subsequently committed to main `21ce9f8`.
+It has no screen import/render, no deployed SQL, and no live acceptance binding.
+51 focused infrastructure/session-recovery tests passed independently, but
+native lifecycle, SQL concurrency and end-to-end acceptance remain unverified.
