@@ -1,4 +1,4 @@
-import type { AdaptiveProgram, AdaptiveReceipt, AdaptiveRequest, AdaptiveTargets } from '../release-candidates/tdee-adaptive-review/apiContract';
+import type { AdaptiveProgram, AdaptiveReceipt, AdaptiveRequest, AdaptiveTargets } from '../apiContract';
 
 export const adaptiveReviewRolloutEnabled = () => process.env.EXPO_PUBLIC_TDEE_REVIEW_MODE === 'adaptive-review-v1';
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);

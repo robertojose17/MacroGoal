@@ -3,11 +3,11 @@ import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { supabase, SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
-import { createAdaptiveAcceptanceController, type AcceptanceResult } from '@/release-candidates/tdee-adaptive-review/acceptanceController';
-import type { AdaptiveProgram, AdaptiveRequest } from '@/release-candidates/tdee-adaptive-review/apiContract';
-import { adaptiveReviewRolloutEnabled, parseAdaptiveProgram, parseAdaptiveReceipt, requestAdaptiveReview } from '@/utils/adaptiveTdeeReview';
-import { createAdaptiveTdeeJournal } from '@/utils/adaptiveTdeeJournal';
-import { adaptiveTdeeJournalStorage } from '@/utils/adaptiveTdeeJournalStorage';
+import { createAdaptiveAcceptanceController, type AcceptanceResult } from '../acceptanceController';
+import type { AdaptiveProgram, AdaptiveRequest } from '../apiContract';
+import { adaptiveReviewRolloutEnabled, parseAdaptiveProgram, parseAdaptiveReceipt, requestAdaptiveReview } from './adaptiveTdeeReview';
+import { createAdaptiveTdeeJournal } from './adaptiveTdeeJournal';
+import { adaptiveTdeeJournalStorage } from './adaptiveTdeeJournalStorage';
 import { readActiveGoal } from '@/utils/activeGoal';
 import { emitGoalChanged, subscribeGoalChanged } from '@/utils/goalChangeEvents';
 

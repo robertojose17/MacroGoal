@@ -44,3 +44,15 @@ Inert adaptive infrastructure was subsequently committed to main `21ce9f8`.
 It has no screen import/render, no deployed SQL, and no live acceptance binding.
 51 focused infrastructure/session-recovery tests passed independently, but
 native lifecycle, SQL concurrency and end-to-end acceptance remain unverified.
+
+## QA entitlement blocker
+
+The production RevenueCat webhook was narrowly patched at main `1235543f` /
+live version 51 so official PROMOTIONAL events have zero recorded USD amount.
+No promotional entitlement has been granted. A later lifecycle audit found
+that the existing unique-per-user subscription mirror is overwritten by such
+a grant and that EXPIRATION unconditionally downgrades the profile. The amount
+fix is not full lifecycle reconciliation. Grant/revoke QA must remain blocked
+until that risk is resolved; it cannot be claimed as a reversible test today.
+The owner's current profile says Premium while the official entitlement is not
+active. Neither an admin flag nor a forged subscription was used as a bypass.

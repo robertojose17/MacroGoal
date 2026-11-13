@@ -41,3 +41,9 @@ observation-only until separately reviewed backend installation/activation.
 Server-side idempotency, source serialization, immutable receipts and current
 goal revisions remain authoritative; clearing browser storage or losing a
 native key is not evidence that an earlier acceptance failed.
+
+## Inert source boundary
+
+All five prepared client files live only in `release-candidates/tdee-adaptive-review/client/`: `AdaptiveTdeeReviewCard.tsx`, `useAdaptiveTdeeReview.ts`, `adaptiveTdeeReview.ts`, `adaptiveTdeeJournal.ts`, and `adaptiveTdeeJournalStorage.ts`. No application runtime directory imports this candidate. Tests import the candidate explicitly; the existing production-binding safety invariant remains unchanged. Moving these sources does not enable any route, screen, or write.
+
+After source relocation, the unchanged application-binding invariant passes in the requested broad suite (`tests/*tdee*.test.cjs`, `tests/adaptive-*.test.mjs`, goal-session and observation-focus recovery): **254/254 passed**, no skips. The relocated parser/journal tests independently pass **17/17**; candidate client ESLint exits 0. These are local automated checks, not live-app or clinical verification.

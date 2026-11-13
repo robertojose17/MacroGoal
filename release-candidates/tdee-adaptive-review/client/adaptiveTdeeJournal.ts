@@ -1,4 +1,4 @@
-import type { AcceptanceDependencies, AcceptanceRequest, JournalEntry } from '../release-candidates/tdee-adaptive-review/acceptanceController';
+import type { AcceptanceDependencies, AcceptanceRequest, JournalEntry } from '../acceptanceController';
 
 /** Identity-only journal: never stores calorie targets, weights, tokens or profile data. */
 export type AdaptiveJournalStorage = {

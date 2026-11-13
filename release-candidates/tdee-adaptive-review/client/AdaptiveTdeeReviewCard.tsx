@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useAdaptiveTdeeReview } from '@/hooks/useAdaptiveTdeeReview';
+import { useAdaptiveTdeeReview } from './useAdaptiveTdeeReview';
 
 /** No auto-accept. Hidden until the independent adaptive rollout is explicitly enabled. */
 export default function AdaptiveTdeeReviewCard({userId,isDark}: {userId:string;isDark:boolean}) {

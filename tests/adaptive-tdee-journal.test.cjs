@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'), assert=require('node:assert/strict'), fs=require('node:fs'), vm=require('node:vm'), ts=require('typescript');
 const exportsObject={};
-vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../utils/adaptiveTdeeJournal.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:exportsObject,Map,Promise,JSON,Error});
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../release-candidates/tdee-adaptive-review/client/adaptiveTdeeJournal.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:exportsObject,Map,Promise,JSON,Error});
 const request={ownerId:'00000000-0000-4000-8000-000000000001',requestId:'00000000-0000-4000-8000-000000000002',proposalId:'00000000-0000-4000-8000-000000000003',proposalDigest:'a'.repeat(64)};
 function harness() {
  const rows=new Map(); let tail=Promise.resolve();
