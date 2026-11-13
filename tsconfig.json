@@ -9,7 +9,9 @@
       "@/*": [
         "./*"
       ]
-    }
+    },
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": [
     "**/*.ts",

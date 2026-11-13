@@ -1,0 +1,39 @@
+'use strict';
+// Dependency-controlled hook runner, NOT a React renderer/native/browser E2E test.
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),ts=require('typescript');
+const base='release-candidates/tdee-adaptive-review',owner='00000000-0000-4000-8000-000000000001',id='00000000-0000-4000-8000-000000000002';
+const defer=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
+const tick=()=>new Promise(r=>setImmediate(r));
+function fixture(){
+ let actor=owner,focus,focusCleanup,auth,app,goalListener,acceptGate=null,readGate=null,lost=false,receipt=null,rollout=true;
+ const events=[],calls=[],rows=new Map(),cache=new Map(),slots=[],effects=[];let cursor=0;
+ const same=(a,b)=>a&&b&&a.length===b.length&&a.every((v,i)=>v===b[i]);
+ const react={useRef(v){const i=cursor++;return slots[i]??=( {current:v});},useState(v){const i=cursor++;if(!(i in slots))slots[i]=v;return [slots[i],n=>{slots[i]=typeof n==='function'?n(slots[i]):n;}];},useMemo(fn,deps){const i=cursor++;if(!slots[i]||!same(slots[i].deps,deps))slots[i]={deps,value:fn()};return slots[i].value;},useCallback(fn,deps){return react.useMemo(()=>fn,deps);},useEffect(fn,deps){const i=cursor++;if(!slots[i]||!same(slots[i].deps,deps)){slots[i]?.cleanup?.();slots[i]={deps};effects.push(()=>{slots[i].cleanup=fn();});}}};
+ const program=()=>({version:'adaptive-review-v1',ownerId:owner,premium:true,enabled:true,reason:'ready',safety:{enabled:true,policyApproved:true,policyVersion:'p1',engineVersion:'e1',clinicalEligibility:'verified',completeness:'verified',sourceWriteSerialization:'verified'},proposal:{type:'persisted_reviewed_proposal',actionable:true,ownerId:owner,id,digest:'a'.repeat(64),policyVersion:'p1',engineVersion:'e1',expiresAt:new Date(Date.now()+60000).toISOString(),current:{calories:2000,proteinG:150,carbsG:200,fatsG:67,fiberG:25},target:{calories:2100,proteinG:158,carbsG:210,fatsG:70,fiberG:25},deltaKcal:100,sourceDate:new Date().toISOString().slice(0,10)}});
+ let tail=Promise.resolve();const storage={read:async k=>rows.get(k)??null,transact(k,fn){const p=tail.catch(()=>{}).then(()=>{const next=fn(rows.get(k)??null);if(next===null)rows.delete(k);else rows.set(k,next);});tail=p;return p;}};
+ const transport=async opts=>{calls.push(opts);if(opts.action==='program')return program();if(opts.action==='receipt')return receipt??{version:'adaptive-receipt-v1',status:'not_found'};
+  receipt={version:'adaptive-receipt-v1',status:'committed',request:opts.request,acceptedGoal:{id,updatedAt:null},goalState:'current'};events.push('server-commit');if(acceptGate)await acceptGate.promise;if(lost)throw Error('lost_response');if(!opts.isCurrent())throw Error('account_changed');return receipt;};
+ function load(file){if(cache.has(file))return cache.get(file);const module={exports:{}};cache.set(file,module.exports);const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+ new Function('require','module','exports',code)(name=>{
+  if(name==='react')return react;
+  if(name==='expo-router')return {useFocusEffect(fn){focus=fn;}};
+  if(name==='react-native')return {AppState:{currentState:'active',addEventListener(_,fn){app=fn;return {remove(){app=null;}};}}};
+  if(name==='expo-crypto')return {randomUUID:()=> '00000000-0000-4000-8000-000000000003'};
+  if(name==='@/lib/supabase/client')return {SUPABASE_PROJECT_URL:'https://example.supabase.co',supabasePublicKey:'public',supabase:{auth:{getSession:async()=>({data:{session:actor?{user:{id:actor},access_token:'test'}:null}}),onAuthStateChange(fn){auth=fn;return {data:{subscription:{unsubscribe(){auth=null;}}}};}}}};
+  if(name==='./adaptiveTdeeJournalStorage')return {adaptiveTdeeJournalStorage:storage};
+  if(name==='@/utils/activeGoal')return {async readActiveGoal(who){assert.equal(who,owner);events.push('read-start');if(readGate)await readGate.promise;events.push('read-done');return {id};}};
+  if(name==='@/utils/goalChangeEvents')return {emitGoalChanged(){events.push('emit');goalListener?.(owner);},subscribeGoalChanged(fn){goalListener=fn;return ()=>{goalListener=null;};}};
+  if(name==='./adaptiveTdeeReview')return {...load(base+'/client/adaptiveTdeeReview.ts'),adaptiveReviewRolloutEnabled:()=>rollout,requestAdaptiveReview:transport};
+  if(name.startsWith('.'))return load(path.normalize(path.join(path.dirname(file),name))+'.ts');throw Error(name);
+ },module,module.exports);return module.exports;}
+ const hook=load(base+'/client/useAdaptiveTdeeReview.ts').useAdaptiveTdeeReview;
+ const render=()=>{cursor=0;const v=hook(owner);while(effects.length)effects.shift()();return v;};
+ const api={render,events,calls,rows,async start(){render();focusCleanup=focus();await tick();return render();},blur(){focusCleanup?.();focusCleanup=null;},focus(){focusCleanup=focus();},auth(next){actor=next;auth?.('changed',actor?{user:{id:actor}}:null);},background(){app?.('background');},unmount(){api.blur();for(const s of slots)s?.cleanup?.();},holdAccept(){acceptGate=defer();return acceptGate;},holdRead(){readGate=defer();return readGate;},lose(){lost=true;},off(){rollout=false;},async settle(){await tick();await tick();return render();}};return api;
+}
+test('commit re-reads active goal before emitting or displaying accepted result',async()=>{const h=fixture();await h.start();const read=h.holdRead(),p=h.render().accept();await tick();assert.deepEqual(h.events,['server-commit','read-start']);assert.notEqual(h.render().result?.status,'committed');read.resolve();await p;assert.deepEqual(h.events,['server-commit','read-start','read-done','emit']);assert.equal(h.render().result.status,'committed');h.unmount();});
+for(const transition of ['blur','auth','background','unmount'])test(`${transition} during acceptance preserves journal without false success`,async()=>{const h=fixture();await h.start();const gate=h.holdAccept(),p=h.render().accept();await tick();assert.equal(h.rows.size,1);if(transition==='auth')h.auth(id);else h[transition]();gate.resolve();await p;assert.equal(h.rows.size,1);assert.equal(h.events.includes('emit'),false);assert.notEqual(h.render().result?.status,'committed');h.unmount();});
+test('lost response reconciles exact receipt on refocus with no second accept; reread precedes emit',async()=>{const h=fixture();await h.start();h.lose();await h.render().accept();assert.equal(h.rows.size,1);h.blur();h.focus();await h.settle();assert.equal(h.calls.filter(c=>c.action==='accept').length,1);assert.equal(h.rows.size,0);assert.deepEqual(h.events,['server-commit','read-start','read-done','emit']);assert.equal(h.render().result.status,'committed');h.unmount();});
+test('blur while reading committed goal prevents stale goal-changed event',async()=>{const h=fixture();await h.start();const read=h.holdRead(),p=h.render().accept();await tick();h.blur();read.resolve();await p;assert.equal(h.events.includes('emit'),false);h.unmount();});
+
+test('recovery waits for successful goal reread before exposing committed result',async()=>{const h=fixture();await h.start();h.lose();await h.render().accept();h.blur();const read=h.holdRead();h.focus();await tick();assert.notEqual(h.render().result?.status,'committed');assert.equal(h.events.includes('emit'),false);read.reject(Error('goal_read_failed'));await h.settle();assert.notEqual(h.render().result?.status,'committed');assert.equal(h.render().error,'goal_read_failed');assert.equal(h.events.includes('emit'),false);h.unmount();});
+test('receipt recovery remains read-only when adaptive rollout is OFF',async()=>{const h=fixture();await h.start();h.lose();await h.render().accept();h.blur();h.off();h.render();h.focus();await h.settle();assert.equal(h.render().result.status,'committed');assert.equal(h.calls.filter(c=>c.action==='accept').length,1);assert.equal(h.rows.size,0);h.unmount();});

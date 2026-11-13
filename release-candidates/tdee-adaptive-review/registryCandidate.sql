@@ -10,7 +10,7 @@ BEGIN
   RAISE EXCEPTION 'source_writer_protocol_required';
  END IF;
 END $preflight$;
-CREATE SCHEMA macrogoal_adaptive_private;
+CREATE SCHEMA IF NOT EXISTS macrogoal_adaptive_private;
 REVOKE ALL ON SCHEMA macrogoal_adaptive_private FROM PUBLIC,anon,authenticated,service_role;
 
 CREATE TABLE macrogoal_adaptive_private.policies (
@@ -154,7 +154,8 @@ BEGIN
  prior:=macrogoal_adaptive_private.read_receipt(p_request);
  IF prior->>'status'<>'not_found' THEN RETURN prior; END IF;
  -- Same owner serializes requests before receipt/proposal consumption. Lock order
- -- agrees with manual save/restart and the independently verified source barrier.
+ -- agrees with manual save/restart and the candidate source barrier.
+ -- Real source-writer interleavings are not yet verified in PostgreSQL.
  SELECT * INTO u FROM public.users WHERE id=actor FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='P0002',MESSAGE='profile_unavailable'; END IF;
  prior:=macrogoal_adaptive_private.read_receipt(p_request);

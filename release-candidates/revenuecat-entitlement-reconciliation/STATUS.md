@@ -20,3 +20,15 @@ Current candidate intentionally blocks promotional processing rather than silent
 
 ## Limits
 Pure tests are not E2E, no SQL transaction implementation, not deploy-ready. General financial fallback defects remain outside this scope.
+
+## Atomic integration candidate added
+atomic-expiration.sql provides actual service-only SECURITY INVOKER RPC:
+- live column types checked (users.id UUID; subscriptions.user_id text, id UUID; timestamps timestamptz);
+- fixed profile->subscription row locking, version/type CAS, actor+row identity binding;
+- matching product/store/environment and nonstale expiration required;
+- both updates in same transaction; trigger errors rollback both;
+- no inserts or paid conversion/commission paths, only active->inactive and premium->free.
+integration.mjs consumes existing policy planner and constructs exact RPC contract. State read before official RC lookup; provider failure makes zero RPC writes. MUST replace expiration branch entirely before legacy ledger/upsert writes, not run alongside it.
+8 model race/failure tests pass in addition to 15 policy tests. PostgreSQL function not installed/executed; therefore runtime role/RLS/trigger interaction remains unverified.
+30-second snapshot freshness is an engineering rejection window, NOT guarantee RC cannot renew immediately after its response. Correct eventual state still requires authoritative reconciliation on every lifecycle event and monotonic/versioned processing.
+No new access rights, promotional activation, live permissions, or real account/subscription values changed. No claim QA reversible: promotional path intentionally blocked pending independent storage/authority design.

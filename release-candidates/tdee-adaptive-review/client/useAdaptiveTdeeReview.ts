@@ -68,12 +68,12 @@ export function useAdaptiveTdeeReview(expectedOwner: string) {
     try {
       const recovered = await controller.recover();
       if (!current() || generation.current !== revision) return;
-      setResult(recovered);
       if (recovered.status === 'committed') {
         await readActiveGoal(expectedOwner);
         if (!current() || generation.current !== revision) return;
         ownWrite.current = true; emitGoalChanged(expectedOwner); ownWrite.current = false;
       }
+      setResult(recovered);
       // Disabling new recommendations must not disable reconciliation of a
       // previously submitted request. Recovery above only reads receipts.
       if (!enabled) return;
