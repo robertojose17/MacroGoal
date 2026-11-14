@@ -15,9 +15,9 @@ Atomic acceptance preserves goal/anchor/proposal/receipt consistency and request
 A baseline is bound to its complete starting goal and journey; it is not silently reset. Initial calibration and subsequent acceptance require at least fourteen days, plus the independent observational data requirements.
 
 ## Important source/runtime difference
-The prepared TypeScript engine preserves protein and fiber, allocates the residual energy between carbohydrates and fat, and permits explicitly nullable cumulative/intake caps.
-The deployed SQL still requires non-null cumulative/intake caps and does not yet include the new exact-protein equality guard.
-Do not deploy or enable these candidates as if they were already a single verified release. The persistent policy change remains unapproved; no workaround or retry is authorized. No numerical cap has been selected or seeded.
+The prepared TypeScript engine preserves protein and fiber and allocates residual energy between carbohydrates and fat. The engine, context parser, bootstrap planner and eligibility refresh planner now require finite positive cumulative/intake caps, aligned with the deployed SQL NOT NULL requirement; null is rejected without substituting defaults.
+The deployed SQL still does not include the new exact-protein equality guard. This cap-contract alignment does not establish full source/runtime equivalence.
+Do not deploy or enable these candidates as if they were already a single verified release. The rejected persistent policy migration remains unapproved; no workaround or retry is authorized. No numerical cap has been selected or seeded. Updated cap-contract regression tests are prepared but not executed because the local runner is blocked; earlier passing test counts below are historical evidence, not validation of these latest changes.
 
 ## Evidence actually obtained
 - Actual own-account SQL acceptance transaction passed: revoked readiness rejected; atomic goal/receipt creation; identical replay; consumed proposal reuse and mismatched request rejection. Mandatory rollback restored the complete original state digest.
