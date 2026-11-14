@@ -43,8 +43,8 @@ export function planSnapshotEligibilityRefresh(value:unknown,actor:string,now:nu
  if(!ints.every(k=>typeof p[k]==='number'&&Number.isSafeInteger(p[k])&&(p[k] as number)>0)||
  (p.max_step_kcal as number)>200||(p.min_days_between_acceptances as number)<14||
  typeof p.max_step_fraction!=='number'||!Number.isFinite(p.max_step_fraction)||p.max_step_fraction<=0||p.max_step_fraction>1||
- !['max_cumulative_delta_kcal','max_intake_kcal'].every(k=>p[k]===null||(typeof p[k]==='number'&&Number.isSafeInteger(p[k])&&(p[k] as number)>0))||
- (p.max_intake_kcal!==null&&(p.max_intake_kcal as number)<(p.min_intake_kcal as number)))return block('policy_invalid');
+ !['max_cumulative_delta_kcal','max_intake_kcal'].every(k=>(typeof p[k]==='number'&&Number.isSafeInteger(p[k])&&(p[k] as number)>0))||
+ ((p.max_intake_kcal as number)<(p.min_intake_kcal as number)))return block('policy_invalid');
  if(!rec(r)||r.version!=='tdee-readiness-v1'||r.ownerId!==actor||r.questionnaireVersion!=='general-adult-v1'||
  r.statementVersion!=='complete-day-v1'||r.today!==observation.context.today||r.timezone!==profile.timezone||
  !hash(r.profileBinding)||!hash(r.journeyBinding)||!hash(value.readinessFingerprint)||!rec(r.eligibility)||
@@ -67,7 +67,7 @@ export function planSnapshotEligibilityRefresh(value:unknown,actor:string,now:nu
  if(!goalNumbers.every(k=>typeof g[k]==='number'&&Number.isSafeInteger(g[k])&&(g[k] as number)>=0)||
  (g.daily_calories as number)<=0||Math.abs((g.daily_calories as number)-4*(g.protein_g as number)-4*(g.carbs_g as number)-9*(g.fats_g as number))>10)return block('current_target_invalid');
  if((g.daily_calories as number)<Math.max(p.min_intake_kcal as number,profile.sex==='female'?1200:1500)||
- (p.max_intake_kcal!==null&&(g.daily_calories as number)>(p.max_intake_kcal as number)))return block('current_target_outside_policy');
+ ((g.daily_calories as number)>(p.max_intake_kcal as number)))return block('current_target_outside_policy');
  const gap=(a.baseline_intake_kcal as number)-a.baseline_expenditure_kcal;
  if(!(g.goal_type==='lose'?gap<0:g.goal_type==='gain'?gap>0:g.goal_type==='maintain'?gap===0:false))return block('goal_direction_mismatch');
  return {kind:'eligibility_refresh_draft' as const,actionable:false as const,ownerId:actor,
