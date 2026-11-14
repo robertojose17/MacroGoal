@@ -68,7 +68,7 @@ CREATE FUNCTION macrogoal_snapshot_review_private.snapshot_time_valid(value text
 RETURNS boolean LANGUAGE plpgsql IMMUTABLE SET search_path TO pg_catalog,pg_temp AS $fn$
 DECLARE captured timestamptz;
 BEGIN
- IF value IS NULL OR value !~ '^\d{4}-\d{2}-\d{2}T' OR at_time IS NULL OR NOT isfinite(at_time) THEN RETURN false; END IF;
+ IF value IS NULL OR value !~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$' OR at_time IS NULL OR NOT isfinite(at_time) THEN RETURN false; END IF;
  BEGIN captured:=value::timestamptz; EXCEPTION WHEN invalid_datetime_format OR datetime_field_overflow THEN RETURN false; END;
  RETURN isfinite(captured) AND captured<=at_time AND at_time-captured<=interval '30 seconds';
 END $fn$;
@@ -100,6 +100,11 @@ BEGIN
  IF p_id IS NULL OR p_owner IS NULL OR p_anchor IS NULL OR p_expires_at IS NULL OR NOT isfinite(p_expires_at) OR
    p_expires_at<=clock_timestamp() OR p_payload IS NULL OR jsonb_typeof(p_payload)<>'object' OR octet_length(p_payload::text)>16384 THEN
   RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_proposal'; END IF;
+ IF p_payload->>'snapshotSemantics' IS DISTINCT FROM 'as-of-revalidated-v1' OR
+    coalesce(p_payload->>'sourceFingerprint','') !~ '^[a-f0-9]{64}$' OR
+    NOT p_payload ?& ARRAY['goalId','goalUpdatedAt','profileUpdatedAt','goalSnapshot','sourceCapturedAt'] OR
+    NOT macrogoal_snapshot_review_private.snapshot_time_valid(p_payload->>'sourceCapturedAt',clock_timestamp()) THEN
+  RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='snapshot_contract_invalid'; END IF;
  SELECT * INTO policy FROM macrogoal_snapshot_review_private.policies WHERE version=p_policy FOR SHARE;
  IF NOT FOUND OR NOT policy.enabled OR NOT policy.reviewed OR NOT policy.snapshot_contract_reviewed OR policy.expires_at<=clock_timestamp() OR
    p_expires_at>policy.expires_at OR p_payload->>'policyDigest' IS DISTINCT FROM policy.digest OR p_payload->>'engineVersion' IS DISTINCT FROM policy.engine_version THEN
@@ -222,6 +227,9 @@ BEGIN
   n:=(target->>k)::numeric;
   IF n<>trunc(n) OR n<0 OR n>10000 THEN RETURN macrogoal_snapshot_review_private.reject_request(p_request,'invalid_target'); END IF;
  END LOOP;
+ IF g.daily_calories IS NULL OR g.daily_calories<=0 OR g.protein_g IS NULL OR g.protein_g<0 OR
+    g.carbs_g IS NULL OR g.carbs_g<0 OR g.fats_g IS NULL OR g.fats_g<0 OR g.fiber_g IS NULL OR g.fiber_g<0 THEN
+  RETURN macrogoal_snapshot_review_private.reject_request(p_request,'existing_goal_invalid'); END IF;
  delta:=(target->>'calories')::integer-g.daily_calories;
  -- Bidirectional bound, not a reviewed nutritional policy.
  IF delta=0 OR abs(delta)>policy.max_step_kcal OR abs(delta)>g.daily_calories*policy.max_step_fraction OR
