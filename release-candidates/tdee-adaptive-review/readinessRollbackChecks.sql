@@ -24,7 +24,7 @@ BEGIN
  PERFORM set_config('role','authenticated',true);
  s:=public.tdee_read_readiness_v1();
  IF s->>'version'<>'tdee-readiness-v1' OR s->>'ownerId'<>a::text OR
- jsonb_array_length(s->'days')>28 OR s->>'profileBinding' !~ '^[a-f0-9]{64}$' OR
+ jsonb_array_length(s->'days')>29 OR s->>'profileBinding' !~ '^[a-f0-9]{64}$' OR
  s->>'journeyBinding' !~ '^[a-f0-9]{64}$' OR
  EXISTS(SELECT 1 FROM jsonb_array_elements(s->'days') d WHERE d->>'date'>=s->>'today' OR
  d->>'contentHash' !~ '^[a-f0-9]{64}$') THEN RAISE EXCEPTION 'read_shape_failed'; END IF; n:=n+1;
