@@ -22,3 +22,51 @@ test('first review waits fourteen days after baseline without fabricating accept
  f.anchor.baselineCapturedAt--;assert.equal(draft(f).kind,'draft');
  for(const v of [undefined,null,NaN,now+1]){f.anchor.baselineCapturedAt=v;assert.equal(draft(f).reason,'baseline_invalid');}
 });
+
+test('protein and fiber remain exact for upward and downward adjustments',()=>{
+ for(const [expenditure,calories,carbs,fats] of [[2800,2100,230,64],[2300,1900,200,56]]){
+ const f=fixture();f.observedExpenditure=expenditure;const r=draft(f);
+ assert.equal(r.kind,'draft');assert.deepEqual(r.target,{calories,proteinG:150,carbsG:carbs,fatsG:fats,fiberG:30});
+ assert.ok(Math.abs(calories-4*r.target.proteinG-4*carbs-9*fats)<=10);
+ }
+});
+test('carbs-only or fat-only distributions preserve zero counterpart',()=>{
+ const f=fixture();f.current.carbsG=350;f.current.fatsG=0;let r=draft(f);
+ assert.equal(r.kind,'draft');assert.equal(r.target.fatsG,0);assert.equal(r.target.carbsG,325);
+ f.current.carbsG=0;f.current.fatsG=156;r=draft(f);
+ assert.equal(r.kind,'draft');assert.equal(r.target.carbsG,0);assert.equal(r.target.fatsG,144);
+ assert.equal(r.target.proteinG,150);
+});
+test('no distributable energy or exhausted residual fails closed',()=>{
+ const f=fixture();f.current.proteinG=500;f.current.carbsG=0;f.current.fatsG=0;
+ assert.equal(draft(f).reason,'macro_energy_unavailable');
+ f.current.proteinG=490;f.current.carbsG=10;
+ assert.equal(draft(f).reason,'macro_energy_unavailable');
+});
+test('fixed fractional macros are not silently rounded',()=>{
+ const f=fixture();f.current.proteinG=150.5;assert.equal(draft(f).reason,'fixed_macros_invalid');
+ f.current.proteinG=150;f.current.fiberG=30.5;assert.equal(draft(f).reason,'fixed_macros_invalid');
+});
+test('residual rounding stays nonnegative integer and within energy tolerance',()=>{
+ for(let protein=50;protein<=300;protein+=25)for(let fat=0;fat<=100;fat+=10){
+ const f=fixture();f.current.proteinG=protein;f.current.fatsG=fat;
+ f.current.carbsG=Math.round((2000-4*protein-9*fat)/4);
+ if(f.current.carbsG<0)continue;
+ for(const expenditure of [2200,2800]){
+ f.observedExpenditure=expenditure;const r=draft(f);
+ if(r.kind!=='draft'){assert.equal(r.reason,'macro_energy_unavailable');continue;}
+ assert.equal(r.target.proteinG,protein);assert.equal(r.target.fiberG,30);
+ assert.ok(Object.values(r.target).every(x=>Number.isInteger(x)&&x>=0));
+ assert.ok(Math.abs(r.target.calories-4*protein-4*r.target.carbsG-9*r.target.fatsG)<=10);
+ }}
+});
+
+test('explicit null removes optional ceiling and net cap, not per-step limits',()=>{
+ const f=fixture();f.policy.maxNetDeltaKcal=null;f.policy.maxIntakeKcal=null;f.observedExpenditure=9000;
+ assert.equal(draft(f).deltaKcal,100);
+ f.anchor.acceptedDelta=1000;f.anchor.intake=1000;f.anchor.acceptedCount=1;f.anchor.lastAcceptedAt=now-14*86400000;
+ assert.equal(draft(f).kind,'draft');
+ for(const value of [undefined,0,-1,Infinity,'none'])for(const key of ['maxNetDeltaKcal','maxIntakeKcal']){
+ const x=fixture();x.policy[key]=value;assert.equal(draft(x).reason,'policy_invalid');
+ }
+});
