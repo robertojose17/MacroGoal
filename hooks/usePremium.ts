@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase/client';
 import Purchases, { isPurchasesAvailable, withRevenueCatUser } from '@/utils/purchases';
 import { premiumEntitlement, premiumFallbackState } from '@/utils/premiumEntitlement';
 import { syncPremiumMembership } from '@/utils/premiumSync';
+import { usePremiumAuthorityShadow } from '@/hooks/usePremiumAuthorityShadow';
 
 type CustomerInfo = any;
 interface UsePremiumReturn {
@@ -41,6 +42,9 @@ export function usePremium(): UsePremiumReturn {
   const followUp = useRef(false);
   const syncRequested = useRef(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Web-only shadow observation. Never feeds existing access, SDK or profile states.
+  usePremiumAuthorityShadow(owner.current ?? null, Platform.OS === 'web');
 
   const reset = useCallback(() => {
     knownPremium.current = false;
