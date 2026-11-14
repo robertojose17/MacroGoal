@@ -5,7 +5,7 @@ function fixture(){
  const goal={...old,id:'g1',daily_calories:1900,protein_g:145,carbs_g:190,fats_g:62,created_at:'2026-02-01T00:00:00Z'};
  const proposal={id:'p',owner_id:'a',anchor_id:'anchor',policy_version:'v',digest:'a'.repeat(64),consumed_request:'r',
  payload:{goalId:'g0',goalSnapshot:old,sourceFingerprint:'b'.repeat(64),deltaKcal:-100,target:{calories:1900,proteinG:145,carbsG:190,fatsG:62,fiberG:28}}};
- const receipt={owner_id:'a',status:'committed',request_id:'r',request:{ownerId:'a',requestId:'r',proposalId:'p',proposalDigest:'a'.repeat(64)},
+ const receipt={anchor_id:'anchor',owner_id:'a',status:'committed',request_id:'r',request:{ownerId:'a',requestId:'r',proposalId:'p',proposalDigest:'a'.repeat(64)},
  accepted_goal_id:'g1',accepted_goal:goal,acceptance_evidence:{contract:'as-of-revalidated-v1',fingerprint:'b'.repeat(64),capturedAt:'2026-01-31T23:59:50Z'}};
  return {actor:'a',anchor:{id:'anchor',owner_id:'a',revoked:false,policy_version:'v',baseline_intake_kcal:2000,accepted_delta_kcal:-100,last_accepted_at:goal.created_at,active_goal_id:'g1'},currentGoal:goal,totalCount:1,rows:[{receipt,proposal}]};
 }
@@ -16,7 +16,7 @@ test('empty chain only valid untouched anchor',()=>{const f=fixture();f.rows=[];
 test('missing and duplicate rows fail closed',()=>{let f=fixture();f.totalCount=2;assert.throws(()=>verify(f));f.rows.push(f.rows[0]);assert.throws(()=>verify(f));});
 test('owner, request, proposal, anchor, policy binding cannot be substituted',()=>{
  for(const mutate of [
- f=>f.rows[0].receipt.owner_id='b',f=>f.rows[0].proposal.owner_id='b',f=>f.rows[0].proposal.anchor_id='other',
+ f=>f.rows[0].receipt.owner_id='b',f=>f.rows[0].receipt.anchor_id='other',f=>f.rows[0].proposal.owner_id='b',f=>f.rows[0].proposal.anchor_id='other',
  f=>f.rows[0].proposal.policy_version='other',f=>f.rows[0].proposal.consumed_request='other',
  f=>f.rows[0].receipt.request.proposalDigest='other',f=>f.rows[0].receipt.accepted_goal.user_id='b']){
  const f=fixture();mutate(f);assert.throws(()=>verify(f));}
