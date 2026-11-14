@@ -34,11 +34,11 @@ BEGIN
  WHERE e.owner_id=actor AND e.policy_version=a.value->>'policy_version'
  ), receipt_count AS MATERIALIZED (
  -- Independent of join: missing/malformed proposal references cannot reduce count.
- SELECT count(*) AS n FROM macrogoal_snapshot_review_private.receipts r
- WHERE r.owner_id=actor AND r.status='committed'
+ SELECT count(*) AS n FROM macrogoal_snapshot_review_private.receipts r CROSS JOIN anchors a
+ WHERE r.owner_id=actor AND r.anchor_id::text=a.value->>'id' AND r.status='committed'
  ), receipt_rows AS MATERIALIZED (
- SELECT r.* FROM macrogoal_snapshot_review_private.receipts r
- WHERE r.owner_id=actor AND r.status='committed' ORDER BY r.created_at,r.request_id LIMIT 1001
+ SELECT r.* FROM macrogoal_snapshot_review_private.receipts r CROSS JOIN anchors a
+ WHERE r.owner_id=actor AND r.anchor_id::text=a.value->>'id' AND r.status='committed' ORDER BY r.created_at,r.request_id LIMIT 1001
  ), chain_rows AS MATERIALIZED (
  SELECT r.request_id,r.created_at,to_jsonb(r) AS receipt,to_jsonb(p) AS proposal
  FROM receipt_rows r LEFT JOIN macrogoal_snapshot_review_private.proposals p
@@ -73,6 +73,6 @@ REVOKE ALL ON FUNCTION macrogoal_snapshot_review_private.read_review_context()
 FROM PUBLIC,anon,authenticated,service_role;
 -- No grants, wrappers, source triggers, defaults granting review, policy seeds,
 -- enrollment or acceptance. Existing receiptChain.ts must verify returned history.
--- All committed owner history is retained; earlier anchor history fails closed
--- until a separately reviewed epoch/partition proof exists. Never truncate history.
+-- Receipt anchor_id is persisted at acceptance; count is independent of proposal
+-- joins. Prior anchor history stays preserved but does not enter this chain.
 COMMIT;
