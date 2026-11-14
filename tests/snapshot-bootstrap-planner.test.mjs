@@ -1,3 +1,4 @@
+/** Caps contract regression changed; execution pending because local runner is blocked. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {planSnapshotBootstrap} from '../release-candidates/tdee-adaptive-review/snapshotBootstrapPlanner.ts';
@@ -67,8 +68,9 @@ test('goal direction mismatch never silently changes target',()=>{
  assert.equal(planSnapshotBootstrap(v,actor,policy,now).reason,'goal_direction_mismatch');
 });
 
-test('bootstrap accepts explicit null optional caps, not missing limits',()=>{
- const {v,policy}=bootstrapFixture();policy.max_cumulative_delta_kcal=null;policy.max_intake_kcal=null;
- assert.equal(planSnapshotBootstrap(v,actor,policy,now).kind,'bootstrap_draft');
- for(const value of [undefined,0,'none']){policy.max_intake_kcal=value;assert.equal(planSnapshotBootstrap(v,actor,policy,now).kind,'blocked');}
+test('bootstrap requires positive finite caps without defaults or source mutation',()=>{
+ for(const value of [null,undefined,0,-1,NaN,Infinity,'none'])for(const key of ['max_cumulative_delta_kcal','max_intake_kcal']){
+  const {v,policy}=bootstrapFixture();policy[key]=value;const before=structuredClone({v,policy});
+  assert.equal(planSnapshotBootstrap(v,actor,policy,now).kind,'blocked');assert.deepEqual({v,policy},before);
+ }
 });
