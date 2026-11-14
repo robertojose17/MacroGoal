@@ -28,7 +28,7 @@ export function prepareSnapshotProposal(input:SnapshotAdjustmentInput,b:Snapshot
   g.daily_calories!==c.calories||g.protein_g!==c.proteinG||g.carbs_g!==c.carbsG||g.fats_g!==c.fatsG||g.fiber_g!==c.fiberG)
   return block('goal_binding_mismatch');
  if(b.eligibilityFingerprint!==input.evidence.fingerprint)return block('eligibility_binding_mismatch');
- const expiry=Math.min(instant(b.policyExpiresAt),instant(b.eligibilityExpiresAt),instant(b.offerExpiresAt));
+ const expiry=Math.min(input.now+300000,instant(b.policyExpiresAt),instant(b.eligibilityExpiresAt),instant(b.offerExpiresAt));
  if(!Number.isFinite(expiry)||expiry<=input.now)return block('offer_expired');
  if(input.policy?.reviewed!==true||input.evidence.eligible!==true||input.evidence.modelReviewed!==true||input.anchor?.receiptsVerified!==true)return block('review_required');
  const draft=draftSnapshotAdjustment(input);
