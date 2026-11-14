@@ -20,7 +20,7 @@ export function createShadowHandler({identityClient,serviceClient,getExistingV2K
    const version=Number(r?.version);if(!Number.isSafeInteger(version)||version<0)throw Error('invalid_version');
    return {...r,version};
   };
-  const authority=createCommonPremiumAuthority({projectId:'0d801cfa',getExistingKey:getExistingV2Key,request,now,
+  const authority=createCommonPremiumAuthority({projectId:'proj0d801cfa',getExistingKey:getExistingV2Key,request,now,
    authenticate:async()=>{const r=await identityClient.auth.getUser(authorization.slice(7));const u=r.error?null:r.data?.user;return u?{id:u.id,isAnonymous:u.is_anonymous===true}:null;},
    resolveServerContext:async({actor})=>{
     if(actor!==owner)throw Error('actor_changed');
