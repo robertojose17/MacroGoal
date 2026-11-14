@@ -5,7 +5,7 @@ import {prepareSnapshotProposal,createSnapshotProposalProducer,validatePersisted
 const actor='11111111-1111-4111-8111-111111111111',hash='a'.repeat(64),now=Date.parse('2026-11-14T12:00:00Z');
 function fixture(){
  const input={current:{calories:2000,proteinG:150,carbsG:215,fatsG:60,fiberG:30},anchor:{intake:2000,expenditure:2400,acceptedDelta:0,acceptedCount:0,receiptsVerified:true,lastAcceptedAt:null},observedExpenditure:2500,policy:{reviewed:true,maxStepKcal:200,maxStepFraction:0.1,maxNetDeltaKcal:400,reviewIntervalDays:14,incrementKcal:25,minIntakeKcal:1500,maxIntakeKcal:3000},evidence:{eligible:true,modelReviewed:true,logging:'confirmed',capturedAt:now-1000,fingerprint:hash,stability:'stable',goalDirectionValid:true},now};
- const binding={ownerId:actor,proposalId:actor,anchorId:actor,goalSnapshot:{id:actor,user_id:actor,is_active:true,updated_at:'2026-11-01T00:00:00Z',daily_calories:2000,protein_g:150,carbs_g:215,fats_g:60,fiber_g:30,extra:'preserved'},profileUpdatedAt:'2026-11-01T00:00:00Z',sourceDate:'2026-11-13',today:'2026-11-14',policyVersion:'reviewed',policyDigest:hash,engineVersion:'snapshot1',policyExpiresAt:'2026-11-15T00:00:00Z',eligibilityDigest:hash,eligibilityFingerprint:hash,eligibilityExpiresAt:'2026-11-15T00:00:00Z',offerExpiresAt:'2026-11-14T13:00:00Z'};
+ const binding={readinessFingerprint:hash,ownerId:actor,proposalId:actor,anchorId:actor,goalSnapshot:{id:actor,user_id:actor,is_active:true,updated_at:'2026-11-01T00:00:00Z',daily_calories:2000,protein_g:150,carbs_g:215,fats_g:60,fiber_g:30,extra:'preserved'},profileUpdatedAt:'2026-11-01T00:00:00Z',sourceDate:'2026-11-13',today:'2026-11-14',policyVersion:'reviewed',policyDigest:hash,engineVersion:'snapshot1',policyExpiresAt:'2026-11-15T00:00:00Z',eligibilityDigest:hash,eligibilityFingerprint:hash,eligibilityExpiresAt:'2026-11-15T00:00:00Z',offerExpiresAt:'2026-11-14T13:00:00Z'};
  return {input,binding};
 }
 test('exact payload and independent offer expiry',()=>{const {input,binding}=fixture();const p=prepareSnapshotProposal(input,binding);assert.equal(p.kind,'prepared');assert.equal(p.actionable,false);assert.equal(p.record.payload.snapshotSemantics,'as-of-revalidated-v1');assert.equal(p.record.payload.sourceCapturedAt,new Date(now-1000).toISOString());assert.equal(p.record.payload.goalSnapshot.extra,'preserved');assert.equal(p.record.expiresAt,'2026-11-14T12:04:59.000Z');binding.goalSnapshot.extra='changed';assert.equal(p.record.payload.goalSnapshot.extra,'preserved');});
@@ -21,3 +21,11 @@ test('engine refuses truthy non-boolean authorization evidence',()=>{for(const [
 test('engine refuses coercible fingerprint objects',()=>{const {input}=fixture();input.evidence.fingerprint={toString:()=>hash};assert.equal(draftSnapshotAdjustment(input).kind,'blocked');});
 test('SQL issuance lifetime is capture plus five minutes, not preparation plus five minutes',()=>{const {input,binding}=fixture();input.evidence.capturedAt=now-30000;const p=prepareSnapshotProposal(input,binding);assert.equal(p.kind,'prepared');assert.equal(Date.parse(p.record.expiresAt),input.evidence.capturedAt+300000);});
 test('malformed timestamps rejected instead of JS calendar normalization',()=>{for(const stamp of ['2026-02-30T00:00:00Z','2026-11-01T24:00:00Z','2026-11-01T00:00:00','2026-11-01T00:00:00.1234567Z']){const {input,binding}=fixture();binding.profileUpdatedAt=stamp;assert.equal(prepareSnapshotProposal(input,binding).kind,'blocked',stamp);}});
+
+test('readiness binding is explicit and preserved for acceptance revalidation',()=>{
+ const {input,binding}=fixture();
+ assert.equal(prepareSnapshotProposal(input,binding).record.payload.readinessFingerprint,hash);
+ for(const value of [undefined,null,'',true,'x'.repeat(64)]){
+ binding.readinessFingerprint=value;assert.equal(prepareSnapshotProposal(input,binding).kind,'blocked');
+ }
+});
