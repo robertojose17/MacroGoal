@@ -8,11 +8,13 @@ export interface ObservationGoal {
   macro_preset: string | null; goal_type?: string; loss_rate_lbs_per_week?: number | null;
 }
 export interface ObservationContext {
+  accessValidUntil?: number;
   ownerId: string; premium: boolean; enabled: boolean; reviewDay: number; today: string;
   nextReviewDate: string; reviewDue: boolean; currentGoal: ObservationGoal | null;
   fingerprint: string; proposal: null; safety: { enabled: false; eligibility: 'unverified' };
 }
 export interface ObservationDependencies {
+  prepare?: (authorization:string) => Promise<void>;
   authenticate: (token: string) => Promise<string | null>;
   context: (authorization: string) => Promise<ObservationContext>;
   snapshot: (authorization: string) => Promise<unknown>;
@@ -23,6 +25,7 @@ const reply = (status: number, body: unknown) => new Response(JSON.stringify(bod
 const markedEstimate = (estimate: DynamicTdeeResult) => ({ ...estimate, observationOnly: true, observationVersion: 'observation-v1' });
 function view(context: ObservationContext, estimate: DynamicTdeeResult | null) {
   return {
+    ...(context.accessValidUntil === undefined ? {} : {accessValidUntil:context.accessValidUntil}),
     version: 'dynamic-program-v1', observationOnly: true, observationVersion: 'observation-v1', premium: context.premium, enabled: context.enabled,
     reviewDay: context.reviewDay, today: context.today, nextReviewDate: context.nextReviewDate,
     reviewDue: false, currentGoal: context.currentGoal, estimate: estimate ? markedEstimate(estimate) : null,
@@ -48,6 +51,7 @@ export function createObservationHandler(deps: ObservationDependencies) {
     try {
       const owner = await deps.authenticate(authorization.slice(7));
       if (!owner) return reply(401, { error: 'authentication_required' });
+      await deps.prepare?.(authorization);
       if (req.method === 'POST') {
         let context = await deps.context(authorization);
         assertOwner(context, owner);
@@ -82,7 +86,7 @@ export function createObservationHandler(deps: ObservationDependencies) {
         if (context.fingerprint !== fingerprint || !context.premium || !context.enabled)
           return reply(409, { error: 'context_changed' });
       }
-      return reply(200, requestedView === 'estimate' ? markedEstimate(estimate ?? emptyTdee()) : view(context, estimate));
+      return reply(200, requestedView === 'estimate' ? {...markedEstimate(estimate ?? emptyTdee()),...(context.accessValidUntil === undefined ? {} : {accessValidUntil:context.accessValidUntil})} : view(context, estimate));
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       const safe = knownErrors.has(message) ? message : 'source_error';
