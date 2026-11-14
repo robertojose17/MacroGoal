@@ -6,7 +6,7 @@ export type TdeeOffer={version:'adaptive-offer-v1';request:TdeeAcceptRequest;sta
 export type TdeeReceipt={version:'adaptive-receipt-v1';status:'committed';request:TdeeAcceptRequest;acceptedGoal:{id:string;updatedAt:string};goalState:'current'|'superseded'}|{version:'adaptive-receipt-v1';status:'rejected';request:TdeeAcceptRequest;reason:string}|{version:'adaptive-receipt-v1';status:'not_found';request:TdeeAcceptRequest};
 const obj=(v:unknown):Record<string,unknown>=>{if(!v||typeof v!=='object'||Array.isArray(v))throw Error('invalid_proposal');return v as Record<string,unknown>;};
 const string=(v:unknown)=>{if(typeof v!=='string'||!v||v.length>200)throw Error('invalid_proposal');return v;};
-const uuid=(v:unknown)=>{const s=string(v);if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(s))throw Error('invalid_proposal');return s;};
+const uuid=(v:unknown)=>{const s=string(v);if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(s))throw Error('invalid_proposal');return s;};
 const digest=(v:unknown)=>{const s=string(v);if(!/^[a-f0-9]{64}$/.test(s))throw Error('invalid_proposal');return s;};
 const iso=(v:unknown)=>{const s=string(v);if(!Number.isFinite(Date.parse(s)))throw Error('invalid_proposal');return s;};
 function targets(v:unknown):TdeeTargets {const x=obj(v);for(const k of ['calories','proteinG','carbsG','fatsG','fiberG'])if(!Number.isSafeInteger(x[k])||(x[k] as number)<0)throw Error('invalid_proposal');if(x.calories===0)throw Error('invalid_proposal');return {calories:x.calories as number,proteinG:x.proteinG as number,carbsG:x.carbsG as number,fatsG:x.fatsG as number,fiberG:x.fiberG as number};}
