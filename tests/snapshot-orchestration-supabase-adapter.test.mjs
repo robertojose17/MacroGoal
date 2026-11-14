@@ -4,28 +4,29 @@ import assert from 'node:assert/strict';
 import {createSnapshotOrchestrationSupabasePorts,createSnapshotOrchestrationSupabaseRuntime} from '../release-candidates/tdee-adaptive-review/snapshotOrchestrationSupabaseAdapter.ts';
 const binding=()=>({version:'reviewed-server-version',digest:'a'.repeat(64),engineVersion:'observed-v1/snapshot-adjustment-v1'});
 function harness(){
- const clients=[],calls=[];let error=null,throws=false;
- const config={url:'https://project.supabase.co',anonKey:'public-key',serviceKey:'private-key',createClient(url,key,options){
+ const clients=[],calls=[],fetches=[];let error=null,throws=false;
+ const config={fetch:async()=>{fetches.push(true);throw Error('unexpected authority call');},url:'https://project.supabase.co',anonKey:'public-key',serviceKey:'private-key',createClient(url,key,options){
   clients.push({url,key,options});
   return {auth:{async getUser(token){calls.push({kind:'auth',key,token});if(throws)throw Error('secret');return {data:{user:{id:'actor'}},error};}},
    async rpc(name,args){calls.push({kind:'rpc',key,name,args});if(throws)throw Error('secret');return {data:{name,args},error};}};
  }};
- return {config,clients,calls,setError(v){error=v;},setThrow(){throws=true;}};
+ return {config,clients,calls,fetches,setError(v){error=v;},setThrow(){throws=true;}};
 }
 test('actual OFF orchestrator factory performs zero client creation and ignores enable flags',async()=>{
  const h=harness(),b=binding(),runtime=createSnapshotOrchestrationSupabaseRuntime(h.config,b);
  b.version='changed';h.config.createClient=()=>{throw Error('swapped');};
  assert.equal((await runtime({authorization:'Bearer token'})).reason,'safety_review_required');
  assert.equal((await runtime({authorization:'Bearer token',enabled:true})).reason,'invalid_request');
- assert.equal(h.clients.length,0);assert.equal(h.calls.length,0);
+ assert.equal(h.clients.length,0);assert.equal(h.calls.length,0);assert.equal(h.fetches.length,0);
 });
 test('own authentication and context carry only user bearer and public key',async()=>{
  const h=harness(),p=createSnapshotOrchestrationSupabasePorts(h.config,binding());
  assert.equal(h.clients.length,0);assert.deepEqual(await p.verifyAccessToken('token'),{id:'actor'});
  await p.loadOwnContext('token');
- assert.equal(h.clients.length,2);
+ assert.equal(h.clients.length,3);
  for(const c of h.clients){assert.equal(c.key,'public-key');assert.equal(c.options.global.headers.Authorization,'Bearer token');assert.deepEqual(c.options.auth,{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false});}
- assert.equal(h.calls[1].name,'tdee_read_review_context_v1');assert.equal(h.calls[1].args,undefined);
+ assert.equal(h.calls[1].name,'observed_get_dynamic_tdee_context_v1');assert.equal(h.calls[1].args,undefined);
+ assert.equal(h.calls[2].name,'tdee_read_review_context_v1');assert.equal(h.calls[2].args,undefined);assert.equal(h.fetches.length,0);
 });
 test('fixed policy binding uses exact service RPC args; mismatch creates no client',async()=>{
  const h=harness(),b=binding(),p=createSnapshotOrchestrationSupabasePorts(h.config,b);
@@ -70,4 +71,47 @@ test('invalid server config and malformed bearer fail before any client exists',
  const p=createSnapshotOrchestrationSupabasePorts(h.config,binding());
  assert.equal(await p.verifyAccessToken('bad token'),null);await assert.rejects(()=>p.loadOwnContext('bad token'),/source_error/);
  assert.equal(h.clients.length,0);
+});
+
+/** Scoped preflight regressions prepared, not executed: runner remains blocked. */
+function managedHarness(result,{httpOk=true,throwFetch=false,managed=true}={}){
+ const calls=[],fetches=[];
+ const config={url:'https://project.supabase.co',anonKey:'public-key',serviceKey:'private-key',
+ createClient(url,key,options){return {auth:{async getUser(){return {data:{user:{id:'actor'}},error:null};}},
+ async rpc(name,args){calls.push({name,key,options,args});
+ return {data:name==='observed_get_dynamic_tdee_context_v1'?{ownerId:'actor',...(managed?{accessValidUntil:null}:{})}:{actor:'actor',premium:false},error:null};}};},
+ async fetch(url,options){fetches.push({url,options});if(throwFetch)throw Error('timeout');
+ return {ok:httpOk,json:async()=>result};}};
+ return {config,calls,fetches};
+}
+test('managed marker refreshes existing authority before fresh own context without service key',async()=>{
+ const h=managedHarness({ownerId:'actor',access:'premium',validUntil:Date.now()+60000});
+ const p=createSnapshotOrchestrationSupabasePorts(h.config,binding());
+ h.config.fetch=()=>{throw Error('mutated fetch');};
+ await p.loadOwnContext('token');
+ assert.deepEqual(h.calls.map(x=>x.name),['observed_get_dynamic_tdee_context_v1','tdee_read_review_context_v1']);
+ assert.equal(h.fetches.length,1);
+ const {url,options}=h.fetches[0];assert.equal(url,'https://project.supabase.co/functions/v1/common-premium-authority');
+ assert.equal(options.method,'GET');assert.deepEqual(options.headers,{Authorization:'Bearer token',apikey:'public-key'});
+ assert.ok(options.signal instanceof AbortSignal);
+ for(const c of h.calls){assert.equal(c.key,'public-key');assert.equal(c.options.global.headers.Authorization,'Bearer token');}
+});
+test('unmanaged accounts never refresh authority and denied access is not upgraded',async()=>{
+ const h=managedHarness(null,{managed:false});const p=createSnapshotOrchestrationSupabasePorts(h.config,binding());
+ await p.loadOwnContext('token');assert.equal(h.fetches.length,0);
+ const denied=managedHarness({ownerId:'actor',access:'denied'});
+ const data=await createSnapshotOrchestrationSupabasePorts(denied.config,binding()).loadOwnContext('token');
+ assert.equal(data.premium,false);assert.equal(denied.fetches.length,1);
+});
+test('owner mismatch expired evidence HTTP failure and timeout stop before review-context read',async()=>{
+ for(const [result,options]of [
+ [{ownerId:'other',access:'premium',validUntil:Date.now()+60000},{}],
+ [{ownerId:'actor',access:'premium',validUntil:0},{}],
+ [{ownerId:'actor',access:'premium',validUntil:'future'},{}],
+ [null,{}],[{}, {httpOk:false}],[{}, {throwFetch:true}]
+ ]){
+  const h=managedHarness(result,options);
+  await assert.rejects(()=>createSnapshotOrchestrationSupabasePorts(h.config,binding()).loadOwnContext('token'),/^Error: source_error$/);
+  assert.equal(h.calls.length,1);assert.equal(h.fetches.length,1);
+ }
 });
