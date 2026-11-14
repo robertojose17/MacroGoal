@@ -27,7 +27,7 @@ BEGIN
  result#>'{receiptChain,totalCount}' IS DISTINCT FROM '0'::jsonb OR
  result#>'{receiptChain,rows}' IS DISTINCT FROM '[]'::jsonb OR
  result->>'readinessFingerprint' IS DISTINCT FROM
- encode(sha256(convert_to((result->'readiness'-'capturedAt')::text,'UTF8')),'hex') THEN
+ encode(sha256(convert_to(((result->'readiness')-'capturedAt')::text,'UTF8')),'hex') THEN
  RAISE EXCEPTION 'coherent_empty_registry_contract'; END IF;
  RAISE NOTICE 'Own actor context query executed; no policy/anchor/receipt invented';
  ELSE RAISE NOTICE 'SKIP runtime query; PLpgSQL compilation alone does not validate deferred query execution'; END IF;
