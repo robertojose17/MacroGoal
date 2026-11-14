@@ -34,6 +34,7 @@ export function usePremium(): UsePremiumReturn {
   const [error, setError] = useState<string | null>(null);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [expirationDate, setExpirationDate] = useState<string | null>(null);
+  const [shadowOwner, setShadowOwner] = useState<string | null>(null);
   const mounted = useRef(false);
   const knownPremium = useRef(false);
   const owner = useRef<string | null | undefined>(undefined);
@@ -44,7 +45,7 @@ export function usePremium(): UsePremiumReturn {
   const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Web-only shadow observation. Never feeds existing access, SDK or profile states.
-  usePremiumAuthorityShadow(owner.current ?? null, Platform.OS === 'web');
+  usePremiumAuthorityShadow(shadowOwner, Platform.OS === 'web');
 
   const reset = useCallback(() => {
     knownPremium.current = false;
@@ -64,7 +65,7 @@ export function usePremium(): UsePremiumReturn {
       if (!current()) return;
       if (sessionError) throw sessionError;
       const userId = data.session?.user.id ?? null;
-      if (owner.current !== userId) { owner.current = userId; reset(); }
+      if (owner.current !== userId) { owner.current = userId; setShadowOwner(userId); reset(); }
       if (!userId) return;
 
       if (Platform.OS !== 'web' && isPurchasesAvailable) {
@@ -159,6 +160,7 @@ export function usePremium(): UsePremiumReturn {
       const next = session?.user.id ?? null;
       if (next !== owner.current) {
         owner.current = next;
+        setShadowOwner(next);
         request.current += 1;
         inFlight.current = null;
         followUp.current = false;

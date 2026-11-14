@@ -20,3 +20,14 @@ export async function readShadowAuthority(d:ShadowDependencies):Promise<Decision
  console.info('[PremiumAuthority] shadow:',decision.access);
  return decision;
 }
+
+/** Coarse diagnostics only. Never return an exception message or request/account data. */
+export function shadowFailureCategory(error:unknown):'authentication_required'|'transport_or_http'|'invalid_contract'|'stale_or_cancelled'|'unknown'{
+ const message=error instanceof Error?error.message:'';
+ if(message==='shadow_auth_required')return 'authentication_required';
+ if(message==='shadow_unavailable')return 'transport_or_http';
+ if(['invalid_shadow_response','invalid_shadow_mode','invalid_authority_decision','expired_authority_decision','invalid_authority_environments','invalid_authority_expiry'].includes(message))return 'invalid_contract';
+ if(['stale_shadow_request','stale_shadow_response','shadow_throttled','shadow_pending','shadow_clock_changed'].includes(message)||error instanceof Error&&error.name==='AbortError')return 'stale_or_cancelled';
+ if(error instanceof TypeError)return 'transport_or_http';
+ return 'unknown';
+}

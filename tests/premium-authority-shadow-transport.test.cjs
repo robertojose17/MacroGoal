@@ -14,13 +14,23 @@ function hookFixture(enabled){
  function moduleAt(file){if(modules.has(file))return modules.get(file);const e={};modules.set(file,e);new Function('exports','require',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(e,name=>{
   if(name==='react')return React;
   if(name==='@/lib/supabase/client')return {SUPABASE_PROJECT_URL:'https://example.supabase.co',supabasePublicKey:'public',supabase:{auth:{getSession:async()=>({data:{session:{user:{id:actor},access_token:'synthetic'}}}),onAuthStateChange(fn){auth=fn;return {data:{subscription:{unsubscribe(){auth=null;}}}};}}}};
-  if(name==='@/utils/premiumAuthority/shadowTransport')return {readShadowAuthority:async d=>{calls++;await new Promise(r=>finish=r);if(d.signal.aborted||!d.isCurrent())throw Error('stale');return {access:'premium',validUntil:Date.now()+10000};}};
+  if(name==='@/utils/premiumAuthority/shadowTransport')return {shadowFailureCategory:()=> 'unknown',readShadowAuthority:async d=>{calls++;await new Promise(r=>finish=r);if(d.signal.aborted||!d.isCurrent())throw Error('stale');return {access:'premium',validUntil:Date.now()+10000};}};
   if(name.startsWith('@/'))return moduleAt(name.slice(2)+'.ts');throw Error(name);
  });return e;}
  moduleAt('hooks/usePremiumAuthorityShadow.ts').usePremiumAuthorityShadow(owner,enabled);const cleanup=effects.map(f=>f());
  return {writes,states,get calls(){return calls;},finish(){finish?.();},signout(){actor='';auth?.('SIGNED_OUT',null);},unmount(){cleanup.forEach(f=>f?.());}};
 }
 const flushHook=()=>new Promise(r=>setImmediate(r));
-test('real hook disabled performs no transport calls; native integration remains disabled',async()=>{const h=hookFixture(false);await flushHook();assert.equal(h.calls,0);h.unmount();assert.match(fs.readFileSync('hooks/usePremium.ts','utf8'),/usePremiumAuthorityShadow\(owner.current \?\? null, Platform.OS === 'web'\)/);});
+test('real hook disabled performs no transport calls; native integration remains disabled',async()=>{const h=hookFixture(false);await flushHook();assert.equal(h.calls,0);h.unmount();assert.match(fs.readFileSync('hooks/usePremium.ts','utf8'),/usePremiumAuthorityShadow\(shadowOwner, Platform.OS === 'web'\)/);});
 test('real hook ignores pending result after signout',async()=>{const h=hookFixture(true);await flushHook();assert.equal(h.calls,1);h.signout();h.finish();await flushHook();assert.equal(h.states[0],null);h.unmount();});
 test('real hook unmount suppresses all later state delivery',async()=>{const h=hookFixture(true);await flushHook();h.unmount();const count=h.writes.length;h.finish();await flushHook();assert.equal(h.writes.length,count);});
+test('usePremium exposes authenticated shadow owner before stalled profile read completes',async()=>{
+ const states=[],refs=[],effects=[],shadow=[];let si=0,ri=0,first=true,auth,finishProfile;
+ const react={useState(v){const i=si++;if(!(i in states))states[i]=v;return [states[i],n=>{states[i]=n;}];},useRef(v){return refs[ri++]??=( {current:v});},useCallback:fn=>fn,useEffect:fn=>{if(first)effects.push(fn);}};
+ const session={user:{id:owner}},query={select(){return query;},eq(){return query;},single(){return new Promise(r=>finishProfile=r);}};
+ const deps={'react':react,'react-native':{Platform:{OS:'web'}},'@/lib/supabase/client':{supabase:{auth:{getSession:async()=>({data:{session}}),onAuthStateChange(fn){auth=fn;return {data:{subscription:{unsubscribe(){}}}};}},from:()=>query}},'@/utils/purchases':{default:{},isPurchasesAvailable:false},'@/utils/premiumEntitlement':{premiumFallbackState:()=>({isPremium:false,error:'unavailable'})},'@/utils/premiumSync':{},'@/hooks/usePremiumAuthorityShadow':{usePremiumAuthorityShadow:(id,enabled)=>shadow.push({id,enabled})}};
+ const e={};new Function('exports','require',ts.transpileModule(fs.readFileSync('hooks/usePremium.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(e,n=>deps[n]);
+ const render=()=>{si=ri=0;return e.usePremium();};render();const cleanups=effects.map(f=>f());first=false;await flushHook();assert.equal(typeof finishProfile,'function');render();assert.deepEqual(shadow.at(-1),{id:owner,enabled:true});assert.equal(states[1],true);auth('SIGNED_OUT',null);render();assert.equal(shadow.at(-1).id,null);finishProfile({data:{user_type:'premium'}});await flushHook();cleanups.forEach(f=>f?.());
+});
+
+test('failure diagnostics emit only fixed classifications, never arbitrary details',()=>{const classify=load('shadowTransport').shadowFailureCategory;for(const [error,expected]of [[Error('shadow_auth_required'),'authentication_required'],[Error('shadow_unavailable'),'transport_or_http'],[TypeError('secret-token'),'transport_or_http'],[Error('invalid_shadow_mode'),'invalid_contract'],[Error('invalid_authority_environments'),'invalid_contract'],[Error('stale_shadow_request'),'stale_or_cancelled'],[Object.assign(Error('private'),{name:'AbortError'}),'stale_or_cancelled'],[Error('token owner email payload'),'unknown'],['shadow_auth_required','unknown'],[null,'unknown']])assert.equal(classify(error),expected);});

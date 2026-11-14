@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
-import { readShadowAuthority } from '@/utils/premiumAuthority/shadowTransport';
+import { readShadowAuthority, shadowFailureCategory } from '@/utils/premiumAuthority/shadowTransport';
 import { createShadowSingleFlight } from '@/utils/premiumAuthority/shadowSingleFlight';
 import type { Decision } from '@/utils/premiumAuthority/authorityClient';
 const shadowRequests = createShadowSingleFlight();
@@ -22,7 +22,7 @@ export function usePremiumAuthorityShadow(expectedOwner:string|null,enabled=fals
     const result=await shadowRequests.read(expectedOwner,(signal,current)=>readShadowAuthority({endpoint:SUPABASE_PROJECT_URL+'/functions/v1/common-premium-authority',apiKey:supabasePublicKey,expectedOwner,
      getSession:()=>supabase.auth.getSession(),request:fetch,signal,isCurrent:current}));
     if(isCurrent()){setObservation(result);setUnavailable(false);}
-   }catch{if(isCurrent()){setObservation(null);setUnavailable(true);}}
+   }catch(error){if(isCurrent()){setObservation(null);setUnavailable(true);console.warn('[PremiumAuthority] shadow unavailable:',shadowFailureCategory(error));}}
   };
   const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
    invalidate();if(session?.user.id!==expectedOwner)shadowRequests.invalidate(expectedOwner);if(session?.user.id===expectedOwner)queueMicrotask(()=>{if(active)void read();});
