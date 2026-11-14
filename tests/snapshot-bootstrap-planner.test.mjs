@@ -66,3 +66,9 @@ test('goal direction mismatch never silently changes target',()=>{
  const {v,policy}=bootstrapFixture();v.currentGoal.goal_type='gain';v.observation.context.currentGoal.goal_type='gain';v.receiptChain.currentGoal.goal_type='gain';
  assert.equal(planSnapshotBootstrap(v,actor,policy,now).reason,'goal_direction_mismatch');
 });
+
+test('bootstrap accepts explicit null optional caps, not missing limits',()=>{
+ const {v,policy}=bootstrapFixture();policy.max_cumulative_delta_kcal=null;policy.max_intake_kcal=null;
+ assert.equal(planSnapshotBootstrap(v,actor,policy,now).kind,'bootstrap_draft');
+ for(const value of [undefined,0,'none']){policy.max_intake_kcal=value;assert.equal(planSnapshotBootstrap(v,actor,policy,now).kind,'blocked');}
+});
