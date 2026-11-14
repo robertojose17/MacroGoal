@@ -10,7 +10,7 @@ export function TdeeProposalReview({visible,active,ownerId,proposal,controller,i
  const [busy,setBusy]=useState(false),[ready,setReady]=useState(false),[result,setResult]=useState<ReviewResult|null>(null),[failed,setFailed]=useState(false),[clock,setClock]=useState(Date.now());
  const epoch=useRef(0),live=useRef({visible,active,ownerId});live.current={visible,active,ownerId};
  const text=isDark?colors.textDark:colors.text,muted=isDark?colors.textSecondaryDark:colors.textSecondary,bg=isDark?colors.cardDark:colors.card;
- const run=async(accept:boolean)=>{if(controller.busy||!live.current.visible||!live.current.active||!ownerId)return;const generation=epoch.current,owner=ownerId;setBusy(true);setFailed(false);
+ const run=async(accept:boolean)=>{if(!live.current.visible||!live.current.active||!ownerId)return;if(controller.busy){setReady(false);setFailed(true);return;}const generation=epoch.current,owner=ownerId;setBusy(true);setFailed(false);
   const current=()=>epoch.current===generation&&live.current.visible&&live.current.active&&live.current.ownerId===owner;
   try{const next=accept&&proposal?await controller.accept(proposal):await controller.recover();if(!current())return;setResult(next);setReady(next.status==='idle');if(next.status==='resolved')onResolved(next);}
   catch{if(current()){setFailed(true);setReady(false);}}finally{if(current())setBusy(false);}
