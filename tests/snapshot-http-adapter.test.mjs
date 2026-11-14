@@ -77,3 +77,60 @@ test('selected ambiguous modes fail400 while native requests need no Origin',asy
  const native=await handler(request('',{headers:{Authorization:'Bearer native-token'}}));
  assert.equal(native.status,503);assert.equal(native.headers.get('Access-Control-Allow-Origin'),null);
 });
+
+/** Prepared regression cases below are not yet executed: local runner is blocked. */
+test('successful calibration returns202 without an offered proposal',async()=>{
+ const handler=createSnapshotHttpHandler(async()=>({reason:'calibration_required',proposal:null,mayHaveWritten:true}),[origin]);
+ const r=await handler(request());
+ assert.equal(r.status,202);
+ assert.deepEqual(await r.json(),{reason:'calibration_required',proposal:null,mayHaveWritten:true});
+ assert.equal(r.headers.get('Cache-Control'),'private, no-store');
+});
+test('all uncertain writes map409 before auth errors and hide internal details',async()=>{
+ for(const reason of ['reconciliation_required','account_changed','source_error','reload_binding_changed']){
+  const handler=createSnapshotHttpHandler(async()=>({reason,proposal:{private:'not returned'},mayHaveWritten:true}),[origin]);
+  const r=await handler(request());
+  assert.equal(r.status,409);
+  assert.deepEqual(await r.json(),{reason:'reconciliation_required',proposal:null,mayHaveWritten:true});
+  assert.equal(r.headers.get('Cache-Control'),'private, no-store');assert.equal(r.headers.get('Vary'),'Origin');
+ }
+});
+test('false or omitted write evidence preserves existing error response shape',async()=>{
+ for(const mayHaveWritten of [false,undefined]){
+  const handler=createSnapshotHttpHandler(async()=>({reason:'account_changed',proposal:null,mayHaveWritten}),[origin]);
+  const r=await handler(request());assert.equal(r.status,401);
+  assert.deepEqual(await r.json(),{reason:'account_changed',proposal:null});
+ }
+});
+test('available proposal remains200 despite committed issuance evidence',async()=>{
+ const proposal={id:'safe-proposal'};
+ const handler=createSnapshotHttpHandler(async()=>({reason:'review_available',proposal,mayHaveWritten:true}),[origin]);
+ const r=await handler(request());assert.equal(r.status,200);
+ assert.deepEqual(await r.json(),{reason:'review_available',proposal});
+});
+
+test('known no-change outcomes return200 only with no proposed targets',async()=>{
+ for(const reason of ['same_anchored_target','policy_limit']){
+  for(const mayHaveWritten of [true,false,undefined]){
+   const handler=createSnapshotHttpHandler(async()=>({reason,proposal:null,mayHaveWritten}),[origin]);
+   const r=await handler(request());assert.equal(r.status,200);
+   assert.deepEqual(await r.json(),{reason:'no_change',proposal:null,...(mayHaveWritten===true?{mayHaveWritten:true}:{})});
+  }
+ }
+});
+test('calibration requires write evidence and null proposal; malformed results remain sanitized',async()=>{
+ for(const result of [
+  {reason:'calibration_required',proposal:null,mayHaveWritten:false},
+  {reason:'calibration_required',proposal:null},
+  {reason:'calibration_required',proposal:{private:true},mayHaveWritten:true},
+  {reason:'same_anchored_target',proposal:{private:true},mayHaveWritten:true},
+  {reason:'policy_limit',proposal:{private:true},mayHaveWritten:false}
+ ]){
+  const handler=createSnapshotHttpHandler(async()=>result,[origin]);
+  const r=await handler(request());
+  assert.equal(r.status,result.mayHaveWritten===true?409:503);
+  assert.deepEqual(await r.json(),result.mayHaveWritten===true?
+   {reason:'reconciliation_required',proposal:null,mayHaveWritten:true}:
+   {reason:'review_not_ready',proposal:null});
+ }
+});
