@@ -7,8 +7,8 @@ export type SnapshotAdjustmentInput={
  current:SnapshotTarget;
  anchor:{baselineCapturedAt:number;intake:number;expenditure:number;acceptedDelta:number;acceptedCount:number;receiptsVerified:boolean;lastAcceptedAt:number|null};
  observedExpenditure:number;
- policy:{reviewed:boolean;maxStepKcal:number;maxStepFraction:number;maxNetDeltaKcal:number;
-  reviewIntervalDays:number;incrementKcal:number;minIntakeKcal:number;maxIntakeKcal:number};
+ policy:{reviewed:boolean;maxStepKcal:number;maxStepFraction:number;maxNetDeltaKcal:number|null;
+  reviewIntervalDays:number;incrementKcal:number;minIntakeKcal:number;maxIntakeKcal:number|null};
  evidence:{eligible:boolean;modelReviewed:boolean;logging:'confirmed'|'heuristic'|'unknown';
   capturedAt:number;fingerprint:string;stability:'stable'|'uncertain';goalDirectionValid:boolean};
  now:number;
@@ -25,14 +25,15 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
  if(e.logging!=='confirmed')return blocked('logging_confirmation_required');
  if(e.stability!=='stable'||e.goalDirectionValid!==true)return blocked('evidence_uncertain');
  if(!finite(e.capturedAt)||e.capturedAt>now||now-e.capturedAt>30000||typeof e.fingerprint!=='string'||!/^[a-f0-9]{64}$/.test(e.fingerprint))return blocked('source_expired_or_invalid');
- if(![p.maxStepKcal,p.maxStepFraction,p.maxNetDeltaKcal,p.reviewIntervalDays,p.incrementKcal,p.minIntakeKcal,p.maxIntakeKcal].every(positive)||
+ if(![p.maxStepKcal,p.maxStepFraction,p.reviewIntervalDays,p.incrementKcal,p.minIntakeKcal].every(positive)||
+  !(p.maxNetDeltaKcal===null||positive(p.maxNetDeltaKcal))||!(p.maxIntakeKcal===null||positive(p.maxIntakeKcal))||
   p.maxStepKcal>200||p.maxStepFraction>1||!Number.isInteger(p.reviewIntervalDays)||p.reviewIntervalDays<14||!Number.isInteger(p.incrementKcal)||
-  p.maxIntakeKcal<p.minIntakeKcal)return blocked('policy_invalid');
+  (p.maxIntakeKcal!==null&&p.maxIntakeKcal<p.minIntakeKcal))return blocked('policy_invalid');
  if(!positive(g.calories)||![g.proteinG,g.carbsG,g.fatsG,g.fiberG].every(n=>finite(n)&&n>=0)||
   Math.abs(g.calories-4*g.proteinG-4*g.carbsG-9*g.fatsG)>10)return blocked('current_target_invalid');
- if(g.calories<p.minIntakeKcal||g.calories>p.maxIntakeKcal)return blocked('current_target_outside_policy');
+ if(g.calories<p.minIntakeKcal||(p.maxIntakeKcal!==null&&g.calories>p.maxIntakeKcal))return blocked('current_target_outside_policy');
  if(!positive(a.intake)||!positive(a.expenditure)||!positive(input.observedExpenditure)||!finite(a.acceptedDelta)||
-  a.receiptsVerified!==true||!Number.isSafeInteger(a.acceptedCount)||a.acceptedCount<0||a.intake+a.acceptedDelta!==g.calories||Math.abs(a.acceptedDelta)>p.maxNetDeltaKcal)return blocked('anchor_mismatch');
+  a.receiptsVerified!==true||!Number.isSafeInteger(a.acceptedCount)||a.acceptedCount<0||a.intake+a.acceptedDelta!==g.calories||(p.maxNetDeltaKcal!==null&&Math.abs(a.acceptedDelta)>p.maxNetDeltaKcal))return blocked('anchor_mismatch');
  if(a.lastAcceptedAt!==null&&(!finite(a.lastAcceptedAt)||a.lastAcceptedAt>now))return blocked('acceptance_history_invalid');
  if((a.acceptedCount>0&&a.lastAcceptedAt===null)||(a.acceptedCount===0&&(a.acceptedDelta!==0||a.lastAcceptedAt!==null)))return blocked('acceptance_history_invalid');
  if(!finite(a.baselineCapturedAt)||a.baselineCapturedAt>now)return blocked('baseline_invalid');
@@ -42,15 +43,19 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
  const difference=desired-g.calories;
  if(difference===0)return {kind:'no_change',reason:'same_anchored_target'};
  const direction=Math.sign(difference);
- const remaining=direction>0?p.maxNetDeltaKcal-a.acceptedDelta:p.maxNetDeltaKcal+a.acceptedDelta;
- const intakeRoom=direction>0?p.maxIntakeKcal-g.calories:g.calories-p.minIntakeKcal;
+ const remaining=p.maxNetDeltaKcal===null?Infinity:direction>0?p.maxNetDeltaKcal-a.acceptedDelta:p.maxNetDeltaKcal+a.acceptedDelta;
+ const intakeRoom=direction>0?(p.maxIntakeKcal===null?Infinity:p.maxIntakeKcal-g.calories):g.calories-p.minIntakeKcal;
  const magnitude=Math.floor(Math.min(Math.abs(difference),p.maxStepKcal,g.calories*p.maxStepFraction,remaining,intakeRoom)/p.incrementKcal)*p.incrementKcal;
  if(!finite(magnitude)||magnitude<p.incrementKcal)return {kind:'no_change',reason:'policy_limit'};
- const delta=direction*magnitude,calories=g.calories+delta,energy=4*g.proteinG+4*g.carbsG+9*g.fatsG;
- if(!positive(energy))return blocked('macro_energy_invalid');
- const scale=calories/energy;
- const target={calories,proteinG:Math.round(g.proteinG*scale),carbsG:Math.round(g.carbsG*scale),fatsG:Math.round(g.fatsG*scale),fiberG:g.fiberG};
- if(!Object.values(target).every(Number.isInteger)||Math.abs(calories-4*target.proteinG-4*target.carbsG-9*target.fatsG)>10)return blocked('macro_rounding_invalid');
+ const delta=direction*magnitude,calories=g.calories+delta;
+ // Preserve the accepted protein/fiber goals exactly. Only carbohydrate/fat
+ // energy absorbs the adjustment, retaining their existing energy proportion.
+ if(!Number.isInteger(g.proteinG)||!Number.isInteger(g.fiberG))return blocked('fixed_macros_invalid');
+ const distributable=4*g.carbsG+9*g.fatsG,residual=calories-4*g.proteinG;
+ if(!positive(distributable)||!positive(residual))return blocked('macro_energy_unavailable');
+ const scale=residual/distributable;
+ const target={calories,proteinG:g.proteinG,carbsG:Math.round(g.carbsG*scale),fatsG:Math.round(g.fatsG*scale),fiberG:g.fiberG};
+ if(!Object.values(target).every(n=>Number.isInteger(n)&&n>=0)||Math.abs(calories-4*target.proteinG-4*target.carbsG-9*target.fatsG)>10)return blocked('macro_rounding_invalid');
  return {kind:'draft',actionable:false,target,deltaKcal:delta,netDeltaKcal:a.acceptedDelta+delta,
   sourceFingerprint:e.fingerprint,sourceCapturedAt:e.capturedAt,contract:'as-of-revalidated-v1'};
 }
