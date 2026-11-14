@@ -25,3 +25,10 @@ test('baseline provenance and direction required',()=>{for(const mutate of [v=>v
 test('estimator gates never bypassed by confirmations',()=>{const v=fixture();v.observation.sources.items[0].calories=0;assert.equal(parseSnapshotReviewContext(v,actor,actor,now).reason,'estimate_unknown_calorie_provenance');});
 
 test('changed journey or baseline goal cannot reuse calibration',()=>{for(const mutate of [v=>v.anchor.journey_binding='b'.repeat(64),v=>v.anchor.baseline_goal_snapshot.protein_g+=1]){const v=fixture();mutate(v);v.receiptChain.anchor=structuredClone(v.anchor);assert.equal(parseSnapshotReviewContext(v,actor,actor,now).kind,'blocked');}});
+
+test('explicit null optional limits survive parser without defaults',()=>{
+ const v=fixture();v.policy.max_cumulative_delta_kcal=null;v.policy.max_intake_kcal=null;
+ const r=parseSnapshotReviewContext(v,actor,actor,now);assert.equal(r.kind,'prepared_context');
+ assert.equal(r.input.policy.maxNetDeltaKcal,null);assert.equal(r.input.policy.maxIntakeKcal,null);
+ for(const value of [undefined,0,'none']){v.policy.max_intake_kcal=value;assert.equal(parseSnapshotReviewContext(v,actor,actor,now).kind,'blocked');}
+});
