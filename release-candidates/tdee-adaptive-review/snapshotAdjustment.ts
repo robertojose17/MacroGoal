@@ -7,8 +7,8 @@ export type SnapshotAdjustmentInput={
  current:SnapshotTarget;
  anchor:{baselineCapturedAt:number;intake:number;expenditure:number;acceptedDelta:number;acceptedCount:number;receiptsVerified:boolean;lastAcceptedAt:number|null};
  observedExpenditure:number;
- policy:{reviewed:boolean;maxStepKcal:number;maxStepFraction:number;maxNetDeltaKcal:number|null;
-  reviewIntervalDays:number;incrementKcal:number;minIntakeKcal:number;maxIntakeKcal:number|null};
+ policy:{reviewed:boolean;maxStepKcal:number;maxStepFraction:number;maxNetDeltaKcal:number;
+  reviewIntervalDays:number;incrementKcal:number;minIntakeKcal:number;maxIntakeKcal:number};
  evidence:{eligible:boolean;modelReviewed:boolean;logging:'confirmed'|'heuristic'|'unknown';
   capturedAt:number;fingerprint:string;stability:'stable'|'uncertain';goalDirectionValid:boolean};
  now:number;
@@ -26,14 +26,14 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
  if(e.stability!=='stable'||e.goalDirectionValid!==true)return blocked('evidence_uncertain');
  if(!finite(e.capturedAt)||e.capturedAt>now||now-e.capturedAt>30000||typeof e.fingerprint!=='string'||!/^[a-f0-9]{64}$/.test(e.fingerprint))return blocked('source_expired_or_invalid');
  if(![p.maxStepKcal,p.maxStepFraction,p.reviewIntervalDays,p.incrementKcal,p.minIntakeKcal].every(positive)||
-  !(p.maxNetDeltaKcal===null||positive(p.maxNetDeltaKcal))||!(p.maxIntakeKcal===null||positive(p.maxIntakeKcal))||
+  !positive(p.maxNetDeltaKcal)||!positive(p.maxIntakeKcal)||
   p.maxStepKcal>200||p.maxStepFraction>1||!Number.isInteger(p.reviewIntervalDays)||p.reviewIntervalDays<14||!Number.isInteger(p.incrementKcal)||
-  (p.maxIntakeKcal!==null&&p.maxIntakeKcal<p.minIntakeKcal))return blocked('policy_invalid');
+  p.maxIntakeKcal<p.minIntakeKcal)return blocked('policy_invalid');
  if(!positive(g.calories)||![g.proteinG,g.carbsG,g.fatsG,g.fiberG].every(n=>finite(n)&&n>=0)||
   Math.abs(g.calories-4*g.proteinG-4*g.carbsG-9*g.fatsG)>10)return blocked('current_target_invalid');
- if(g.calories<p.minIntakeKcal||(p.maxIntakeKcal!==null&&g.calories>p.maxIntakeKcal))return blocked('current_target_outside_policy');
+ if(g.calories<p.minIntakeKcal||g.calories>p.maxIntakeKcal)return blocked('current_target_outside_policy');
  if(!positive(a.intake)||!positive(a.expenditure)||!positive(input.observedExpenditure)||!finite(a.acceptedDelta)||
-  a.receiptsVerified!==true||!Number.isSafeInteger(a.acceptedCount)||a.acceptedCount<0||a.intake+a.acceptedDelta!==g.calories||(p.maxNetDeltaKcal!==null&&Math.abs(a.acceptedDelta)>p.maxNetDeltaKcal))return blocked('anchor_mismatch');
+  a.receiptsVerified!==true||!Number.isSafeInteger(a.acceptedCount)||a.acceptedCount<0||a.intake+a.acceptedDelta!==g.calories||Math.abs(a.acceptedDelta)>p.maxNetDeltaKcal)return blocked('anchor_mismatch');
  if(a.lastAcceptedAt!==null&&(!finite(a.lastAcceptedAt)||a.lastAcceptedAt>now))return blocked('acceptance_history_invalid');
  if((a.acceptedCount>0&&a.lastAcceptedAt===null)||(a.acceptedCount===0&&(a.acceptedDelta!==0||a.lastAcceptedAt!==null)))return blocked('acceptance_history_invalid');
  if(!finite(a.baselineCapturedAt)||a.baselineCapturedAt>now)return blocked('baseline_invalid');
@@ -43,8 +43,8 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
  const difference=desired-g.calories;
  if(difference===0)return {kind:'no_change',reason:'same_anchored_target'};
  const direction=Math.sign(difference);
- const remaining=p.maxNetDeltaKcal===null?Infinity:direction>0?p.maxNetDeltaKcal-a.acceptedDelta:p.maxNetDeltaKcal+a.acceptedDelta;
- const intakeRoom=direction>0?(p.maxIntakeKcal===null?Infinity:p.maxIntakeKcal-g.calories):g.calories-p.minIntakeKcal;
+ const remaining=direction>0?p.maxNetDeltaKcal-a.acceptedDelta:p.maxNetDeltaKcal+a.acceptedDelta;
+ const intakeRoom=direction>0?(p.maxIntakeKcal-g.calories):g.calories-p.minIntakeKcal;
  const magnitude=Math.floor(Math.min(Math.abs(difference),p.maxStepKcal,g.calories*p.maxStepFraction,remaining,intakeRoom)/p.incrementKcal)*p.incrementKcal;
  if(!finite(magnitude)||magnitude<p.incrementKcal)return {kind:'no_change',reason:'policy_limit'};
  const delta=direction*magnitude,calories=g.calories+delta;
