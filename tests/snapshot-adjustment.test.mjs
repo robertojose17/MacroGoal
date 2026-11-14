@@ -1,3 +1,4 @@
+/** Caps contract regression changed; execution pending because local runner is blocked. */
 import test from 'node:test';import assert from 'node:assert/strict';
 import {draftSnapshotAdjustment as draft} from '../release-candidates/tdee-adaptive-review/snapshotAdjustment.ts';
 const now=1794668400000;
@@ -61,12 +62,11 @@ test('residual rounding stays nonnegative integer and within energy tolerance',(
  }}
 });
 
-test('explicit null removes optional ceiling and net cap, not per-step limits',()=>{
- const f=fixture();f.policy.maxNetDeltaKcal=null;f.policy.maxIntakeKcal=null;f.observedExpenditure=9000;
- assert.equal(draft(f).deltaKcal,100);
- f.anchor.acceptedDelta=1000;f.anchor.intake=1000;f.anchor.acceptedCount=1;f.anchor.lastAcceptedAt=now-14*86400000;
- assert.equal(draft(f).kind,'draft');
- for(const value of [undefined,0,-1,Infinity,'none'])for(const key of ['maxNetDeltaKcal','maxIntakeKcal']){
- const x=fixture();x.policy[key]=value;assert.equal(draft(x).reason,'policy_invalid');
+test('required finite positive caps reject null without mutating inputs',()=>{
+ for(const value of [null,undefined,0,-1,NaN,Infinity,'none'])for(const key of ['maxNetDeltaKcal','maxIntakeKcal']){
+  const f=fixture();f.policy[key]=value;const before=structuredClone(f);
+  assert.equal(draft(f).reason,'policy_invalid');assert.deepEqual(f,before);
  }
+ const f=fixture();f.policy.maxIntakeKcal=f.policy.minIntakeKcal-1;
+ assert.equal(draft(f).reason,'policy_invalid');
 });
