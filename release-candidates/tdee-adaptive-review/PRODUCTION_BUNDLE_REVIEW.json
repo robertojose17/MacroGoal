@@ -20,7 +20,8 @@
     "recommendationsEnabled": false,
     "acceptanceEnabled": false,
     "reviewedPolicyId": null,
-    "reductions": "fail-closed until individual total-deficit contract is verified"
+    "reductions": "fail-closed until individual total-deficit contract is verified",
+    "scope": "TypeScript release switches, not a database-wide kill switch. SQL acceptance independently requires a valid enabled policy and valid issued proposal; do not seed those to bypass OFF."
   },
   "packaging": [
     "Preserve repository-relative paths exactly; do not strip supabase/functions/observed-snapshot-release from uploaded paths.",
