@@ -44,3 +44,10 @@ Common calorie ranges in weight-management guidance are individualized treatment
 https://pmc.ncbi.nlm.nih.gov/articles/PMC5819889/
 
 The estimator's numerical domain must not be represented as a clinical intake range. No proprietary competitor algorithm or clinical validation is claimed.
+
+## Additional verification, 2026-11-14
+- Eligibility refresh passed own-account transaction tests with real current Premium evidence and observation enabled: service-only authority, exact goal/profile/anchor CAS, bounded expiry, canonical digest, replay and revocation. Transaction rollback preserved the combined account state digest.
+- The two refresh functions were then installed additively with execution restricted to service_role. Anonymous and authenticated execution are denied; fixed search paths and private SECURITY DEFINER/public INVOKER were verified. No existing table grants or calorie caps changed.
+- Registry readback remains zero policies, anchors, eligibility rows, proposals and receipts. The observation switch was restored to OFF through the real web application and verified in the database. No synthetic account data or medical attestations persist.
+- Own-actor offer recovery and expired-request closure are installed and transaction-tested; closure never applies a goal. Recovery UI remains unmounted.
+- HTTP dispatcher and Supabase ports are prepared but unmounted: nine focused tests pass, including the actual immutable OFF runtime returning 503 without creating Supabase clients. These tests do not replace a full Deno/project type check or live proposal E2E.
