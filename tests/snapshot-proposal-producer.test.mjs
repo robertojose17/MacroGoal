@@ -1,3 +1,4 @@
+/** Reduction-suspension regression changes prepared, not executed: runner blocked. */
 import {draftSnapshotAdjustment} from '../release-candidates/tdee-adaptive-review/snapshotAdjustment.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +13,7 @@ test('exact payload and independent offer expiry',()=>{const {input,binding}=fix
 test('no inferred evidence',()=>{for(const key of ['eligible','modelReviewed']){const {input,binding}=fixture();input.evidence[key]=false;assert.equal(prepareSnapshotProposal(input,binding).kind,'blocked');}for(const logging of ['unknown','heuristic']){const {input,binding}=fixture();input.evidence.logging=logging;assert.equal(prepareSnapshotProposal(input,binding).kind,'blocked');}});
 test('binding mismatch blocks',()=>{for(const key of ['user_id','daily_calories','updated_at']){const {input,binding}=fixture();binding.goalSnapshot[key]=null;assert.equal(prepareSnapshotProposal(input,binding).kind,'blocked');}const {input,binding}=fixture();binding.eligibilityFingerprint='b'.repeat(64);assert.equal(prepareSnapshotProposal(input,binding).kind,'blocked');});
 test('freshness and expiry blocks',()=>{for(const capture of [now+1,now-30001]){const {input,binding}=fixture();input.evidence.capturedAt=capture;assert.equal(prepareSnapshotProposal(input,binding).kind,'blocked');}for(const key of ['policyExpiresAt','eligibilityExpiresAt','offerExpiresAt','profileUpdatedAt']){const {input,binding}=fixture();binding[key]='bad';assert.equal(prepareSnapshotProposal(input,binding).kind,'blocked');}});
-test('negative draft remains non actionable',()=>{const {input,binding}=fixture();input.observedExpenditure=2300;const p=prepareSnapshotProposal(input,binding);assert.equal(p.kind,'prepared');assert.equal(p.record.payload.deltaKcal,-100);assert.equal(p.actionable,false);});
+test('producer cannot prepare negative draft without individual deficit review',()=>{const {input,binding}=fixture();input.observedExpenditure=2300;const before=structuredClone({input,binding});const p=prepareSnapshotProposal(input,binding);assert.equal(p.kind,'blocked');assert.equal(p.reason,'individual_deficit_review_required');assert.deepEqual({input,binding},before);});
 test('malformed top-level blocks',()=>{assert.equal(prepareSnapshotProposal(null,null).kind,'blocked');const {input,binding}=fixture();binding.goalSnapshot=[];assert.equal(prepareSnapshotProposal(input,binding).kind,'blocked');});
 test('OFF never invokes loader or persist',async()=>{let calls=0;const produce=createSnapshotProposalProducer({loadReviewedContext:async()=>{calls++;return fixture();},persist:async()=>{calls++;},now:()=>now});assert.equal((await produce(actor)).reason,'safety_review_required');assert.equal((await produce('bad')).reason,'authentication_required');assert.equal(calls,0);});
 test('persisted envelope exact and expiry checked',()=>{const {input,binding}=fixture();const {record}=prepareSnapshotProposal(input,binding);const good={type:'persisted_reviewed_proposal',actionable:true,ownerId:actor,id:actor,digest:hash,policyVersion:record.policyVersion,engineVersion:record.payload.engineVersion,expiresAt:record.expiresAt,current:record.payload.current,target:record.payload.target,deltaKcal:record.payload.deltaKcal,sourceDate:record.payload.sourceDate};assert.equal(validatePersistedSnapshotProposal(record,good,now).id,actor);for(const v of [null,{}, {...good,target:{...good.target,calories:1}},{...good,type:'fake'},{...good,actionable:false}])assert.throws(()=>validatePersistedSnapshotProposal(record,v,now),/source_error/);assert.throws(()=>validatePersistedSnapshotProposal(record,good,Date.parse(record.expiresAt)),/source_error/);});
@@ -31,10 +32,10 @@ test('readiness binding is explicit and preserved for acceptance revalidation',(
 });
 
 test('persisted snapshot payload preserves accepted protein and fiber',()=>{
- for(const observed of [2300,2500]){
+ for(const observed of [2500]){
  const {input,binding}=fixture();input.observedExpenditure=observed;const p=prepareSnapshotProposal(input,binding);
  assert.equal(p.kind,'prepared');assert.equal(p.record.payload.target.proteinG,150);assert.equal(p.record.payload.target.fiberG,30);
- assert.equal(p.record.payload.target.carbsG,observed===2300?200:230);
- assert.equal(p.record.payload.target.fatsG,observed===2300?56:64);
+ assert.equal(p.record.payload.target.carbsG,230);
+ assert.equal(p.record.payload.target.fatsG,64);
  }
 });
