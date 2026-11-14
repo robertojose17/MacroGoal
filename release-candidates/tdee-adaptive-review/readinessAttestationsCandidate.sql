@@ -33,7 +33,7 @@ END $f$;
 CREATE FUNCTION macrogoal_readiness_private.read_state() RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $f$
 DECLARE a uuid:=macrogoal_readiness_private.actor(); u public.users;
- t date; first_day date; pb text; jb text; at_time timestamptz:=statement_timestamp();
+ t date; first_day date; pb text; jb text; at_time timestamptz:=clock_timestamp();
  e macrogoal_readiness_private.attestations; ds jsonb; n bigint;
 BEGIN
  SELECT * INTO u FROM public.users WHERE id=a;
