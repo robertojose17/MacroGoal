@@ -103,7 +103,8 @@ BEGIN
  IF p_payload->>'snapshotSemantics' IS DISTINCT FROM 'as-of-revalidated-v1' OR
     coalesce(p_payload->>'sourceFingerprint','') !~ '^[a-f0-9]{64}$' OR
     NOT p_payload ?& ARRAY['goalId','goalUpdatedAt','profileUpdatedAt','goalSnapshot','sourceCapturedAt'] OR
-    NOT macrogoal_snapshot_review_private.snapshot_time_valid(p_payload->>'sourceCapturedAt',clock_timestamp()) THEN
+    NOT macrogoal_snapshot_review_private.snapshot_time_valid(p_payload->>'sourceCapturedAt',clock_timestamp()) OR
+    p_expires_at>(p_payload->>'sourceCapturedAt')::timestamptz+interval '5 minutes' THEN
   RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='snapshot_contract_invalid'; END IF;
  SELECT * INTO policy FROM macrogoal_snapshot_review_private.policies WHERE version=p_policy FOR SHARE;
  IF NOT FOUND OR NOT policy.enabled OR NOT policy.reviewed OR NOT policy.snapshot_contract_reviewed OR policy.expires_at<=clock_timestamp() OR
@@ -179,10 +180,13 @@ BEGIN
  IF current_setting('transaction_isolation') <> 'read committed' THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'isolation_unsupported'); END IF;
  IF NOT p.payload ?& ARRAY['goalId','goalUpdatedAt','profileUpdatedAt','goalSnapshot','sourceFingerprint','sourceCapturedAt','snapshotSemantics'] OR
-    u.updated_at IS DISTINCT FROM (p.payload->>'profileUpdatedAt')::timestamptz THEN
+    jsonb_typeof(p.payload->'profileUpdatedAt') IS DISTINCT FROM 'string' OR
+    jsonb_typeof(p.payload->'goalUpdatedAt') IS DISTINCT FROM 'string' OR
+    u.updated_at IS NULL OR u.updated_at IS DISTINCT FROM (p.payload->>'profileUpdatedAt')::timestamptz THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'profile_changed'); END IF;
  SELECT * INTO g FROM public.goals WHERE id=(p.payload->>'goalId')::uuid AND user_id=actor AND is_active=true FOR UPDATE;
- IF NOT FOUND OR to_jsonb(g) IS DISTINCT FROM p.payload->'goalSnapshot' OR
+ IF NOT FOUND OR g.updated_at IS NULL OR g.updated_at IS DISTINCT FROM (p.payload->>'goalUpdatedAt')::timestamptz OR
+    to_jsonb(g) IS DISTINCT FROM p.payload->'goalSnapshot' OR
     (SELECT count(*) FROM public.goals WHERE user_id=actor AND is_active=true)<>1 THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'goal_changed'); END IF;
  SELECT * INTO p FROM macrogoal_snapshot_review_private.proposals WHERE id=(p_request->>'proposalId')::uuid AND owner_id=actor FOR UPDATE;
