@@ -19,6 +19,10 @@ The prepared TypeScript engine preserves protein and fiber and allocates residua
 The deployed SQL still does not include the new exact-protein equality guard. This cap-contract alignment does not establish full source/runtime equivalence.
 Do not deploy or enable these candidates as if they were already a single verified release. The rejected persistent policy migration remains unapproved; no workaround or retry is authorized. No numerical cap has been selected or seeded. Updated cap-contract regression tests are prepared but not executed because the local runner is blocked; earlier passing test counts below are historical evidence, not validation of these latest changes.
 
+## Temporary reduction suspension
+The prepared engine now blocks every downward calorie adjustment with `individual_deficit_review_required` because no verifiable individual total-deficit limit is defined by the current contract. This does not introduce a mandatory professional visit or a new user-facing requirement; a professionally reviewed method/policy could derive such a limit in future, but that mechanism is not implemented here. Extra request or input fields cannot approve an exception. Upward drafts and no-change outcomes retain existing guards; this is not a claim that increases are individually clinically reviewed.
+This is a temporary fail-closed suspension, not a completed adaptive feature or an approved individual policy. No SQL, live release flag or numerical policy has changed. Related engine, producer and parser regressions are prepared but have not been executed because the runner remains blocked.
+
 ## Evidence actually obtained
 - Actual own-account SQL acceptance transaction passed: revoked readiness rejected; atomic goal/receipt creation; identical replay; consumed proposal reuse and mismatched request rejection. Mandatory rollback restored the complete original state digest.
 - Bootstrap rollback passed: service-only writer; exact goal/profile/journey CAS; creation; repetition does not restart baseline; no target mutation. Original state digest matched afterward.
