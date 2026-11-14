@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createSnapshotHttpHandler,dispatchSnapshotReview} from '../release-candidates/tdee-adaptive-review/snapshotHttpHandler.ts';
 import {createSnapshotSupabasePorts,createSnapshotSupabaseRuntime} from '../release-candidates/tdee-adaptive-review/snapshotSupabaseAdapter.ts';
 const url='https://example.invalid/observed?mode=adaptive-review-v1',origin='https://app.example.invalid';
-const request=(suffix='',options={})=>new Request(url+suffix,{headers:{Authorization:'Bearer user-token',Origin:origin},...options});
+const request=(suffix='',options={})=>new Request(url+suffix,{method:'POST',headers:{Authorization:'Bearer user-token',Origin:origin},...options});
 function config(createClient){return {url:'https://project.supabase.co',anonKey:'public-key',serviceKey:'private-server-key',createClient};}
 test('actual OFF runtime returns no-store503 without any client creation',async()=>{
  let calls=0;const runtime=createSnapshotSupabaseRuntime(config(()=>{calls++;throw Error('must-not-run')}));
@@ -21,11 +21,12 @@ test('OPTIONS preflight does not authenticate or load',async()=>{
  let calls=0;const handler=createSnapshotHttpHandler(async()=>{calls++;throw Error('bad')},[origin]);
  const r=await handler(request('',{method:'OPTIONS',headers:{Origin:origin}}));
  assert.equal(r.status,204);assert.equal(await r.text(),'');assert.equal(calls,0);
- assert.equal(r.headers.get('Access-Control-Allow-Methods'),'GET, OPTIONS');
+ assert.equal(r.headers.get('Access-Control-Allow-Methods'),'POST, OPTIONS');
 });
 test('wrong methods, duplicate mode, query evidence and missing bearer rejected',async()=>{
  let calls=0;const handler=createSnapshotHttpHandler(async()=>{calls++;throw Error('bad')},[origin]);
- assert.equal((await handler(request('',{method:'POST',body:'{}'}))).status,405);
+ for(const method of ['GET','HEAD','PUT','PATCH','DELETE'])assert.equal((await handler(request('',{method}))).status,405);
+ assert.equal((await handler(request('',{body:'{}'}))).status,400);
  for(const suffix of ['&ownerId=someone','&enabled=true','&targets=1','&mode=legacy'])assert.equal((await handler(request(suffix))).status,400);
  for(const authorization of ['', 'bearer token','Bearer one two']){
  assert.equal((await handler(request('',{headers:{Authorization:authorization,Origin:origin}}))).status,401);
