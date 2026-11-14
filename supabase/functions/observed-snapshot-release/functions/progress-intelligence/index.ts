@@ -1,3 +1,4 @@
+import { createAdaptiveReviewDispatcher } from '../adaptive-review/dispatcher.ts';
 import { createObservationDispatcher } from '../observed-program/dispatcher.ts';
 import { createObservedProgressDispatcher } from '../observed-progress/dispatcher.ts';
 import { legacyHandler } from './legacy-handler.ts';
@@ -8,4 +9,5 @@ import { createProgressDispatcher } from '../preview-progress/dispatcher.ts';
 const v10 = createPreviewDispatcher(legacyHandler, () => import('../preview-program/runtime.ts'));
 const progress = createProgressDispatcher(v10, () => import('../preview-progress/runtime.ts'));
 const observation = createObservationDispatcher(progress, () => import('../observed-program/runtime.ts'));
-Deno.serve(createObservedProgressDispatcher(observation, () => import('../observed-progress/runtime.ts')));
+const existing = createObservedProgressDispatcher(observation, () => import('../observed-progress/runtime.ts'));
+Deno.serve(createAdaptiveReviewDispatcher(existing, () => import('../adaptive-review/runtime.ts')));
