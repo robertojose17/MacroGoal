@@ -20,6 +20,7 @@ export function parseObservationContext(value: unknown, owner: string): Observat
       !Number.isInteger(value.reviewDay) || Number(value.reviewDay) < 0 || Number(value.reviewDay) > 6 ||
       !civil(value.today) || !civil(value.nextReviewDate) || value.reviewDue !== false || value.proposal !== null ||
       !hash(value.fingerprint) || !record(value.safety) || value.safety.enabled !== false || value.safety.eligibility !== 'unverified') fail();
+  if (Object.hasOwn(value,'accessValidUntil') && (!Number.isSafeInteger(value.accessValidUntil) || Number(value.accessValidUntil)<=0)) fail();
   const goal = value.currentGoal;
   if (goal !== null) {
     if (!record(goal) || !text(goal.id) || !['daily_calories','protein_g','carbs_g','fats_g','fiber_g'].every(k => finite(goal[k]) && goal[k] >= 0) ||
