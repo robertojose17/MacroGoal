@@ -102,6 +102,7 @@ BEGIN
   RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_proposal'; END IF;
  IF p_payload->>'snapshotSemantics' IS DISTINCT FROM 'as-of-revalidated-v1' OR
     coalesce(p_payload->>'sourceFingerprint','') !~ '^[a-f0-9]{64}$' OR
+    coalesce(p_payload->>'readinessFingerprint','') !~ '^[a-f0-9]{64}$' OR
     NOT p_payload ?& ARRAY['goalId','goalUpdatedAt','profileUpdatedAt','goalSnapshot','sourceCapturedAt'] OR
     NOT macrogoal_snapshot_review_private.snapshot_time_valid(p_payload->>'sourceCapturedAt',clock_timestamp()) OR
     p_expires_at>(p_payload->>'sourceCapturedAt')::timestamptz+interval '5 minutes' THEN
@@ -158,7 +159,7 @@ RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path TO pg_c
 DECLARE actor uuid:=macrogoal_snapshot_review_private.assert_request(p_request); prior jsonb;
  p macrogoal_snapshot_review_private.proposals; policy macrogoal_snapshot_review_private.policies;
  anchor macrogoal_snapshot_review_private.anchors; e macrogoal_snapshot_review_private.eligibility;
- u public.users; g public.goals; result public.goals; snapshot jsonb; target jsonb;
+ u public.users; g public.goals; result public.goals; snapshot jsonb; readiness jsonb; target jsonb;
  k text; n numeric; delta integer; accepted_at timestamptz; today date;
 BEGIN
  -- Replay is available even when the feature/policy is OFF or proposal expired.
@@ -203,6 +204,16 @@ BEGIN
  IF NOT FOUND OR NOT e.eligible OR NOT e.complete_days_verified OR e.expires_at<=clock_timestamp() OR
    e.digest IS DISTINCT FROM p.payload->>'eligibilityDigest' OR e.source_fingerprint IS DISTINCT FROM p.payload->>'sourceFingerprint' THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'eligibility_review_required'); END IF;
+ -- User can revoke self-confirmation without changing food/weight inputs.
+ -- No actor parameter is accepted by the readiness API.
+ readiness:=public.tdee_read_readiness_v1();
+ IF readiness->>'version' IS DISTINCT FROM 'tdee-readiness-v1' OR readiness->>'ownerId' IS DISTINCT FROM actor::text OR
+    readiness#>'{eligibility,current}' IS DISTINCT FROM 'true'::jsonb OR
+    readiness#>'{eligibility,adult}' IS DISTINCT FROM 'true'::jsonb OR
+    readiness#>>'{eligibility,response}' IS DISTINCT FROM 'criteria_confirmed' OR
+    coalesce(p.payload->>'readinessFingerprint','') !~ '^[a-f0-9]{64}$' OR
+    encode(sha256(convert_to((readiness-'capturedAt')::text,'UTF8')),'hex') IS DISTINCT FROM p.payload->>'readinessFingerprint' THEN
+  RETURN macrogoal_snapshot_review_private.reject_request(p_request,'readiness_changed'); END IF;
  -- Revalidated snapshot; source writes after this cut may enter the next review.
  snapshot:=public.observed_get_tdee_snapshot_v1();
  IF jsonb_typeof(snapshot) IS DISTINCT FROM 'object' OR snapshot->>'version' IS DISTINCT FROM 'observed-snapshot-v1' OR
