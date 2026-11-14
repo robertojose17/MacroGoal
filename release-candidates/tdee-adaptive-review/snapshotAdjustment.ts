@@ -5,7 +5,7 @@
 export type SnapshotTarget={calories:number;proteinG:number;carbsG:number;fatsG:number;fiberG:number};
 export type SnapshotAdjustmentInput={
  current:SnapshotTarget;
- anchor:{intake:number;expenditure:number;acceptedDelta:number;acceptedCount:number;receiptsVerified:boolean;lastAcceptedAt:number|null};
+ anchor:{baselineCapturedAt:number;intake:number;expenditure:number;acceptedDelta:number;acceptedCount:number;receiptsVerified:boolean;lastAcceptedAt:number|null};
  observedExpenditure:number;
  policy:{reviewed:boolean;maxStepKcal:number;maxStepFraction:number;maxNetDeltaKcal:number;
   reviewIntervalDays:number;incrementKcal:number;minIntakeKcal:number;maxIntakeKcal:number};
@@ -26,7 +26,7 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
  if(e.stability!=='stable'||e.goalDirectionValid!==true)return blocked('evidence_uncertain');
  if(!finite(e.capturedAt)||e.capturedAt>now||now-e.capturedAt>30000||typeof e.fingerprint!=='string'||!/^[a-f0-9]{64}$/.test(e.fingerprint))return blocked('source_expired_or_invalid');
  if(![p.maxStepKcal,p.maxStepFraction,p.maxNetDeltaKcal,p.reviewIntervalDays,p.incrementKcal,p.minIntakeKcal,p.maxIntakeKcal].every(positive)||
-  p.maxStepKcal>200||p.maxStepFraction>1||!Number.isInteger(p.reviewIntervalDays)||!Number.isInteger(p.incrementKcal)||
+  p.maxStepKcal>200||p.maxStepFraction>1||!Number.isInteger(p.reviewIntervalDays)||p.reviewIntervalDays<14||!Number.isInteger(p.incrementKcal)||
   p.maxIntakeKcal<p.minIntakeKcal)return blocked('policy_invalid');
  if(!positive(g.calories)||![g.proteinG,g.carbsG,g.fatsG,g.fiberG].every(n=>finite(n)&&n>=0)||
   Math.abs(g.calories-4*g.proteinG-4*g.carbsG-9*g.fatsG)>10)return blocked('current_target_invalid');
@@ -35,7 +35,8 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
   a.receiptsVerified!==true||!Number.isSafeInteger(a.acceptedCount)||a.acceptedCount<0||a.intake+a.acceptedDelta!==g.calories||Math.abs(a.acceptedDelta)>p.maxNetDeltaKcal)return blocked('anchor_mismatch');
  if(a.lastAcceptedAt!==null&&(!finite(a.lastAcceptedAt)||a.lastAcceptedAt>now))return blocked('acceptance_history_invalid');
  if((a.acceptedCount>0&&a.lastAcceptedAt===null)||(a.acceptedCount===0&&(a.acceptedDelta!==0||a.lastAcceptedAt!==null)))return blocked('acceptance_history_invalid');
- if(a.lastAcceptedAt!==null&&now-a.lastAcceptedAt<p.reviewIntervalDays*86400000)return blocked('review_cooldown');
+ if(!finite(a.baselineCapturedAt)||a.baselineCapturedAt>now)return blocked('baseline_invalid');
+ if(now-(a.lastAcceptedAt??a.baselineCapturedAt)<p.reviewIntervalDays*86400000)return blocked('review_cooldown');
  // Preserve the original accepted energy gap; never subtract another deficit.
  const desired=a.intake+(input.observedExpenditure-a.expenditure);
  const difference=desired-g.calories;
