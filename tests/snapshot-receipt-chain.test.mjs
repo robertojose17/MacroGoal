@@ -7,12 +7,12 @@ function fixture(){
  payload:{goalId:'g0',goalSnapshot:old,sourceFingerprint:'b'.repeat(64),deltaKcal:-100,target:{calories:1900,proteinG:145,carbsG:190,fatsG:62,fiberG:28}}};
  const receipt={anchor_id:'anchor',owner_id:'a',status:'committed',request_id:'r',request:{ownerId:'a',requestId:'r',proposalId:'p',proposalDigest:'a'.repeat(64)},
  accepted_goal_id:'g1',accepted_goal:goal,acceptance_evidence:{contract:'as-of-revalidated-v1',fingerprint:'b'.repeat(64),capturedAt:'2026-01-31T23:59:50Z'}};
- return {actor:'a',anchor:{id:'anchor',owner_id:'a',revoked:false,policy_version:'v',baseline_intake_kcal:2000,accepted_delta_kcal:-100,last_accepted_at:goal.created_at,active_goal_id:'g1'},currentGoal:goal,totalCount:1,rows:[{receipt,proposal}]};
+ return {actor:'a',anchor:{id:'anchor',owner_id:'a',revoked:false,policy_version:'v',baseline_goal_snapshot:structuredClone(old),baseline_intake_kcal:2000,accepted_delta_kcal:-100,last_accepted_at:goal.created_at,active_goal_id:'g1'},currentGoal:goal,totalCount:1,rows:[{receipt,proposal}]};
 }
 test('verified signed chain derives count and net rather than a claimed boolean',()=>{
  assert.deepEqual(verify(fixture()),{acceptedCount:1,acceptedDelta:-100,lastAcceptedAt:Date.parse('2026-02-01T00:00:00Z'),receiptsVerified:true});
 });
-test('empty chain only valid untouched anchor',()=>{const f=fixture();f.rows=[];f.totalCount=0;assert.throws(()=>verify(f));f.anchor.accepted_delta_kcal=0;f.anchor.last_accepted_at=null;f.currentGoal.daily_calories=2000;assert.equal(verify(f).acceptedCount,0);});
+test('empty chain only valid untouched anchor',()=>{const f=fixture();f.rows=[];f.totalCount=0;assert.throws(()=>verify(f));f.anchor.accepted_delta_kcal=0;f.anchor.last_accepted_at=null;f.currentGoal=structuredClone(f.anchor.baseline_goal_snapshot);f.anchor.active_goal_id=f.currentGoal.id;assert.equal(verify(f).acceptedCount,0);});
 test('missing and duplicate rows fail closed',()=>{let f=fixture();f.totalCount=2;assert.throws(()=>verify(f));f.rows.push(f.rows[0]);assert.throws(()=>verify(f));});
 test('owner, request, proposal, anchor, policy binding cannot be substituted',()=>{
  for(const mutate of [
@@ -42,3 +42,5 @@ test('round trip net zero retains two acceptances and last timestamp',()=>{
  assert.equal(verify(f).acceptedCount,2);assert.equal(verify(f).acceptedDelta,0);
  second.proposal.payload.goalSnapshot={...second.proposal.payload.goalSnapshot,protein_g:999};assert.throws(()=>verify(f));
 });
+
+test('manual macro edit with unchanged calories invalidates initial baseline',()=>{const f=fixture();f.rows=[];f.totalCount=0;f.anchor.accepted_delta_kcal=0;f.anchor.last_accepted_at=null;f.currentGoal=structuredClone(f.anchor.baseline_goal_snapshot);f.anchor.active_goal_id=f.currentGoal.id;f.currentGoal.protein_g+=1;assert.throws(()=>verify(f));});
