@@ -36,6 +36,7 @@ export type TdeeReviewServices={
  readPending:(owner:string)=>Promise<unknown|null>;writePending:(owner:string,request:TdeeAcceptRequest)=>Promise<void>;clearPending:(request:TdeeAcceptRequest)=>Promise<void>;
  accept:(request:TdeeAcceptRequest)=>Promise<unknown>;receipt:(request:TdeeAcceptRequest)=>Promise<unknown>;
  offer:(request:TdeeAcceptRequest)=>Promise<unknown>;closeExpired:(request:TdeeAcceptRequest)=>Promise<unknown>;
+ onCommitted?:(receipt:Extract<TdeeReceipt,{status:'committed'}>)=>void|Promise<void>;
 };
 export type ReviewResult={status:'idle'}|{status:'unresolved';request:TdeeAcceptRequest;offer?:TdeeOffer}|{status:'resolved';receipt:Exclude<TdeeReceipt,{status:'not_found'}>};
 const actorFlights=new Set<string>();
@@ -48,7 +49,11 @@ export function createTdeeReviewController(service:TdeeReviewServices){
  const finish=async(raw:unknown,request:TdeeAcceptRequest):Promise<ReviewResult>=>{
   current(request.ownerId);const receipt=parseTdeeReceipt(raw,request);
   if(receipt.status==='not_found')return {status:'unresolved',request};
-  await service.clearPending(request);current(request.ownerId);return {status:'resolved',receipt};
+  let cleanupError:unknown;
+  try{await service.clearPending(request);}catch(error){cleanupError=error;}
+  current(request.ownerId);
+  if(receipt.status==='committed')try{await service.onCommitted?.(receipt);}catch{/* Readback failure does not undo the verified commit. */}
+  current(request.ownerId);if(cleanupError)throw cleanupError;return {status:'resolved',receipt};
  };
  const recoverRequest=async(request:TdeeAcceptRequest):Promise<ReviewResult>=>{
   try{const result=await finish(await service.receipt(request),request);if(result.status!=='unresolved')return result;

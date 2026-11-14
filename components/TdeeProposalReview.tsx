@@ -5,14 +5,14 @@ import {colors} from '@/styles/commonStyles';
 import {parseTdeeProposal,type TdeeProposal,type ReviewResult,type createTdeeReviewController} from '@/utils/tdeeProposalReview';
 type Controller=ReturnType<typeof createTdeeReviewController>;
 /** Isolated until the server issuer is enabled. Never accepts on mount or dismiss. */
-export function TdeeProposalReview({visible,active,ownerId,proposal,controller,isDark,onClose,onResolved}:{visible:boolean;active:boolean;ownerId?:string;proposal:TdeeProposal|null;controller:Controller;isDark:boolean;onClose:()=>void;onResolved:(result:ReviewResult)=>void}){
+export function TdeeProposalReview({visible,active,ownerId,proposal,controller,isDark,onClose,onResolved}:{visible:boolean;active:boolean;ownerId?:string;proposal:TdeeProposal|null;controller:Controller;isDark:boolean;onClose:()=>void;onResolved:(result:ReviewResult)=>void|Promise<void>}){
  const {i18n}=useTranslation(),es=i18n.language.startsWith('es'),label=(en:string,sp:string)=>es?sp:en;
  const [busy,setBusy]=useState(false),[ready,setReady]=useState(false),[result,setResult]=useState<ReviewResult|null>(null),[failed,setFailed]=useState(false),[clock,setClock]=useState(Date.now());
  const epoch=useRef(0),live=useRef({visible,active,ownerId});live.current={visible,active,ownerId};
  const text=isDark?colors.textDark:colors.text,muted=isDark?colors.textSecondaryDark:colors.textSecondary,bg=isDark?colors.cardDark:colors.card;
  const run=async(mode:'recover'|'accept'|'retry'|'closeExpired')=>{if(!live.current.visible||!live.current.active||!ownerId)return;if(controller.busy){setReady(false);setFailed(true);return;}const generation=epoch.current,owner=ownerId;setBusy(true);setFailed(false);
   const current=()=>epoch.current===generation&&live.current.visible&&live.current.active&&live.current.ownerId===owner;
-  try{let next:ReviewResult;if(mode==='accept'&&proposal)next=await controller.accept(proposal);else if(mode==='retry'&&result?.status==='unresolved'&&result.offer)next=await controller.retryReviewed(result.offer);else if(mode==='closeExpired'&&result?.status==='unresolved')next=await controller.closeExpired(result.request);else next=await controller.recover();if(!current())return;setResult(next);setReady(next.status==='idle');if(next.status==='resolved')onResolved(next);}
+  try{let next:ReviewResult;if(mode==='accept'&&proposal)next=await controller.accept(proposal);else if(mode==='retry'&&result?.status==='unresolved'&&result.offer)next=await controller.retryReviewed(result.offer);else if(mode==='closeExpired'&&result?.status==='unresolved')next=await controller.closeExpired(result.request);else next=await controller.recover();if(!current())return;setResult(next);setReady(next.status==='idle');if(next.status==='resolved')await onResolved(next);}
   catch{if(current()){setFailed(true);setReady(false);}}finally{if(current())setBusy(false);}
  };
  useEffect(()=>{++epoch.current;setReady(false);setResult(null);setFailed(false);setBusy(false);setClock(Date.now());if(visible&&active&&ownerId)void run('recover');return()=>{++epoch.current;};},[visible,active,ownerId,controller]);

@@ -27,7 +27,7 @@ export function makeTdeeReviewServices(actor:()=>string|undefined):TdeeReviewSer
 export async function readTdeeReviewProposal(owner:string,isCurrent:()=>boolean,signal:AbortSignal):Promise<{reason:string;proposal:TdeeProposal|null}>{
  const current=()=>{if(!isCurrent()||signal.aborted)throw Error('account_changed');};current();
  const {data,error}=await supabase.auth.getSession();current();if(error||!data.session||data.session.user.id!==owner)throw Error('account_changed');
- const response=await fetch(SUPABASE_PROJECT_URL+'/functions/v1/progress-intelligence?mode=adaptive-review-v1',{method:'GET',signal,cache:'no-store',headers:{apikey:supabasePublicKey,Authorization:'Bearer '+data.session.access_token}});current();if(!response.ok)throw Error('review_unavailable');const raw=await response.json();current();
+ const response=await fetch(SUPABASE_PROJECT_URL+'/functions/v1/progress-intelligence?mode=adaptive-review-v1',{method:'POST',signal,cache:'no-store',headers:{apikey:supabasePublicKey,Authorization:'Bearer '+data.session.access_token}});current();if(!response.ok)throw Error('review_unavailable');const raw=await response.json();current();
  if(!raw||typeof raw.reason!=='string'||!(raw.proposal===null||typeof raw.proposal==='object'))throw Error('invalid_proposal');
  return {reason:raw.reason,proposal:raw.proposal===null?null:parseTdeeProposal(raw.proposal,owner)};
 }
