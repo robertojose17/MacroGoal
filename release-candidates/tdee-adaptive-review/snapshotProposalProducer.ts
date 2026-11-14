@@ -7,7 +7,7 @@ export type SnapshotBinding={
  profileUpdatedAt:string;sourceDate:string;today:string;
  policyVersion:string;policyDigest:string;engineVersion:string;policyExpiresAt:string;
  eligibilityDigest:string;eligibilityFingerprint:string;eligibilityExpiresAt:string;
- offerExpiresAt:string;
+ offerExpiresAt:string;readinessFingerprint:string;
 };
 type Prepared={kind:'prepared';actionable:false;record:ProposalRecord}|{kind:'blocked'|'no_change';reason:string};
 const uuid=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(v);
@@ -18,7 +18,7 @@ const block=(reason:string):Prepared=>({kind:'blocked',reason});
 /** Evidence is supplied by a reviewed server loader, never manufactured here. */
 export function prepareSnapshotProposal(input:SnapshotAdjustmentInput,b:SnapshotBinding):Prepared {
  if(!input||!input.current||!input.evidence||!b||!uuid(b.ownerId)||!uuid(b.proposalId)||!uuid(b.anchorId)||
-  !hash(b.policyDigest)||!hash(b.eligibilityDigest)||!hash(b.eligibilityFingerprint)||
+  !hash(b.readinessFingerprint)||!hash(b.policyDigest)||!hash(b.eligibilityDigest)||!hash(b.eligibilityFingerprint)||
   (typeof b.policyVersion!=='string'||!b.policyVersion)||(typeof b.engineVersion!=='string'||!b.engineVersion)||!day(b.sourceDate)||!day(b.today)||b.sourceDate>=b.today||
   !Number.isFinite(instant(b.profileUpdatedAt))||instant(b.profileUpdatedAt)>input.now)
   return block('invalid_binding');
@@ -38,7 +38,7 @@ export function prepareSnapshotProposal(input:SnapshotAdjustmentInput,b:Snapshot
  expiresAt:new Date(expiry).toISOString(),payload:{
  goalId:g.id,goalUpdatedAt:g.updated_at,profileUpdatedAt:b.profileUpdatedAt,goalSnapshot:structuredClone(g),
  sourceFingerprint:draft.sourceFingerprint,sourceCapturedAt:new Date(draft.sourceCapturedAt).toISOString(),
- snapshotSemantics:draft.contract,eligibilityDigest:b.eligibilityDigest,policyDigest:b.policyDigest,engineVersion:b.engineVersion,
+ snapshotSemantics:draft.contract,readinessFingerprint:b.readinessFingerprint,eligibilityDigest:b.eligibilityDigest,policyDigest:b.policyDigest,engineVersion:b.engineVersion,
  today:b.today,sourceDate:b.sourceDate,current:structuredClone(c),target:structuredClone(draft.target),deltaKcal:draft.deltaKcal}}};
 }
 export {validatePersistedProposal as validatePersistedSnapshotProposal};
