@@ -48,12 +48,12 @@ CREATE TABLE macrogoal_snapshot_review_private.proposals (
 CREATE TABLE macrogoal_snapshot_review_private.receipts (
  owner_id uuid NOT NULL, request_id uuid NOT NULL, request jsonb NOT NULL,
  status text NOT NULL CHECK(status IN ('committed','rejected')),
- reason text, accepted_goal_id uuid, accepted_goal jsonb,
+ reason text, anchor_id uuid REFERENCES macrogoal_snapshot_review_private.anchors(id), accepted_goal_id uuid, accepted_goal jsonb,
  acceptance_evidence jsonb,
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  PRIMARY KEY(owner_id,request_id),
- CHECK((status='committed' AND accepted_goal_id IS NOT NULL AND accepted_goal IS NOT NULL AND reason IS NULL)
-    OR (status='rejected' AND accepted_goal_id IS NULL AND accepted_goal IS NULL AND reason IS NOT NULL))
+ CHECK((status='committed' AND anchor_id IS NOT NULL AND accepted_goal_id IS NOT NULL AND accepted_goal IS NOT NULL AND reason IS NULL)
+    OR (status='rejected' AND anchor_id IS NULL AND accepted_goal_id IS NULL AND accepted_goal IS NULL AND reason IS NOT NULL))
 );
 DO $secure$
 DECLARE t text;
@@ -270,8 +270,8 @@ BEGIN
   g.start_date,g.start_journey_date,g.macro_preset,anchor.baseline_intake_kcal,accepted_at,accepted_at,accepted_at) RETURNING * INTO result;
  UPDATE macrogoal_snapshot_review_private.anchors SET active_goal_id=result.id,accepted_delta_kcal=accepted_delta_kcal+delta,last_accepted_at=accepted_at WHERE id=anchor.id;
  UPDATE macrogoal_snapshot_review_private.proposals SET consumed_request=(p_request->>'requestId')::uuid WHERE id=p.id;
- INSERT INTO macrogoal_snapshot_review_private.receipts(owner_id,request_id,request,status,accepted_goal_id,accepted_goal,acceptance_evidence)
- VALUES(actor,(p_request->>'requestId')::uuid,p_request,'committed',result.id,to_jsonb(result),
+ INSERT INTO macrogoal_snapshot_review_private.receipts(owner_id,request_id,request,status,anchor_id,accepted_goal_id,accepted_goal,acceptance_evidence)
+ VALUES(actor,(p_request->>'requestId')::uuid,p_request,'committed',anchor.id,result.id,to_jsonb(result),
  jsonb_build_object('contract','as-of-revalidated-v1','fingerprint',snapshot->>'sourceFingerprint','capturedAt',snapshot->>'capturedAt'));
  RETURN jsonb_build_object('version','adaptive-receipt-v1','status','committed','request',p_request,
    'acceptedGoal',jsonb_build_object('id',result.id,'updatedAt',result.updated_at),'goalState','current');
