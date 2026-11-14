@@ -13,7 +13,7 @@ CREATE TABLE macrogoal_snapshot_review_private.policies (
  snapshot_contract_reviewed boolean NOT NULL DEFAULT false,
  max_step_kcal integer NOT NULL CHECK(max_step_kcal BETWEEN 1 AND 200),
  max_step_fraction numeric NOT NULL CHECK(max_step_fraction>0 AND max_step_fraction<=1),
- min_days_between_acceptances integer NOT NULL CHECK(min_days_between_acceptances>0),
+ min_days_between_acceptances integer NOT NULL CHECK(min_days_between_acceptances>=14),
  max_cumulative_delta_kcal integer NOT NULL CHECK(max_cumulative_delta_kcal>0),
  min_intake_kcal integer NOT NULL CHECK(min_intake_kcal>0),
  max_intake_kcal integer NOT NULL CHECK(max_intake_kcal>=min_intake_kcal),
@@ -24,6 +24,7 @@ CREATE TABLE macrogoal_snapshot_review_private.anchors (
  policy_version text NOT NULL REFERENCES macrogoal_snapshot_review_private.policies(version),
  active_goal_id uuid NOT NULL, baseline_intake_kcal integer NOT NULL CHECK(baseline_intake_kcal>0),
  baseline_expenditure_kcal integer NOT NULL CHECK(baseline_expenditure_kcal>0),
+ baseline_captured_at timestamptz NOT NULL CHECK(isfinite(baseline_captured_at)),
  accepted_delta_kcal integer NOT NULL DEFAULT 0 CHECK(abs(accepted_delta_kcal)<=10000),
  last_accepted_at timestamptz, revoked boolean NOT NULL DEFAULT false,
  UNIQUE(owner_id,active_goal_id)
@@ -255,7 +256,9 @@ BEGIN
    (target->>'calories')::integer>policy.max_intake_kcal OR (target->>'fiberG')::integer IS DISTINCT FROM g.fiber_g OR
    abs((target->>'calories')::integer-4*(target->>'proteinG')::integer-4*(target->>'carbsG')::integer-9*(target->>'fatsG')::integer)>10 THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'target_limits'); END IF;
- IF (anchor.accepted_delta_kcal<>0 AND anchor.last_accepted_at IS NULL) OR
+ IF anchor.baseline_captured_at>clock_timestamp() OR
+    (anchor.last_accepted_at IS NULL AND anchor.baseline_captured_at+make_interval(days=>policy.min_days_between_acceptances)>clock_timestamp()) OR
+    (anchor.accepted_delta_kcal<>0 AND anchor.last_accepted_at IS NULL) OR
     (anchor.last_accepted_at IS NOT NULL AND anchor.last_accepted_at+make_interval(days=>policy.min_days_between_acceptances)>clock_timestamp()) THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'review_cooldown'); END IF;
  IF p.expires_at<=clock_timestamp() OR policy.expires_at<=clock_timestamp() OR e.expires_at<=clock_timestamp() OR
