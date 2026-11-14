@@ -30,7 +30,7 @@ export function verifySnapshotReceiptChain(value:unknown):VerifiedReceiptChain {
  for(const row of ordered){
  if(!rec(row)||!rec(row.receipt)||!rec(row.proposal))return fail();
  const r=row.receipt,p=row.proposal;
- if(r.owner_id!==actor||r.status!=='committed'||!text(r.request_id)||!rec(r.request)||!rec(r.accepted_goal)||!rec(p.payload)||
+ if(r.owner_id!==actor||r.anchor_id!==a.id||r.status!=='committed'||!text(r.request_id)||!rec(r.request)||!rec(r.accepted_goal)||!rec(p.payload)||
  p.owner_id!==actor||p.anchor_id!==a.id||p.policy_version!==a.policy_version||!text(p.id)||typeof p.digest!=='string'||!/^[a-f0-9]{64}$/.test(p.digest)||
  p.consumed_request!==r.request_id||r.request.ownerId!==actor||r.request.requestId!==r.request_id||
  r.request.proposalId!==p.id||r.request.proposalDigest!==p.digest||requests.has(r.request_id)||proposals.has(p.id))return fail();
