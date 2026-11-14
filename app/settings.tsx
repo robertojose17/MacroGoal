@@ -1,3 +1,4 @@
+import { TdeeDataReadiness } from '@/components/TdeeDataReadiness';
 import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
 import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
@@ -1384,6 +1385,8 @@ export default function SettingsScreen() {
                         </View>
                       </TouchableOpacity>
                     )}
+
+                    <TdeeDataReadiness userId={editor.snapshot?.profile.id} isDark={isDark} />
 
                     {/* ── C. View Adjustment History ── */}
                     <TouchableOpacity
