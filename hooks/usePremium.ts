@@ -5,6 +5,7 @@ import Purchases, { isPurchasesAvailable, withRevenueCatUser } from '@/utils/pur
 import { premiumEntitlement, premiumFallbackState } from '@/utils/premiumEntitlement';
 import { syncPremiumMembership } from '@/utils/premiumSync';
 import { usePremiumAuthorityShadow } from '@/hooks/usePremiumAuthorityShadow';
+import { comparePremiumObservation } from '@/utils/premiumAuthority/compareObservation';
 
 type CustomerInfo = any;
 interface UsePremiumReturn {
@@ -45,7 +46,14 @@ export function usePremium(): UsePremiumReturn {
   const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Web-only shadow observation. Never feeds existing access, SDK or profile states.
-  usePremiumAuthorityShadow(shadowOwner, Platform.OS === 'web');
+  const { observation: authorityObservation } = usePremiumAuthorityShadow(shadowOwner, Platform.OS === 'web');
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const comparison = comparePremiumObservation(shadowOwner, isPremium, loading, authorityObservation);
+    // Coarse, local diagnostics only: no identifiers, receipts, tokens or telemetry.
+    // Critically this never changes setIsPremium, profiles, SDK state or feature gates.
+    if (comparison !== 'pending') console.info('[PremiumAuthority] comparison:', comparison);
+  }, [shadowOwner, isPremium, loading, authorityObservation]);
 
   const reset = useCallback(() => {
     knownPremium.current = false;
