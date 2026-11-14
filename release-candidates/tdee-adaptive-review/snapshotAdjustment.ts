@@ -42,6 +42,9 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
  const desired=a.intake+(input.observedExpenditure-a.expenditure);
  const difference=desired-g.calories;
  if(difference===0)return {kind:'no_change',reason:'same_anchored_target'};
+ // No server-verified individual total-deficit review contract exists yet.
+ // Temporarily suspend every reduction; extra input flags cannot override this.
+ if(difference<0)return blocked('individual_deficit_review_required');
  const direction=Math.sign(difference);
  const remaining=direction>0?p.maxNetDeltaKcal-a.acceptedDelta:p.maxNetDeltaKcal+a.acceptedDelta;
  const intakeRoom=direction>0?(p.maxIntakeKcal-g.calories):g.calories-p.minIntakeKcal;
