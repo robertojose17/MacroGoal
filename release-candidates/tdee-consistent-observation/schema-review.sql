@@ -1,12 +1,12 @@
--- Read-only snapshot API, scoped tester authority aligned with observed-program.
--- Nutrition inputs use one materialized source query. Tester authority checks freshness at invocation.
+-- Additive read-only API. Review before applying; no goals/settings/source writes.
+-- Source inputs use one materialized query; scoped tester authority rechecks freshness.
 BEGIN;
 CREATE FUNCTION public.observed_get_tdee_snapshot_v1()
- RETURNS jsonb
- LANGUAGE plpgsql
- STABLE
- SECURITY INVOKER
- SET search_path TO 'pg_catalog', 'pg_temp'
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path TO pg_catalog, pg_temp
 AS $function$
 DECLARE
   actor uuid := auth.uid();
@@ -150,4 +150,6 @@ END;
 $function$;
 REVOKE ALL ON FUNCTION public.observed_get_tdee_snapshot_v1() FROM PUBLIC,anon,service_role;
 GRANT EXECUTE ON FUNCTION public.observed_get_tdee_snapshot_v1() TO authenticated;
+COMMENT ON FUNCTION public.observed_get_tdee_snapshot_v1() IS
+  'Owner-scoped, read-only observation snapshot. Not a prescription, source-write lock or clinical eligibility approval.';
 COMMIT;
