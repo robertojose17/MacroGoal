@@ -14,7 +14,8 @@
 ## Implemented, still inactive
 - snapshotRegistryCandidate.sql: private registry and own-actor acceptance candidate with reviewed snapshot contract gate; no grants, seeds or public wrapper.
 - snapshotAdjustment.ts: pure signed anchored draft calculation, step ceiling of 200 kcal plus explicit fraction, policy floor/ceiling, net-deviation limit, interval and receipt-history checks. Threshold values are policy inputs, not hidden defaults or medical guarantees. No live import, no automatic target changes.
-- Existing deployed observation/entitlement remains unchanged by these candidate commits.
+- snapshotProposalProducer.ts prepares bounded offers from supplied reviewed inputs, remains release-OFF. receiptChain.ts verifies actor/request/proposal/goal continuity and derives acceptance count/net from a complete private chain; it does not make missing history valid.
+- The deployed observation snapshot now uses the same scoped verified tester authority as observed-program, removing the remaining owner/admin bypass. Other subscription branches are preserved.
 - The prior serialized-source registry remains a historical candidate, not a dependency of this contract.
 
 ## Verification actually performed
@@ -25,8 +26,11 @@
 - Ten signed-adjustment tests passed using the actual TypeScript engine transformed by Node on the connected Windows computer. They include both directions, no stacked deficit, large expenditure swings, floors, expiry, cooldown, anchor mismatch, and return-to-baseline history.
 - This is not full app type-check, live multi-session acceptance, real-user nutritional efficacy, or clinical validation.
 
+- Ten observation snapshot contract tests passed after the scoped authority fix. Runtime rollback checks included authenticated-role access and revoked tester authority; binding restored exactly.
+- Six receipt-chain tests passed, including signed round trips whose net is zero but acceptance count remains two.
+
 ## Remaining before activation
-1. Reviewed product policy and evidence/eligibility inputs. Do not infer complete food logging from meal count or Premium; heuristic completeness must remain labeled as heuristic. No new questionnaire or collection is enabled.
+1. Reviewed product policy and evidence/eligibility inputs. Do not infer complete food logging from meal count or Premium. The owner authorized minimal self-confirmation and complete-day UI; readiness SQL/UI implementation is in progress, not yet installed or collecting data. Self-report is not model review or clinical validation.
 2. A coherent private producer/adapter linking the current source snapshot and goal CAS to the new registry; no manufactured reviewed flags.
 3. Persistent private deployment, authenticated wrappers and tests of two accepts, manual edits, expiry while waiting, lost-response replay and atomic rollback. Existing application consumers must refresh the same active goal.
 4. UI presentation/explicit acceptance/recovery and account E2E. TestFlight remains separately authorized.
