@@ -57,8 +57,8 @@ BEGIN
  target_fat:=round(target_cal*0.25/9)::integer;
  target_carbs:=round((target_cal-4*target_protein-9*target_fat)::numeric/4)::integer;
  INSERT INTO macrogoal_snapshot_review_private.policies VALUES(pv,'rollback-fixture-only',pd,true,true,true,200,0.2,14,500,1500,4000,clock_timestamp()+interval '10 minutes');
- INSERT INTO macrogoal_snapshot_review_private.anchors(id,owner_id,policy_version,active_goal_id,baseline_intake_kcal,baseline_expenditure_kcal,baseline_captured_at)
- VALUES(v_anchor_id,actor,pv,g.id,g.daily_calories,g.daily_calories+100,clock_timestamp()-interval '15 days');
+ INSERT INTO macrogoal_snapshot_review_private.anchors(id,owner_id,policy_version,active_goal_id,baseline_intake_kcal,baseline_expenditure_kcal,baseline_captured_at,journey_binding,baseline_goal_snapshot)
+ VALUES(v_anchor_id,actor,pv,g.id,g.daily_calories,g.daily_calories+100,clock_timestamp()-interval '15 days',state->>'journeyBinding',old_goal);
  INSERT INTO macrogoal_snapshot_review_private.eligibility VALUES(actor,pv,ed,true,true,snap->>'sourceFingerprint',clock_timestamp()+interval '10 minutes');
  FOR mode IN 1..2 LOOP
   -- Re-read current readiness after the revoked-fixture case was restored.
