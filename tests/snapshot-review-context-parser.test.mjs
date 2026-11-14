@@ -33,3 +33,13 @@ test('required caps reject null or invalid values without defaults or source mut
   assert.equal(parseSnapshotReviewContext(v,actor,actor,now).kind,'blocked');assert.deepEqual(v,before);
  }
 });
+
+/** Prepared, not executed: parser must not fabricate individual review evidence. */
+test('real estimator lower expenditure blocks reduction despite synthetic review flags',()=>{
+ const v=fixture();for(const item of v.observation.sources.items)item.calories=1150;
+ v.individualDeficitReview={reviewed:true,maxTotalDeficitKcal:100000};
+ const before=structuredClone(v);
+ const r=parseSnapshotReviewContext(v,actor,actor,now);
+ assert.equal(r.kind,'blocked');assert.equal(r.reason,'individual_deficit_review_required');
+ assert.deepEqual(v,before);
+});
