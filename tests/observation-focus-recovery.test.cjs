@@ -16,25 +16,28 @@ function harness({ expectedOwner, deferred = false, initialAppState = 'active' }
     useCallback(fn) { return fn; },
     useEffect(fn) { const i = ei++; if (!(i in effects)) effects[i] = fn; },
   };
-  const exported = {};
+  const exported = {}, observation = {};
+  new Function('exports', ts.transpileModule(fs.readFileSync('utils/dynamicTdeeObservation.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(observation);
   const client = { supabase: { auth: { async getSession() { return { data: { session }, error: null }; }, onAuthStateChange(fn) { auth = fn; return { data: { subscription: { unsubscribe() {} } } }; } } }, SUPABASE_PROJECT_URL: 'https://example.invalid', supabasePublicKey: 'public' };
   const imports = {
     'react-native': { AppState: { currentState: initialAppState, addEventListener(event, fn) { assert.equal(event, 'change'); appStateListener = fn; return { remove() { removedAppListener = true; } }; } } },
     react: React, 'expo-router': { useFocusEffect(fn) { focus = fn; } }, '@/lib/supabase/client': client,
     '@/utils/goalChangeEvents': { subscribeGoalChanged(fn) { goal = fn; return () => {}; } },
-    '@/utils/dynamicTdeeObservation': { observationRolloutEnabled: () => true, requestObservation(input) {
+    '@/utils/dynamicTdeeObservation': { observationAccessValidUntil: observation.observationAccessValidUntil, observationRolloutEnabled: () => true, requestObservation(input) {
       const call = { input, resolve: null, reject: null }; calls.push(call);
       if (!deferred) return Promise.resolve({ revision: calls.length, owner: input.expectedOwner });
       return new Promise((resolve, reject) => { call.resolve = resolve; call.reject = reject; });
     } },
   };
-  new Function('require', 'exports', 'setTimeout', 'clearTimeout', ts.transpileModule(fs.readFileSync('hooks/useObservationResource.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(name => { assert.ok(name in imports, name); return imports[name]; }, exported, setTimer, clearTimer);
+  new Function('require', 'exports', 'setTimeout', 'clearTimeout', 'Date', ts.transpileModule(fs.readFileSync('hooks/useObservationResource.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(name => { assert.ok(name in imports, name); return imports[name]; }, exported, setTimer, clearTimer, {now: () => now});
   const parse = value => value;
   const render = () => { si = ri = ei = 0; return exported.useObservationResource('program', parse, expected); };
   render(); const cleanups = effects.map(fn => fn()); focusCleanup = focus();
   return { calls, render, states,
     appState(value) { if (!removedAppListener) appStateListener(value); },
     timerCount: () => timers.size,
+    clock(ms) { now = ms; },
+    reject(index) { calls[index].reject(Error("network_unavailable")); },
     advance(ms) { now += ms; for (const [id, timer] of [...timers]) if (timer.at <= now) { timers.delete(id); timer.fn(); } },
     blur() { focusCleanup(); }, focus() { focusCleanup = focus(); },
     auth(next) { session = next; auth('TOKEN_REFRESHED', next); }, goal(id) { goal(id); },
@@ -186,4 +189,39 @@ test('actor switch in background waits and foreground reads only the new actor',
   const h = harness(); await flush(); h.appState('background'); h.auth({ user: { id: 'other' }, access_token: 'other-token' }); await flush();
   assert.equal(h.calls.length, 1); assert.equal(h.render().value, null); assert.equal(h.timerCount(), 0); h.appState('active'); await flush();
   assert.equal(h.calls.length, 2); assert.equal(h.calls[1].input.expectedOwner, 'other'); assert.equal(h.render().value.owner, 'other'); h.unmount();
+});
+
+
+
+test('managed TDEE expires at server deadline and revalidates, ordinary cache stays five minutes', async () => {
+  const h = harness({deferred:true}); await flush();
+  h.resolve(0,{premium:true,accessValidUntil:30000}); await flush();
+  assert.equal(h.render().value.premium,true);
+  h.advance(29999); assert.equal(h.render().value.premium,true); assert.equal(h.calls.length,1);
+  h.advance(1); assert.equal(h.render().value,null); await flush(); assert.equal(h.calls.length,2);
+  h.resolve(1,{premium:false,accessValidUntil:60000}); await flush(); assert.equal(h.render().value.premium,false); h.unmount();
+  const ordinary = harness(); await flush(); ordinary.advance(30000); await flush();
+  assert.equal(ordinary.calls.length,1); assert.equal(ordinary.render().value.revision,1);
+  ordinary.advance(270000); await flush(); assert.equal(ordinary.calls.length,2); ordinary.unmount();
+});
+test('managed expired, malformed or too-long deadlines never publish or fall back', async () => {
+  for(const until of [0,-1,30001,null,'30000']) {
+    const h = harness({deferred:true}); await flush(); h.resolve(0,{premium:true,accessValidUntil:until}); await flush();
+    assert.equal(h.render().value,null); assert.equal(h.render().error,'observation_access_expired'); assert.equal(h.timerCount(),0); h.unmount();
+  }
+});
+test('managed cached permission clears on background and account change', async () => {
+  const h = harness({deferred:true}); await flush(); h.resolve(0,{premium:true,accessValidUntil:30000}); await flush();
+  h.appState('background'); assert.equal(h.render().value,null); assert.equal(h.timerCount(),0);
+  h.appState('active'); await flush(); assert.equal(h.calls.length,2);
+  h.auth({user:{id:'next'},access_token:'next-token'}); await flush();
+  h.resolve(1,{premium:true,accessValidUntil:30000}); await flush(); assert.equal(h.render().value,null); h.unmount();
+});
+
+test('delayed timer and clock rollback do not expose managed cache; failed refresh never falls back',async()=>{
+ const h=harness({deferred:true}); await flush(); h.resolve(0,{premium:true,accessValidUntil:30000}); await flush();
+ h.clock(30000); assert.equal(h.render().value,null);
+ h.clock(-1); assert.equal(h.render().value,null);
+ h.clock(0); h.advance(30000); await flush(); h.reject(1); await flush();
+ assert.equal(h.render().value,null); assert.equal(h.render().error,'network_unavailable'); h.unmount();
 });

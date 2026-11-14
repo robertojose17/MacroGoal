@@ -52,3 +52,12 @@ test('same actor token refresh preserves observation; signout clears it',async()
 test('hook discards pending request on actor change and unmount',async()=>{let resolve;const h=harness(()=>new Promise(r=>{resolve=r;}));await flush();h.auth(null);resolve(reply(program()));await flush();assert.equal(h.states[0],null);h.cleanup();});
 test('goal event for another actor preserves cache; own goal invalidates before refresh',async()=>{let calls=0,resolve;const h=harness(async()=>{calls++;if(calls===1)return reply(program());return new Promise(r=>{resolve=r;});});await flush();h.goal('other');assert.equal(calls,1);assert.notEqual(h.states[0],null);h.goal('owner');assert.equal(h.states[0],null);await flush();resolve(reply(program()));await flush();assert.notEqual(h.states[0],null);h.cleanup();});
 test('settings mutation is serialized; goal invalidation reconciles with one GET, never another POST',async()=>{let resolve;const methods=[];const h=harness(async(_url,options)=>{methods.push(options.method);if(methods.length===2)return new Promise(r=>{resolve=r;});return reply(methods.length===1?program():{...program(),enabled:false,reviewDay:4});});await flush();const pending=h.hook.updateSettings(false,4);await flush();await assert.rejects(h.hook.updateSettings(true,3),/observation_busy/);h.goal('owner');resolve(reply({...program(),enabled:false,reviewDay:4}));await assert.rejects(pending,/account_changed/);await flush();assert.deepEqual(methods,['GET','POST','GET']);assert.equal(h.states[0].value.enabled,false);assert.equal(h.states[0].value.reviewDay,4);assert.equal(h.states[1],false);assert.equal(h.states[2],null);h.cleanup();});
+
+
+
+test('optional managed access deadline is preserved; ordinary payload shape stays unchanged',()=>{
+ const now=Date.parse('2026-11-12T12:00:00Z');
+ assert.equal('accessValidUntil' in parseProgramWithClock(program(),now),false);
+ assert.equal(parseProgramWithClock({...program(),accessValidUntil:now+30000},now).accessValidUntil,now+30000);
+ for(const accessValidUntil of [now,now-1,now+30001,null,String(now+1000)]) assert.throws(()=>parseProgramWithClock({...program(),accessValidUntil},now));
+});

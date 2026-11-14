@@ -4,14 +4,14 @@ import { AppState } from 'react-native';
 
 import { supabase, SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
 import { subscribeGoalChanged } from '@/utils/goalChangeEvents';
-import { observationRolloutEnabled, requestObservation, type ObservationKind } from '@/utils/dynamicTdeeObservation';
+import { observationRolloutEnabled, observationAccessValidUntil, requestObservation, type ObservationKind } from '@/utils/dynamicTdeeObservation';
 
 // Cache freshness only; this is not a clinical eligibility threshold.
 const CACHE_FRESHNESS_MS = 5 * 60 * 1000;
 
 /** No shared cache: a previous account/goal can never seed a new mount. */
 export function useObservationResource<T>(kind: ObservationKind, parse: (value: unknown) => T, expectedOwner?: string) {
-  const [snapshot, setSnapshot] = useState<{ owner: string; value: T } | null>(null);
+  const [snapshot, setSnapshot] = useState<{ owner: string; value: T; accessValidUntil?: number; receivedAt?: number } | null>(null);
   const [loading, setLoading] = useState(false), [error, setError] = useState<string | null>(null);
   const epoch = useRef(0), mounted = useRef(false), focused = useRef(false), owner = useRef<string | null>(null);
   const reconcileOnFocus = useRef(false), refreshRead = useRef<(() => void) | null>(null);
@@ -47,12 +47,14 @@ export function useObservationResource<T>(kind: ObservationKind, parse: (value: 
         enabled:observationRolloutEnabled(), settings });
       const value = parse(raw);
       if (!isCurrent()) throw Error('account_changed');
-      setSnapshot({owner:actor,value});
+      const receivedAt = Date.now();
+      const accessValidUntil = kind === 'program' ? observationAccessValidUntil(raw, receivedAt) : undefined;
+      setSnapshot({owner:actor,value,...(accessValidUntil === undefined ? {} : {accessValidUntil,receivedAt})});
       expiry.current = setTimeout(() => {
         expiry.current = null;
         if (!isCurrent()) return;
         setSnapshot(null); refreshRead.current?.();
-      }, CACHE_FRESHNESS_MS);
+      }, accessValidUntil === undefined ? CACHE_FRESHNESS_MS : Math.min(CACHE_FRESHNESS_MS, accessValidUntil - receivedAt));
       return value;
     } catch (failure) {
       if (current()) { setSnapshot(null); setError(failure instanceof Error ? failure.message : 'observation_unavailable'); }
@@ -117,6 +119,11 @@ export function useObservationResource<T>(kind: ObservationKind, parse: (value: 
       cancelOutstanding(); setSnapshot(null); setLoading(false);
     };
   }, [expectedOwner, refresh, cancelOutstanding]));
-  const value = snapshot && (!expectedOwner || snapshot.owner === expectedOwner) && snapshot.owner === owner.current ? snapshot.value : null;
+  // Recheck on render too: background throttling or a clock rollback cannot
+  // extend a managed authorization while its expiry callback is delayed.
+  const accessCurrent = snapshot?.accessValidUntil === undefined ||
+    (Date.now() >= snapshot.receivedAt! && Date.now() < snapshot.accessValidUntil);
+  const value = accessCurrent && snapshot && (!expectedOwner || snapshot.owner === expectedOwner) && snapshot.owner === owner.current ? snapshot.value : null;
   return { value, loading, error, refresh, updateSettings: (enabled: boolean, reviewDay: number) => fetchValue({enabled,reviewDay}) };
 }
+

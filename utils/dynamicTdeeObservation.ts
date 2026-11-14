@@ -17,6 +17,7 @@ export interface ObservationProgram {
   premium: boolean; enabled: boolean; reviewDay: number; today: string; nextReviewDate: string;
   reviewDue: false; proposal: null; reviewPeriod: null; reason: string;
   estimate: ObservationEstimate | null;
+  accessValidUntil?: number;
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -35,8 +36,18 @@ function date(value: unknown): string {
       !Number.isFinite(Date.parse(value + 'T12:00:00Z')) || new Date(value + 'T12:00:00Z').toISOString().slice(0,10) !== value) throw Error('invalid_observation');
   return value;
 }
+/** Optional server-scoped TDEE authorization deadline. No client identity allowlist. */
+export function observationAccessValidUntil(value: unknown, now = Date.now()): number | undefined {
+  const v = record(value);
+  if (!Object.prototype.hasOwnProperty.call(v, 'accessValidUntil')) return undefined;
+  const until = v.accessValidUntil;
+  if (!Number.isSafeInteger(now) || typeof until !== 'number' || !Number.isSafeInteger(until) ||
+      until <= now || until > now + 30000) throw Error('observation_access_expired');
+  return until;
+}
 export function parseObservationProgram(value: unknown, now = Date.now()): ObservationProgram {
   const v = record(value);
+  const accessValidUntil = observationAccessValidUntil(value, now);
   if (v.version !== 'dynamic-program-v1' || v.observationOnly !== true || v.observationVersion !== 'observation-v1' ||
       typeof v.premium !== 'boolean' || typeof v.enabled !== 'boolean' || typeof v.reviewDay !== 'number' ||
       !Number.isInteger(v.reviewDay) || v.reviewDay < 0 || v.reviewDay > 6 || v.reviewDue !== false ||
@@ -75,7 +86,8 @@ export function parseObservationProgram(value: unknown, now = Date.now()): Obser
       reason:e.reason, kcalPerDay:kcal, asOf, confidence:e.confidence, loggingCompleteness:'unverified', coverage };
   }
   return { version:'dynamic-program-v1', observationOnly:true, observationVersion:'observation-v1', premium:v.premium,
-    enabled:v.enabled, reviewDay:v.reviewDay, today, nextReviewDate, reviewDue:false, proposal:null, reviewPeriod:null, reason:v.reason, estimate };
+    enabled:v.enabled, reviewDay:v.reviewDay, today, nextReviewDate, reviewDue:false, proposal:null, reviewPeriod:null, reason:v.reason, estimate,
+    ...(accessValidUntil === undefined ? {} : { accessValidUntil }) };
 }
 export async function requestObservation(input: {
   kind: ObservationKind; endpoint: string; apiKey: string; session: ObservationSession;
@@ -101,3 +113,4 @@ export async function requestObservation(input: {
   if (input.signal.aborted || !input.isCurrent()) throw Error('account_changed');
   return data;
 }
+
