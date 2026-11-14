@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const sql=readFileSync(new URL('../release-candidates/tdee-adaptive-review/readinessAttestationsCandidate.sql',import.meta.url),'utf8');
+test('candidate has no deployment grants or policy activation',()=>{assert.doesNotMatch(sql,/^GRANT /m);assert.doesNotMatch(sql,/CREATE TRIGGER|UPDATE public\.|INSERT INTO public\.|modelReviewed|eligible boolean/i);});
+test('actor derived and anonymous excluded, sources owner scoped',()=>{assert.match(sql,/a uuid:=auth.uid\(\)/);assert.match(sql,/is_anonymous/);assert.match(sql,/m.user_id=a/);assert.match(sql,/WHERE id=a FOR UPDATE/);});
+test('read hashes actual consumed values, no updated_at-only fingerprint',()=>{for(const field of ['i.quantity','i.grams','i.calories','i.protein','i.carbs','i.fats','i.fiber','i.is_scheduled'])assert.ok(sql.includes(field));assert.match(sql,/content_hash=d.hash/);assert.match(sql,/i.calories IS NULL/);assert.match(sql,/sum\(i.calories\).*0\)>0/);});
+test('readiness binding/age/dates are server generated',()=>{assert.match(sql,/journey_restart_count/);assert.match(sql,/u.date_of_birth/);assert.match(sql,/u.sex/);assert.match(sql,/t-28/);assert.match(sql,/date<t/);assert.match(sql,/interval '30 days'/);assert.match(sql,/clock_timestamp\(\)/);});
+test('idempotent replay precedes writes and never extends expiry',()=>{const replay=sql.indexOf('IF FOUND THEN');assert.ok(replay<sql.indexOf('INSERT INTO macrogoal_readiness_private.attestations'));assert.match(sql,/prior IS DISTINCT FROM p_request/);assert.match(sql,/PRIMARY KEY\(owner_id,request_id\)/);});
+test('batch validates before writes, duplicates and unexpected fields refused',()=>{assert.match(sql,/BETWEEN 1 AND 28/);assert.match(sql,/duplicate_day/);assert.match(sql,/jsonb_object_keys\(item\)/);assert.ok(sql.indexOf('duplicate_day')<sql.indexOf('INSERT INTO macrogoal_readiness_private.complete_days'));assert.match(sql,/confirmed'='true'::jsonb AND d->'confirmable'/);});
