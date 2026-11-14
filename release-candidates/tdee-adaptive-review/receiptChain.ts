@@ -21,7 +21,7 @@ export function verifySnapshotReceiptChain(value:unknown):VerifiedReceiptChain {
  g.user_id!==actor||g.is_active!==true||a.active_goal_id!==g.id||
  a.baseline_intake_kcal+a.accepted_delta_kcal!==g.daily_calories)return fail();
  if(rows.length===0){
- if(a.accepted_delta_kcal!==0||a.last_accepted_at!==null)return fail();
+ if(a.accepted_delta_kcal!==0||a.last_accepted_at!==null||!same(a.baseline_goal_snapshot,g))return fail();
  return {acceptedCount:0,acceptedDelta:0,lastAcceptedAt:null,receiptsVerified:true};
  }
  const ordered=[...rows].sort((x,y)=>time(rec(x)&&rec(x.receipt)&&rec(x.receipt.accepted_goal)?x.receipt.accepted_goal.created_at:null)-time(rec(y)&&rec(y.receipt)&&rec(y.receipt.accepted_goal)?y.receipt.accepted_goal.created_at:null));
@@ -44,7 +44,7 @@ export function verifySnapshotReceiptChain(value:unknown):VerifiedReceiptChain {
  r.acceptance_evidence.contract!=='as-of-revalidated-v1'||typeof payload.sourceFingerprint!=='string'||!/^[a-f0-9]{64}$/.test(payload.sourceFingerprint)||r.acceptance_evidence.fingerprint!==payload.sourceFingerprint)return fail();
  const at=time(accepted.created_at);
  if(!Number.isFinite(at)||at<=last||!Number.isFinite(time(r.acceptance_evidence.capturedAt))||time(r.acceptance_evidence.capturedAt)>at||
- (prior?!same(old,prior):old.daily_calories!==a.baseline_intake_kcal))return fail();
+ (prior?!same(old,prior):!same(old,a.baseline_goal_snapshot)))return fail();
  prior=accepted;last=at;net+=payload.deltaKcal;
  requests.add(r.request_id);proposals.add(p.id);goals.add(accepted.id);
  }
