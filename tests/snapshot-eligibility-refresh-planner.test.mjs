@@ -1,3 +1,4 @@
+/** Caps contract regression changed; execution pending because local runner is blocked. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {planSnapshotEligibilityRefresh} from '../release-candidates/tdee-adaptive-review/snapshotEligibilityRefreshPlanner.ts';
@@ -50,8 +51,13 @@ test('unreviewed policy, actor mismatch or stale source blocks',()=>{
  }
  assert.equal(planSnapshotEligibilityRefresh(fixture(),actor,now+30001).reason,'source_expired');
 });
-test('expiry is earlier policy boundary; nullable caps explicit only',()=>{
- const v=fixture();v.policy.expires_at='2026-11-14T12:00:10Z';v.policy.max_cumulative_delta_kcal=null;v.policy.max_intake_kcal=null;
+test('expiry remains earlier policy boundary with required numeric caps',()=>{
+ const v=fixture();v.policy.expires_at='2026-11-14T12:00:10Z';
  assert.equal(planSnapshotEligibilityRefresh(v,actor,now).eligibilityEvidence.expiresAt,'2026-11-14T12:00:10.000Z');
- v.policy.max_intake_kcal=undefined;assert.equal(planSnapshotEligibilityRefresh(v,actor,now).kind,'blocked');
+});
+test('refresh requires positive finite caps without defaults or source mutation',()=>{
+ for(const value of [null,undefined,0,-1,NaN,Infinity,'none'])for(const key of ['max_cumulative_delta_kcal','max_intake_kcal']){
+  const v=fixture();v.policy[key]=value;const before=structuredClone(v);
+  assert.equal(planSnapshotEligibilityRefresh(v,actor,now).kind,'blocked');assert.deepEqual(v,before);
+ }
 });
