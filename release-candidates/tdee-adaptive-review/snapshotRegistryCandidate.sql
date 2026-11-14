@@ -65,7 +65,7 @@ BEGIN
 END $secure$;
 
 CREATE FUNCTION macrogoal_snapshot_review_private.snapshot_time_valid(value text, at_time timestamptz)
-RETURNS boolean LANGUAGE plpgsql IMMUTABLE SET search_path TO pg_catalog,pg_temp AS $fn$
+RETURNS boolean LANGUAGE plpgsql STABLE SET search_path TO pg_catalog,pg_temp AS $fn$
 DECLARE captured timestamptz;
 BEGIN
  IF value IS NULL OR value !~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$' OR at_time IS NULL OR NOT isfinite(at_time) THEN RETURN false; END IF;
@@ -210,8 +210,9 @@ BEGIN
     coalesce(snapshot->>'sourceFingerprint','') !~ '^[a-f0-9]{64}$' OR coalesce(p.payload->>'sourceFingerprint','') !~ '^[a-f0-9]{64}$' OR
     p.payload->>'snapshotSemantics' IS DISTINCT FROM 'as-of-revalidated-v1' OR
     NOT macrogoal_snapshot_review_private.snapshot_time_valid(snapshot->>'capturedAt',clock_timestamp()) OR
+    (p.payload->>'sourceCapturedAt')::timestamptz>(snapshot->>'capturedAt')::timestamptz OR
     snapshot->>'sourceFingerprint' IS DISTINCT FROM p.payload->>'sourceFingerprint' OR
-   snapshot#>>'{context,premium}' IS DISTINCT FROM 'true' OR snapshot#>>'{context,enabled}' IS DISTINCT FROM 'true' THEN
+   snapshot#>'{context,premium}' IS DISTINCT FROM 'true'::jsonb OR snapshot#>'{context,enabled}' IS DISTINCT FROM 'true'::jsonb THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'context_changed'); END IF;
  SELECT * INTO g FROM public.goals WHERE id=anchor.active_goal_id AND user_id=actor AND is_active=true;
  IF NOT FOUND OR to_jsonb(g) IS DISTINCT FROM p.payload->'goalSnapshot' THEN
