@@ -1,3 +1,4 @@
+/** Caps contract regression changed; execution pending because local runner is blocked. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseSnapshotReviewContext} from '../release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts';
@@ -26,9 +27,9 @@ test('estimator gates never bypassed by confirmations',()=>{const v=fixture();v.
 
 test('changed journey or baseline goal cannot reuse calibration',()=>{for(const mutate of [v=>v.anchor.journey_binding='b'.repeat(64),v=>v.anchor.baseline_goal_snapshot.protein_g+=1]){const v=fixture();mutate(v);v.receiptChain.anchor=structuredClone(v.anchor);assert.equal(parseSnapshotReviewContext(v,actor,actor,now).kind,'blocked');}});
 
-test('explicit null optional limits survive parser without defaults',()=>{
- const v=fixture();v.policy.max_cumulative_delta_kcal=null;v.policy.max_intake_kcal=null;
- const r=parseSnapshotReviewContext(v,actor,actor,now);assert.equal(r.kind,'prepared_context');
- assert.equal(r.input.policy.maxNetDeltaKcal,null);assert.equal(r.input.policy.maxIntakeKcal,null);
- for(const value of [undefined,0,'none']){v.policy.max_intake_kcal=value;assert.equal(parseSnapshotReviewContext(v,actor,actor,now).kind,'blocked');}
+test('required caps reject null or invalid values without defaults or source mutation',()=>{
+ for(const value of [null,undefined,0,-1,NaN,Infinity,'none'])for(const key of ['max_cumulative_delta_kcal','max_intake_kcal']){
+  const v=fixture();v.policy[key]=value;const before=structuredClone(v);
+  assert.equal(parseSnapshotReviewContext(v,actor,actor,now).kind,'blocked');assert.deepEqual(v,before);
+ }
 });
