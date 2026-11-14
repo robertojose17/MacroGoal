@@ -25,6 +25,8 @@ CREATE TABLE macrogoal_snapshot_review_private.anchors (
  active_goal_id uuid NOT NULL, baseline_intake_kcal integer NOT NULL CHECK(baseline_intake_kcal>0),
  baseline_expenditure_kcal integer NOT NULL CHECK(baseline_expenditure_kcal>0),
  baseline_captured_at timestamptz NOT NULL CHECK(isfinite(baseline_captured_at)),
+ journey_binding text NOT NULL CHECK(journey_binding ~ '^[a-f0-9]{64}$'),
+ baseline_goal_snapshot jsonb NOT NULL CHECK(jsonb_typeof(baseline_goal_snapshot)='object' AND octet_length(baseline_goal_snapshot::text)<=16384),
  accepted_delta_kcal integer NOT NULL DEFAULT 0 CHECK(abs(accepted_delta_kcal)<=10000),
  last_accepted_at timestamptz, revoked boolean NOT NULL DEFAULT false,
  UNIQUE(owner_id,active_goal_id)
@@ -215,6 +217,10 @@ BEGIN
     coalesce(p.payload->>'readinessFingerprint','') !~ '^[a-f0-9]{64}$' OR
     encode(sha256(convert_to((readiness-'capturedAt')::text,'UTF8')),'hex') IS DISTINCT FROM p.payload->>'readinessFingerprint' THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'readiness_changed'); END IF;
+ IF anchor.journey_binding IS DISTINCT FROM readiness->>'journeyBinding' THEN
+  RETURN macrogoal_snapshot_review_private.reject_request(p_request,'journey_changed'); END IF;
+ IF anchor.last_accepted_at IS NULL AND anchor.baseline_goal_snapshot IS DISTINCT FROM to_jsonb(g) THEN
+  RETURN macrogoal_snapshot_review_private.reject_request(p_request,'baseline_goal_changed'); END IF;
  -- Revalidated snapshot; source writes after this cut may enter the next review.
  snapshot:=public.observed_get_tdee_snapshot_v1();
  IF jsonb_typeof(snapshot) IS DISTINCT FROM 'object' OR snapshot->>'version' IS DISTINCT FROM 'observed-snapshot-v1' OR
