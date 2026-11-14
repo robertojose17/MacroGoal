@@ -1,7 +1,7 @@
 {
   "format": "macrogoal-static-bundle-review-v1",
   "repository": "robertojose17/MacroGoal",
-  "sourceCommit": "bd43bc331fd7c734822967e04ef56f3b79593a1e",
+  "sourceCommit": "888e83172c8542eb713fdac8952571d08e5d2f86",
   "functionSlug": "progress-intelligence",
   "entrypoint": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts",
   "deploymentPerformed": false,
@@ -14,7 +14,8 @@
     "sourceBlobs": "read back against sourceCommit",
     "bundleCompilation": "NOT RUN",
     "backendExecution": "BLOCKED; do not bypass runner rejection",
-    "productionE2E": "NOT RUN for this source release"
+    "productionE2E": "NOT RUN for this source release",
+    "scopedTesterPreflight": "Existing helper reused before context reads; included in static closure; new adapter tests NOT RUN."
   },
   "release": {
     "recommendationsEnabled": false,
@@ -109,10 +110,11 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotOrchestrationSupabaseAdapter.ts",
-      "gitBlobSha": "f9facb8893b4dab624c5f796e3f63be3b666bb85",
+      "gitBlobSha": "5b6e615ae700342ffebff5db69de5374ff935656",
       "imports": [
         "./snapshotReviewOrchestration.ts",
         "./snapshotServerRuntime.ts",
+        "../../supabase/functions/observed-snapshot-release/functions/observed-program/scoped-tester-refresh.mjs",
         "./snapshotSupabaseAdapter.ts"
       ]
     },
