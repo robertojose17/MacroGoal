@@ -1,0 +1,551 @@
+{
+  "format": "macrogoal-static-bundle-review-v1",
+  "repository": "robertojose17/MacroGoal",
+  "sourceCommit": "bd43bc331fd7c734822967e04ef56f3b79593a1e",
+  "functionSlug": "progress-intelligence",
+  "entrypoint": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts",
+  "deploymentPerformed": false,
+  "deploymentAllowed": false,
+  "verification": {
+    "relativeImportClosure": "reviewed",
+    "fileCount": 59,
+    "missingRelativeImports": 0,
+    "repositoryEscapes": 0,
+    "sourceBlobs": "read back against sourceCommit",
+    "bundleCompilation": "NOT RUN",
+    "backendExecution": "BLOCKED; do not bypass runner rejection",
+    "productionE2E": "NOT RUN for this source release"
+  },
+  "release": {
+    "recommendationsEnabled": false,
+    "acceptanceEnabled": false,
+    "reviewedPolicyId": null,
+    "reductions": "fail-closed until individual total-deficit contract is verified"
+  },
+  "packaging": [
+    "Preserve repository-relative paths exactly; do not strip supabase/functions/observed-snapshot-release from uploaded paths.",
+    "Include every listed source file and use the exact entrypoint; do not deploy the legacy supabase/functions/progress-intelligence/index.ts.",
+    "Verify every blob against sourceCommit before packaging; regenerate this manifest if any dependency changes.",
+    "The manifest is evidence of static source closure only, not permission to deploy or activate."
+  ],
+  "externalDependencies": [
+    "npm:@supabase/supabase-js@2.83.0"
+  ],
+  "previousDeployment": {
+    "version": 17,
+    "fileCount": 43,
+    "logicDifferences": [
+      "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts"
+    ],
+    "typeOnlyDifferences": [
+      "supabase/functions/observed-snapshot-release/functions/progress-intelligence/types.ts",
+      "supabase/functions/observed-snapshot-release/functions/preview-progress/types.ts"
+    ],
+    "unchangedLiveFiles": 40,
+    "newSourceFiles": 16
+  },
+  "remainingGates": [
+    "Resolve blocked backend test execution without bypassing the rejection.",
+    "Compile the complete preserved-path Deno bundle and check production dispatcher regressions.",
+    "Review and define policy values and individual total-deficit controls; no clinical review is implied by boolean flags.",
+    "Verify actual own-account end-to-end behavior and restoration before claiming ready.",
+    "No TestFlight submission without separate owner approval."
+  ],
+  "files": [
+    {
+      "path": "release-candidates/tdee-adaptive-review/apiContract.ts",
+      "gitBlobSha": "0f95cf462520f0a52fb54b1bac8643ffe37b1939",
+      "imports": []
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/proposal.ts",
+      "gitBlobSha": "caaea4fcd3924e1f62185ca9bbea89cf8f36ca24",
+      "imports": []
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/proposalProducer.ts",
+      "gitBlobSha": "239e9632698c837e410f988d3df3c4aafbf9ebdf",
+      "imports": [
+        "./proposal.ts",
+        "./apiContract.ts"
+      ]
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/receiptChain.ts",
+      "gitBlobSha": "c2b7bda8162badf2f02ced6a32f011e2dad346bc",
+      "imports": []
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/snapshotAdjustment.ts",
+      "gitBlobSha": "2dd96b197506c2a6b92abce41f3882176131162e",
+      "imports": []
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/snapshotBootstrapPlanner.ts",
+      "gitBlobSha": "d75082b5ec5df07b071aae3222b7982159649146",
+      "imports": [
+        "../../supabase/functions/observed-snapshot-release/functions/observed-program/snapshot.ts",
+        "../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts",
+        "../../supabase/functions/observed-snapshot-release/functions/_shared/dynamic-tdee.ts",
+        "./snapshotReviewContextParser.ts"
+      ]
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/snapshotEligibilityRefreshPlanner.ts",
+      "gitBlobSha": "146c288919f8b909b02807b58ccbef7915936a6e",
+      "imports": [
+        "../../supabase/functions/observed-snapshot-release/functions/observed-program/snapshot.ts",
+        "../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts",
+        "../../supabase/functions/observed-snapshot-release/functions/_shared/dynamic-tdee.ts",
+        "./receiptChain.ts",
+        "./snapshotReviewContextParser.ts"
+      ]
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/snapshotHttpHandler.ts",
+      "gitBlobSha": "d204e886688a22a2bdc903f32e77519e8d2b55c2",
+      "imports": []
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/snapshotOrchestrationSupabaseAdapter.ts",
+      "gitBlobSha": "f9facb8893b4dab624c5f796e3f63be3b666bb85",
+      "imports": [
+        "./snapshotReviewOrchestration.ts",
+        "./snapshotServerRuntime.ts",
+        "./snapshotSupabaseAdapter.ts"
+      ]
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/snapshotProposalProducer.ts",
+      "gitBlobSha": "fbadab3e780695a25c6a19ba9dc85608e4fa888a",
+      "imports": [
+        "./snapshotAdjustment.ts",
+        "./proposal.ts",
+        "./proposalProducer.ts"
+      ]
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts",
+      "gitBlobSha": "28e0fae518f784337e1fb7ab4842ab32428bd71e",
+      "imports": [
+        "../../supabase/functions/observed-snapshot-release/functions/observed-program/snapshot.ts",
+        "../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts",
+        "../../supabase/functions/observed-snapshot-release/functions/_shared/dynamic-tdee.ts",
+        "./receiptChain.ts",
+        "./snapshotAdjustment.ts",
+        "./snapshotProposalProducer.ts"
+      ]
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/snapshotReviewOrchestration.ts",
+      "gitBlobSha": "8979a8a45327df65f92a918a3888e503c6b67c10",
+      "imports": [
+        "./proposal.ts",
+        "./snapshotReviewContextParser.ts",
+        "./snapshotBootstrapPlanner.ts",
+        "./snapshotEligibilityRefreshPlanner.ts",
+        "./snapshotProposalProducer.ts",
+        "./proposalProducer.ts"
+      ]
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/snapshotServerRuntime.ts",
+      "gitBlobSha": "328e95712557ce855e91495998fb569d0a2cde24",
+      "imports": [
+        "./proposal.ts",
+        "./snapshotReviewContextParser.ts",
+        "./snapshotProposalProducer.ts",
+        "./proposalProducer.ts"
+      ]
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/snapshotSupabaseAdapter.ts",
+      "gitBlobSha": "3036f93c9f0a8e91ca2c13d0c5717000d2011625",
+      "imports": [
+        "./snapshotServerRuntime.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/_shared/dynamic-tdee.ts",
+      "gitBlobSha": "d078e1c32d83a7b2be4e26e05856af52885b19f6",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/_shared/require-own-user.ts",
+      "gitBlobSha": "57319c988c019c59973bdd8038a9ca3e034cbd59",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/adaptive-review/dispatcher.ts",
+      "gitBlobSha": "e23f22cd6478ed1a0c24210b7b26443749de65b1",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/adaptive-review/runtime.ts",
+      "gitBlobSha": "d793c9457ef04f0301cc14c1cdf7505a13f5f182",
+      "imports": [
+        "npm:@supabase/supabase-js@2.83.0",
+        "../../../../../release-candidates/tdee-adaptive-review/proposal.ts",
+        "../../../../../release-candidates/tdee-adaptive-review/snapshotHttpHandler.ts",
+        "../../../../../release-candidates/tdee-adaptive-review/snapshotOrchestrationSupabaseAdapter.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts",
+      "gitBlobSha": "3e573fd28517c685fbb793adbfd35b6ef290f06b",
+      "imports": [
+        "../_shared/dynamic-tdee.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/observed-program/dispatcher.ts",
+      "gitBlobSha": "616e7971e70a56052e5a844d2d2df6fea1501433",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/observed-program/handler.ts",
+      "gitBlobSha": "88dcfb714656ef58c21002f0dd4b583839fff832",
+      "imports": [
+        "../dynamic-tdee/data.ts",
+        "../_shared/dynamic-tdee.ts",
+        "./snapshot.ts",
+        "./dispatcher.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/observed-program/runtime.ts",
+      "gitBlobSha": "29f59fc2c6a8d37e4bc95e9f71c00c8a49961401",
+      "imports": [
+        "./scoped-tester-refresh.mjs",
+        "npm:@supabase/supabase-js@2.83.0",
+        "./handler.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/observed-program/scoped-tester-refresh.mjs",
+      "gitBlobSha": "46e88e045b88117fbace89df20760ce93b29a2f6",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/observed-program/snapshot.ts",
+      "gitBlobSha": "877421c4c63eab084ccdfdec1fc3f27cbc360cfd",
+      "imports": [
+        "./handler.ts",
+        "../dynamic-tdee/data.ts",
+        "../_shared/dynamic-tdee.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/observed-progress/dispatcher.ts",
+      "gitBlobSha": "60c1a09ea94adf26c37dffdd4750f0e4aab1bc30",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/observed-progress/handler.ts",
+      "gitBlobSha": "4d9643e21dfad423dfdc40044af476d964bb18c1",
+      "imports": [
+        "./dispatcher.ts",
+        "../preview-progress/historicalTargets.ts",
+        "../preview-progress/weightSource.ts",
+        "../preview-progress/trendWeight.ts",
+        "../preview-progress/weightPace.ts",
+        "../preview-progress/loggingReliability.ts",
+        "../preview-progress/adherence.ts",
+        "../preview-progress/assemble.ts",
+        "../preview-progress/config.ts",
+        "../dynamic-tdee/data.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/observed-progress/runtime.ts",
+      "gitBlobSha": "12521011c2c1e8fb35c0b795d0e723ac761ad207",
+      "imports": [
+        "npm:@supabase/supabase-js@2.83.0",
+        "./handler.ts",
+        "../preview-progress/queries.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-program/handler.ts",
+      "gitBlobSha": "592c0d2a87f5cdeca2cd9711fe3dcdc055ea083a",
+      "imports": [
+        "../dynamic-tdee/data.ts",
+        "../_shared/dynamic-tdee.ts",
+        "../progress-intelligence/dispatcher.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-program/runtime.ts",
+      "gitBlobSha": "5f71431f45862201e2efe34c0236ef1e43c9077a",
+      "imports": [
+        "npm:@supabase/supabase-js@2.83.0",
+        "./handler.ts",
+        "../dynamic-tdee/data.ts",
+        "../_shared/dynamic-tdee.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/accepted-goal-history.ts",
+      "gitBlobSha": "369c9ae1bd3503b417e3d342d7808bc906dfa893",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/adherence.ts",
+      "gitBlobSha": "1037f60e45dc5dc60d9e74fe90fe3e54f473f17d",
+      "imports": [
+        "./types.ts",
+        "./loggingReliability.ts",
+        "./historicalTargets.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/assemble.ts",
+      "gitBlobSha": "c772211c68e90838fbe2908951b6e4e1171b6965",
+      "imports": [
+        "./types.ts",
+        "./queries.ts",
+        "./weightSource.ts",
+        "./types.ts",
+        "./loggingReliability.ts",
+        "./types.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/config.ts",
+      "gitBlobSha": "f5b01d0c8182a14207a5eefad7a309ef55950bb5",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/dispatcher.ts",
+      "gitBlobSha": "67d73f2428ecde4996da2fc6e98895718306d488",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/handler.ts",
+      "gitBlobSha": "139b09034731d6fd61329c8887dfadf2f1760005",
+      "imports": [
+        "./dispatcher.ts",
+        "./historicalTargets.ts",
+        "./weightSource.ts",
+        "./trendWeight.ts",
+        "./weightPace.ts",
+        "./loggingReliability.ts",
+        "./adherence.ts",
+        "./assemble.ts",
+        "./config.ts",
+        "../dynamic-tdee/data.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/historicalTargets.ts",
+      "gitBlobSha": "4ac4d5bbd6a5da4db6a92dd358187d66fead2367",
+      "imports": [
+        "./config.ts",
+        "./accepted-goal-history.ts",
+        "./accepted-goal-history.ts",
+        "./accepted-goal-history.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/loggingReliability.ts",
+      "gitBlobSha": "0cb3c68e59ef4ed2cc45ac5cdb640ccc1b47c017",
+      "imports": [
+        "./types.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/queries.ts",
+      "gitBlobSha": "abbadcffef0816222f0355ca5583d551e871d075",
+      "imports": [
+        "../dynamic-tdee/data.ts",
+        "../_shared/dynamic-tdee.ts",
+        "../progress-intelligence/queries.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/runtime.ts",
+      "gitBlobSha": "7664a19dfed36d63ff5e7056a939956a34f48b8f",
+      "imports": [
+        "npm:@supabase/supabase-js@2.83.0",
+        "./handler.ts",
+        "./queries.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/trendWeight.ts",
+      "gitBlobSha": "9b7dbd4faf1e87f7fa047d2afcba7d82c7dddc84",
+      "imports": [
+        "./weightSource.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/types.ts",
+      "gitBlobSha": "7336e7055f88e092631c47903c9ba1cb03fc952a",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/weightPace.ts",
+      "gitBlobSha": "9bfbe536b590d732fb0fd594e1842f1a06f9770a",
+      "imports": [
+        "./weightSource.ts",
+        "./types.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/weightSource.ts",
+      "gitBlobSha": "44bc9104bbcc7688300ea0afa5423e388af7a0f0",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/adherence.ts",
+      "gitBlobSha": "55d6fddfe33a890e25265ec3c9f367e1f844f6e6",
+      "imports": [
+        "./types.ts",
+        "./loggingReliability.ts",
+        "./historicalTargets.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/assemble.ts",
+      "gitBlobSha": "d351363fb3b9f90c65645ef35e97737e5fec58e5",
+      "imports": [
+        "./types.ts",
+        "./queries.ts",
+        "./weightSource.ts",
+        "./types.ts",
+        "./loggingReliability.ts",
+        "./progressStatus.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/config.ts",
+      "gitBlobSha": "5748c91f23c1b56bd8049689fc1de28206b5ec98",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/dispatcher.ts",
+      "gitBlobSha": "dfe86ed7194db87830d41ffe6e63c5dc9274fd73",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/historicalTargets.ts",
+      "gitBlobSha": "369ea89faf336a84df086ddd8297e05db44558a1",
+      "imports": [
+        "./types.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts",
+      "gitBlobSha": "fe0e9bc1a54d54d66976e01a04e6762f84b97998",
+      "imports": [
+        "../adaptive-review/dispatcher.ts",
+        "../observed-program/dispatcher.ts",
+        "../observed-progress/dispatcher.ts",
+        "./legacy-handler.ts",
+        "./dispatcher.ts",
+        "../preview-progress/dispatcher.ts",
+        "../preview-program/runtime.ts",
+        "../preview-progress/runtime.ts",
+        "../observed-program/runtime.ts",
+        "../observed-progress/runtime.ts",
+        "../adaptive-review/runtime.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/legacy-handler.ts",
+      "gitBlobSha": "480eef0953692c856ec1856028d36d031c67e192",
+      "imports": [
+        "./queries.ts",
+        "./weightSource.ts",
+        "./trendWeight.ts",
+        "./weightPace.ts",
+        "./historicalTargets.ts",
+        "./loggingReliability.ts",
+        "./adherence.ts",
+        "./progressStatus.ts",
+        "./projection.ts",
+        "./tdee.ts",
+        "./assemble.ts",
+        "./config.ts",
+        "../_shared/require-own-user.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/loggingReliability.ts",
+      "gitBlobSha": "104b88bd97d859d90a6545a0ee201ca3b79d829d",
+      "imports": [
+        "./types.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/progressStatus.ts",
+      "gitBlobSha": "a4867f66c858e255aaadecc81dd9f0391fb0c31d",
+      "imports": [
+        "./types.ts",
+        "./weightSource.ts",
+        "./weightPace.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/projection.ts",
+      "gitBlobSha": "0a28741af6272ba5d98ddc42949f13becb754952",
+      "imports": [
+        "./types.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/queries.ts",
+      "gitBlobSha": "5f8fd4ccb257d582b81743d8dc40a305b4e43259",
+      "imports": [
+        "npm:@supabase/supabase-js@2.83.0"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/tdee.ts",
+      "gitBlobSha": "296b3e5ed45a103454f4c97faeb8b984a3f3a7c6",
+      "imports": [
+        "./types.ts",
+        "../_shared/dynamic-tdee.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/trendWeight.ts",
+      "gitBlobSha": "dc6e6723978fda10c79e52e3c6c4c38d4049d9e0",
+      "imports": [
+        "./weightSource.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/types.ts",
+      "gitBlobSha": "7336e7055f88e092631c47903c9ba1cb03fc952a",
+      "imports": []
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/weightPace.ts",
+      "gitBlobSha": "94f08c06b81166900b296cc3966014874fb8f45f",
+      "imports": [
+        "./weightSource.ts",
+        "./types.ts",
+        "./config.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/weightSource.ts",
+      "gitBlobSha": "0b83a79065990f2af1833ca3b568accfeb18fd08",
+      "imports": []
+    }
+  ]
+}
