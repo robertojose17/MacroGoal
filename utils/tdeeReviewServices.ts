@@ -17,7 +17,7 @@ export function makeTdeeReviewServices(actor:()=>string|undefined):TdeeReviewSer
     // Receipt reconciliation outlives the screen. Never expose old-account results,
     // but invalidate same-account consumers even if navigation unmounted the hook.
     const exact=parseTdeeReceipt(raw,parseTdeeAcceptRequest(request,owner));
-    if(exact.status==='committed'){const latest=await supabase.auth.getSession();if(!latest.error&&latest.data.session?.user.id===owner)emitGoalChanged(owner);}
+    if(exact.status==='committed'){const latest=await supabase.auth.getSession();if(latest.error||latest.data.session?.user.id!==owner)throw Error('account_changed');emitGoalChanged(owner);}
    }
    current(owner);return raw;
   }finally{clearTimeout(timer);}
