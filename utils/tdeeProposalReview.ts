@@ -2,6 +2,7 @@
 export type TdeeTargets={calories:number;proteinG:number;carbsG:number;fatsG:number;fiberG:number};
 export type TdeeProposal={type:'persisted_reviewed_proposal';actionable:true;ownerId:string;id:string;digest:string;policyVersion:string;engineVersion:string;expiresAt:string;current:TdeeTargets;target:TdeeTargets;deltaKcal:number;sourceDate:string};
 export type TdeeAcceptRequest={ownerId:string;requestId:string;proposalId:string;proposalDigest:string};
+export type TdeeOffer={version:'adaptive-offer-v1';request:TdeeAcceptRequest;status:'available';proposal:TdeeProposal}|{version:'adaptive-offer-v1';request:TdeeAcceptRequest;status:'expired'|'consumed'|'unavailable'|'not_found';proposal:null};
 export type TdeeReceipt={version:'adaptive-receipt-v1';status:'committed';request:TdeeAcceptRequest;acceptedGoal:{id:string;updatedAt:string};goalState:'current'|'superseded'}|{version:'adaptive-receipt-v1';status:'rejected';request:TdeeAcceptRequest;reason:string}|{version:'adaptive-receipt-v1';status:'not_found';request:TdeeAcceptRequest};
 const obj=(v:unknown):Record<string,unknown>=>{if(!v||typeof v!=='object'||Array.isArray(v))throw Error('invalid_proposal');return v as Record<string,unknown>;};
 const string=(v:unknown)=>{if(typeof v!=='string'||!v||v.length>200)throw Error('invalid_proposal');return v;};
@@ -24,12 +25,19 @@ export function parseTdeeReceipt(raw:unknown,request:TdeeAcceptRequest):TdeeRece
  if(v.status==='rejected')return {version:'adaptive-receipt-v1',status:'rejected',request:echo,reason:string(v.reason)};
  throw Error('invalid_receipt');
 }
+export function parseTdeeOffer(raw:unknown,request:TdeeAcceptRequest):TdeeOffer {
+ const v=obj(raw),echo=parseTdeeAcceptRequest(v.request,request.ownerId);if(v.version!=='adaptive-offer-v1'||!sameRequest(echo,request))throw Error('invalid_offer');
+ if(v.status==='available'){const proposal=parseTdeeProposal(v.proposal,request.ownerId);if(proposal.id!==request.proposalId||proposal.digest!==request.proposalDigest)throw Error('invalid_offer');return {version:'adaptive-offer-v1',request:echo,status:'available',proposal};}
+ if(!['expired','consumed','unavailable','not_found'].includes(String(v.status))||v.proposal!==null)throw Error('invalid_offer');
+ return {version:'adaptive-offer-v1',request:echo,status:v.status as 'expired'|'consumed'|'unavailable'|'not_found',proposal:null};
+}
 export type TdeeReviewServices={
  actor:()=>string|undefined;newRequestId:()=>string;
- readPending:(owner:string)=>Promise<unknown|null>;writePending:(owner:string,request:TdeeAcceptRequest)=>Promise<void>;clearPending:(owner:string)=>Promise<void>;
+ readPending:(owner:string)=>Promise<unknown|null>;writePending:(owner:string,request:TdeeAcceptRequest)=>Promise<void>;clearPending:(request:TdeeAcceptRequest)=>Promise<void>;
  accept:(request:TdeeAcceptRequest)=>Promise<unknown>;receipt:(request:TdeeAcceptRequest)=>Promise<unknown>;
+ offer:(request:TdeeAcceptRequest)=>Promise<unknown>;closeExpired:(request:TdeeAcceptRequest)=>Promise<unknown>;
 };
-export type ReviewResult={status:'idle'}|{status:'unresolved';request:TdeeAcceptRequest}|{status:'resolved';receipt:Exclude<TdeeReceipt,{status:'not_found'}>};
+export type ReviewResult={status:'idle'}|{status:'unresolved';request:TdeeAcceptRequest;offer?:TdeeOffer}|{status:'resolved';receipt:Exclude<TdeeReceipt,{status:'not_found'}>};
 const actorFlights=new Set<string>();
 /** One instance per mounted review surface. The durable journal protects across remounts. */
 export function createTdeeReviewController(service:TdeeReviewServices){
@@ -40,20 +48,32 @@ export function createTdeeReviewController(service:TdeeReviewServices){
  const finish=async(raw:unknown,request:TdeeAcceptRequest):Promise<ReviewResult>=>{
   current(request.ownerId);const receipt=parseTdeeReceipt(raw,request);
   if(receipt.status==='not_found')return {status:'unresolved',request};
-  await service.clearPending(request.ownerId);current(request.ownerId);return {status:'resolved',receipt};
+  await service.clearPending(request);current(request.ownerId);return {status:'resolved',receipt};
  };
  const recoverRequest=async(request:TdeeAcceptRequest):Promise<ReviewResult>=>{
-  try{return await finish(await service.receipt(request),request);}catch{current(request.ownerId);return {status:'unresolved',request};}
+  try{const result=await finish(await service.receipt(request),request);if(result.status!=='unresolved')return result;
+   const raw=await service.offer(request);current(request.ownerId);return {status:'unresolved',request,offer:parseTdeeOffer(raw,request)};
+  }catch{current(request.ownerId);return {status:'unresolved',request};}
  };
+ const requirePending=async(request:TdeeAcceptRequest)=>{const owner=actor();parseTdeeAcceptRequest(request,owner);const raw=await service.readPending(owner);current(owner);if(raw===null||!sameRequest(parseTdeeAcceptRequest(raw,owner),request))throw Error('pending_changed');};
  return {
   get busy(){return busy;},
   recover:()=>run(async():Promise<ReviewResult>=>{const owner=actor(),raw=await service.readPending(owner);current(owner);if(raw===null)return {status:'idle'};return recoverRequest(parseTdeeAcceptRequest(raw,owner));}),
+  retryReviewed:(offer:TdeeOffer)=>run(async():Promise<ReviewResult>=>{
+   // Called only after the exact recovered targets are displayed and explicitly accepted.
+   const request=offer.request;await requirePending(request);const checked=parseTdeeOffer(offer,request);if(checked.status!=='available')throw Error('offer_unavailable');
+   try{return await finish(await service.accept(request),request);}catch{current(request.ownerId);return recoverRequest(request);}
+  }),
+  closeExpired:(request:TdeeAcceptRequest)=>run(async():Promise<ReviewResult>=>{await requirePending(request);try{return await finish(await service.closeExpired(request),request);}catch{current(request.ownerId);return recoverRequest(request);}}),
   accept:(proposal:TdeeProposal)=>run(async():Promise<ReviewResult>=>{
    const owner=actor();parseTdeeProposal(proposal,owner);const prior=await service.readPending(owner);current(owner);
    if(prior!==null)return recoverRequest(parseTdeeAcceptRequest(prior,owner));
    const request=parseTdeeAcceptRequest({ownerId:owner,requestId:service.newRequestId(),proposalId:proposal.id,proposalDigest:proposal.digest},owner);
    // Must persist successfully before any mutation; storage failure is fail closed.
-   await service.writePending(owner,request);current(owner);parseTdeeProposal(proposal,owner);
+   await service.writePending(owner,request);
+   // Known-unsent failures may clear only this request while its actor is still current.
+   // Once accept() is invoked, every error is ambiguous and retains its request identity.
+   try{current(owner);parseTdeeProposal(proposal,owner);}catch(error){if(service.actor()===owner)await service.clearPending(request);throw error;}
    try{return await finish(await service.accept(request),request);}catch{current(owner);return recoverRequest(request);}
   })
  };

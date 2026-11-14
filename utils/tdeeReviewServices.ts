@@ -2,7 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import {supabase,SUPABASE_PROJECT_URL,supabasePublicKey} from '@/lib/supabase/client';
 import {parseTdeeAcceptRequest,parseTdeeProposal,type TdeeReviewServices,type TdeeProposal} from '@/utils/tdeeProposalReview';
-const key=(owner:string)=>'@tdee_accept_pending_v1:'+owner;
+const prefix=(owner:string)=>'@tdee_accept_pending_v2:'+owner+':';
+const key=(request:{ownerId:string;requestId:string})=>prefix(request.ownerId)+request.requestId;
 /** No tokens or nutrition data in the journal. Account-owned pending requests survive navigation. */
 export function makeTdeeReviewServices(actor:()=>string|undefined):TdeeReviewServices {
  const current=(owner:string)=>{if(actor()!==owner)throw Error('account_changed');};
@@ -13,11 +14,13 @@ export function makeTdeeReviewServices(actor:()=>string|undefined):TdeeReviewSer
   try{const response=await fetch(SUPABASE_PROJECT_URL+'/rest/v1/rpc/'+name,{method:'POST',signal:abort.signal,cache:'no-store',headers:{apikey:supabasePublicKey,Authorization:'Bearer '+data.session.access_token,'Content-Type':'application/json'},body:JSON.stringify({p_request:request})});current(owner);if(!response.ok)throw Error('review_unavailable');const raw=await response.json();current(owner);return raw;}finally{clearTimeout(timer);}
  };
  return {actor,newRequestId:()=>Crypto.randomUUID(),
-  readPending:async owner=>{current(owner);const raw=await AsyncStorage.getItem(key(owner));current(owner);return raw===null?null:parseTdeeAcceptRequest(JSON.parse(raw),owner);},
-  writePending:async(owner,request)=>{current(owner);const safe=parseTdeeAcceptRequest(request,owner);await AsyncStorage.setItem(key(owner),JSON.stringify(safe));current(owner);},
-  clearPending:async owner=>{current(owner);await AsyncStorage.removeItem(key(owner));current(owner);},
+  readPending:async owner=>{current(owner);const keys=(await AsyncStorage.getAllKeys()).filter(k=>k.startsWith(prefix(owner))).sort();current(owner);for(const candidate of keys){const raw=await AsyncStorage.getItem(candidate);current(owner);if(raw===null)continue;const request=parseTdeeAcceptRequest(JSON.parse(raw),owner);if(key(request)!==candidate)throw Error('invalid_journal');return request;}return null;},
+  writePending:async(owner,request)=>{current(owner);const safe=parseTdeeAcceptRequest(request,owner);await AsyncStorage.setItem(key(safe),JSON.stringify(safe));current(owner);},
+  clearPending:async request=>{current(request.ownerId);const safe=parseTdeeAcceptRequest(request,request.ownerId);await AsyncStorage.removeItem(key(safe));current(request.ownerId);},
   accept:request=>rpc('tdee_accept_snapshot_proposal_v1',request,request.ownerId),
-  receipt:request=>rpc('tdee_read_snapshot_receipt_v1',request,request.ownerId)
+  receipt:request=>rpc('tdee_read_snapshot_receipt_v1',request,request.ownerId),
+  offer:request=>rpc('tdee_read_snapshot_offer_v1',request,request.ownerId),
+  closeExpired:request=>rpc('tdee_close_expired_snapshot_request_v1',request,request.ownerId)
  };
 }
 /** Prepared only. Do not call until the reviewed issuer selector is enabled. */
