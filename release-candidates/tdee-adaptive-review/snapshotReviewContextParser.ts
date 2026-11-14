@@ -61,9 +61,10 @@ export function parseSnapshotReviewContext(value:unknown,actor:string,proposalId
  const baseline=time(a.baseline_captured_at);
  if(!Number.isFinite(baseline)||baseline>captured)return block('anchor_baseline_unverified');
  if(verified.acceptedCount===0&&now-baseline<14*86400000)return block('initial_review_cooldown');
- const numberKeys=['max_step_kcal','max_step_fraction','max_cumulative_delta_kcal','min_days_between_acceptances','min_intake_kcal','max_intake_kcal'];
+ const numberKeys=['max_step_kcal','max_step_fraction','min_days_between_acceptances','min_intake_kcal'];
  if(!numberKeys.every(k=>typeof policy[k]==='number'&&Number.isFinite(policy[k])&&(policy[k] as number)>0)||
  (policy.min_days_between_acceptances as number)<14||
+ !['max_cumulative_delta_kcal','max_intake_kcal'].every(k=>policy[k]===null||(typeof policy[k]==='number'&&Number.isFinite(policy[k])&&(policy[k] as number)>0))||
  typeof a.baseline_expenditure_kcal!=='number'||!Number.isFinite(a.baseline_expenditure_kcal)||a.baseline_expenditure_kcal<=0)return block('policy_or_anchor_invalid');
  const gap=(a.baseline_intake_kcal as number)-a.baseline_expenditure_kcal;
  const direction=g.goal_type==='lose'?gap<0:g.goal_type==='gain'?gap>0:g.goal_type==='maintain'?gap===0:false;
@@ -74,8 +75,8 @@ export function parseSnapshotReviewContext(value:unknown,actor:string,proposalId
  acceptedCount:verified.acceptedCount,receiptsVerified:verified.receiptsVerified,lastAcceptedAt:verified.lastAcceptedAt,baselineCapturedAt:baseline},
  observedExpenditure:estimate.kcalPerDay,
  policy:{reviewed:true,maxStepKcal:policy.max_step_kcal as number,maxStepFraction:policy.max_step_fraction as number,
- maxNetDeltaKcal:policy.max_cumulative_delta_kcal as number,reviewIntervalDays:policy.min_days_between_acceptances as number,
- incrementKcal:engine.incrementKcal,minIntakeKcal:Math.max(policy.min_intake_kcal as number,profile.sex==='female'?1200:1500),maxIntakeKcal:policy.max_intake_kcal as number},
+ maxNetDeltaKcal:policy.max_cumulative_delta_kcal as number|null,reviewIntervalDays:policy.min_days_between_acceptances as number,
+ incrementKcal:engine.incrementKcal,minIntakeKcal:Math.max(policy.min_intake_kcal as number,profile.sex==='female'?1200:1500),maxIntakeKcal:policy.max_intake_kcal as number|null},
  evidence:{eligible:true,modelReviewed:true,logging:'confirmed',capturedAt:captured,fingerprint:observation.sourceFingerprint,
  stability:'stable',goalDirectionValid:direction},now};
  // These booleans result from explicit record/chain/estimator checks above.
