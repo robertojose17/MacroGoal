@@ -1,12 +1,12 @@
--- Additive read-only API. Review before applying; no goals/settings/source writes.
--- One STABLE invocation uses one MVCC snapshot for every context/source read.
+-- Read-only snapshot API, scoped tester authority aligned with observed-program.
+-- Nutrition inputs use one materialized source query. Tester authority checks freshness at invocation.
 BEGIN;
 CREATE FUNCTION public.observed_get_tdee_snapshot_v1()
-RETURNS jsonb
-LANGUAGE plpgsql
-STABLE
-SECURITY INVOKER
-SET search_path TO pg_catalog, pg_temp
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE
+ SECURITY INVOKER
+ SET search_path TO 'pg_catalog', 'pg_temp'
 AS $function$
 DECLARE
   actor uuid := auth.uid();
@@ -35,10 +35,12 @@ BEGIN
       CASE WHEN p.valid_zone THEN (captured_at AT TIME ZONE p.timezone)::date END AS today,
       coalesce(s.enabled,false) AS enabled, coalesce(s.review_day,0) AS review_day,
       s.started_on, to_jsonb(s) AS settings_record,
-      EXISTS(SELECT 1 FROM public.subscriptions sub
+      CASE WHEN actor = '3af0eabf-e742-4657-80c4-130dfa867502'::uuid
+        THEN coalesce((macrogoal_observed_private.tester_access(actor)->>'allowed')::boolean,false)
+        ELSE EXISTS(SELECT 1 FROM public.subscriptions sub
         WHERE sub.user_id=actor::text AND sub.status IN ('active','trialing')
         AND sub.entitlement_ids && ARRAY['pro','Macrogoal Pro','macrogoal_pro','premium']::text[]
-        AND (sub.expiration_at IS NULL OR sub.expiration_at>captured_at)) AS premium
+        AND (sub.expiration_at IS NULL OR sub.expiration_at>captured_at)) END AS premium
     FROM profile p LEFT JOIN macrogoal_observed_private.settings s ON s.user_id=actor
   ), goal_rows AS MATERIALIZED (
     SELECT g.id,g.daily_calories,g.protein_g,g.carbs_g,g.fats_g,g.fiber_g,
@@ -148,6 +150,4 @@ END;
 $function$;
 REVOKE ALL ON FUNCTION public.observed_get_tdee_snapshot_v1() FROM PUBLIC,anon,service_role;
 GRANT EXECUTE ON FUNCTION public.observed_get_tdee_snapshot_v1() TO authenticated;
-COMMENT ON FUNCTION public.observed_get_tdee_snapshot_v1() IS
-  'Owner-scoped, read-only observation snapshot. Not a prescription, source-write lock or clinical eligibility approval.';
 COMMIT;
