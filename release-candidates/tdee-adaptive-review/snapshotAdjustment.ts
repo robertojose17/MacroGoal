@@ -21,10 +21,10 @@ const blocked=(reason:string):SnapshotAdjustmentResult=>({kind:'blocked',reason}
 export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotAdjustmentResult {
  if(!input||!input.current||!input.anchor||!input.policy||!input.evidence||!finite(input.now))return blocked('invalid_input');
  const {current:g,anchor:a,policy:p,evidence:e,now}=input;
- if(!p.reviewed||!e.eligible||!e.modelReviewed)return blocked('review_required');
+ if(p.reviewed!==true||e.eligible!==true||e.modelReviewed!==true)return blocked('review_required');
  if(e.logging!=='confirmed')return blocked('logging_confirmation_required');
- if(e.stability!=='stable'||!e.goalDirectionValid)return blocked('evidence_uncertain');
- if(!finite(e.capturedAt)||e.capturedAt>now||now-e.capturedAt>30000||!/^[a-f0-9]{64}$/.test(e.fingerprint))return blocked('source_expired_or_invalid');
+ if(e.stability!=='stable'||e.goalDirectionValid!==true)return blocked('evidence_uncertain');
+ if(!finite(e.capturedAt)||e.capturedAt>now||now-e.capturedAt>30000||typeof e.fingerprint!=='string'||!/^[a-f0-9]{64}$/.test(e.fingerprint))return blocked('source_expired_or_invalid');
  if(![p.maxStepKcal,p.maxStepFraction,p.maxNetDeltaKcal,p.reviewIntervalDays,p.incrementKcal,p.minIntakeKcal,p.maxIntakeKcal].every(positive)||
   p.maxStepKcal>200||p.maxStepFraction>1||!Number.isInteger(p.reviewIntervalDays)||!Number.isInteger(p.incrementKcal)||
   p.maxIntakeKcal<p.minIntakeKcal)return blocked('policy_invalid');
@@ -32,7 +32,7 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
   Math.abs(g.calories-4*g.proteinG-4*g.carbsG-9*g.fatsG)>10)return blocked('current_target_invalid');
  if(g.calories<p.minIntakeKcal||g.calories>p.maxIntakeKcal)return blocked('current_target_outside_policy');
  if(!positive(a.intake)||!positive(a.expenditure)||!positive(input.observedExpenditure)||!finite(a.acceptedDelta)||
-  !a.receiptsVerified||!Number.isSafeInteger(a.acceptedCount)||a.acceptedCount<0||a.intake+a.acceptedDelta!==g.calories||Math.abs(a.acceptedDelta)>p.maxNetDeltaKcal)return blocked('anchor_mismatch');
+  a.receiptsVerified!==true||!Number.isSafeInteger(a.acceptedCount)||a.acceptedCount<0||a.intake+a.acceptedDelta!==g.calories||Math.abs(a.acceptedDelta)>p.maxNetDeltaKcal)return blocked('anchor_mismatch');
  if(a.lastAcceptedAt!==null&&(!finite(a.lastAcceptedAt)||a.lastAcceptedAt>now))return blocked('acceptance_history_invalid');
  if((a.acceptedCount>0&&a.lastAcceptedAt===null)||(a.acceptedCount===0&&(a.acceptedDelta!==0||a.lastAcceptedAt!==null)))return blocked('acceptance_history_invalid');
  if(a.lastAcceptedAt!==null&&now-a.lastAcceptedAt<p.reviewIntervalDays*86400000)return blocked('review_cooldown');
