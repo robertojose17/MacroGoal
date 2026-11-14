@@ -1,4 +1,4 @@
-/** Isolated candidate: no application entrypoint mounts this dispatcher. */
+/** Explicit review request. POST may prepare baseline/eligibility/proposal; never GET. */
 export const SNAPSHOT_REVIEW_MODE='adaptive-review-v1';
 type Runtime=(request:unknown)=>Promise<{reason:string;proposal:unknown}>;
 export function createSnapshotHttpHandler(runtime:Runtime,allowedOrigins:readonly string[]){
@@ -14,11 +14,11 @@ export function createSnapshotHttpHandler(runtime:Runtime,allowedOrigins:readonl
   if(modes.length!==1||modes[0]!==SNAPSHOT_REVIEW_MODE||
    [...url.searchParams.keys()].some(k=>k!=='mode'))return reply(400,'invalid_request');
   if(request.method==='OPTIONS'){
-   headers.set('Access-Control-Allow-Methods','GET, OPTIONS');
+   headers.set('Access-Control-Allow-Methods','POST, OPTIONS');
    headers.set('Access-Control-Allow-Headers','authorization, apikey, x-client-info, content-type');
    return new Response(null,{status:204,headers});
   }
-  if(request.method!=='GET'){headers.set('Allow','GET, OPTIONS');return reply(405,'method_not_allowed');}
+  if(request.method!=='POST'){headers.set('Allow','POST, OPTIONS');return reply(405,'method_not_allowed');}
   if(request.body!==null)return reply(400,'invalid_request');
   const authorization=request.headers.get('Authorization');
   if(!authorization||authorization.length>16384||!/^Bearer [^\s]+$/.test(authorization))return reply(401,'authentication_required');
