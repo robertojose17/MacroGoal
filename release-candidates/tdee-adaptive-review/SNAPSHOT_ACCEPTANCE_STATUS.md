@@ -1,48 +1,46 @@
 # Snapshot-based adaptive acceptance status
 
-2026-11-14. Snapshot-as-of concurrency semantics approved by the owner. This document does not activate recommendation generation or goal mutation.
+2026-11-14. Recommendations remain OFF. No target has been changed persistently by this work. No TestFlight release.
 
-## New contract
-- No source-table triggers, global writer isolation changes, source fences, or all-user backfill.
-- Lock the authenticated profile and exact current goal; compare their non-null versions and complete goal snapshot.
-- Revalidate a coherent source snapshot after those locks. Fresh acceptance capture is at most 30 seconds old.
-- A food/weight write after that capture may affect the following review. This is explicitly not the former all-writers-through-commit guarantee.
-- Preserve exact request identity, repeatable receipts, atomic goal/anchor/proposal/receipt writes, and replay after expiry or disabling.
-- Record the accepted source fingerprint, capture time and contract version.
-- Proposal lifetime is bounded separately (five-minute engineering ceiling). It is not the freshness interval of the revalidation.
+## Live, verified
+- Observational TDEE uses the scoped verified Premium authority without an owner/admin bypass.
+- Readiness UI is deployed on web: eligibility self-confirmation and explicitly complete food days, reversible by the user. Self-report is not clinical review.
+- Private snapshot registry, own-actor context/read/accept/receipt wrappers and service-only issuance/bootstrap wrappers are installed.
+- Five registry tables have RLS and no direct authenticated/service table grants. Anonymous acceptance and authenticated issuance are denied.
+- Registry readback: zero policies, anchors, proposals and receipts. Therefore installed acceptance cannot issue/apply a recommendation.
 
-## Implemented, still inactive
-- snapshotRegistryCandidate.sql: private registry and own-actor acceptance candidate with reviewed snapshot contract gate; no grants, seeds or public wrapper.
-- snapshotAdjustment.ts: pure signed anchored draft calculation, step ceiling of 200 kcal plus explicit fraction, policy floor/ceiling, net-deviation limit, interval and receipt-history checks. Threshold values are policy inputs, not hidden defaults or medical guarantees. No live import, no automatic target changes.
-- snapshotProposalProducer.ts prepares bounded offers from supplied reviewed inputs, remains release-OFF. receiptChain.ts verifies actor/request/proposal/goal continuity and derives acceptance count/net from a complete private chain; it does not make missing history valid.
-- The deployed observation snapshot now uses the same scoped verified tester authority as observed-program, removing the remaining owner/admin bypass. Other subscription branches are preserved.
-- The prior serialized-source registry remains a historical candidate, not a dependency of this contract.
+## Snapshot contract
+Authenticated profile and exact current goal are locked and compared; recent sources and readiness are revalidated. Source changes after the capture enter a subsequent review. This is not a global source-writer serialization guarantee.
+Atomic acceptance preserves goal/anchor/proposal/receipt consistency and request identity. Receipts support recovery after expiry.
+A baseline is bound to its complete starting goal and journey; it is not silently reset. Initial calibration and subsequent acceptance require at least fourteen days, plus the independent observational data requirements.
 
-## Verification actually performed
-- Registry definitions compiled in the existing Supabase database under a transaction that explicitly ended ROLLBACK.
-- Timestamp boundary (30 seconds), stale, future, invalid date, missing timezone and null checks passed.
-- Closed API privileges, no seeded policy/proposal, and no source trigger checks passed.
-- Subsequent catalog read confirmed neither the private schema nor acceptance function persisted.
-- Ten signed-adjustment tests passed using the actual TypeScript engine transformed by Node on the connected Windows computer. They include both directions, no stacked deficit, large expenditure swings, floors, expiry, cooldown, anchor mismatch, and return-to-baseline history.
-- This is not full app type-check, live multi-session acceptance, real-user nutritional efficacy, or clinical validation.
+## Important source/runtime difference
+The prepared TypeScript engine preserves protein and fiber, allocates the residual energy between carbohydrates and fat, and permits explicitly nullable cumulative/intake caps.
+The deployed SQL still requires non-null cumulative/intake caps and does not yet include the new exact-protein equality guard.
+Do not deploy or enable these candidates as if they were already a single verified release. The persistent policy change remains unapproved; no workaround or retry is authorized. No numerical cap has been selected or seeded.
 
-- Ten observation snapshot contract tests passed after the scoped authority fix. Runtime rollback checks included authenticated-role access and revoked tester authority; binding restored exactly.
-- Six receipt-chain tests passed, including signed round trips whose net is zero but acceptance count remains two.
+## Evidence actually obtained
+- Actual own-account SQL acceptance transaction passed: revoked readiness rejected; atomic goal/receipt creation; identical replay; consumed proposal reuse and mismatched request rejection. Mandatory rollback restored the complete original state digest.
+- Bootstrap rollback passed: service-only writer; exact goal/profile/journey CAS; creation; repetition does not restart baseline; no target mutation. Original state digest matched afterward.
+- Current candidate suites: 56 passing tests across engine, producer, context parser, bootstrap and runtime; seven receipt-chain tests also passed. They run real module bodies with Node TypeScript stripping, not a full project type-check.
+- Readiness UI: 67 focused tests and real web open/cancel checks passed without saving health declarations or complete-day attestations.
+- Full live proposal/acceptance UI E2E is still pending. Software tests do not establish nutritional efficacy or clinical validity.
 
-## Remaining before activation
-1. Reviewed product policy and evidence/eligibility inputs. Do not infer complete food logging from meal count or Premium. The owner authorized minimal self-confirmation and complete-day UI; readiness SQL/UI implementation is in progress, not yet installed or collecting data. Self-report is not model review or clinical validation.
-2. A coherent private producer/adapter linking the current source snapshot and goal CAS to the new registry; no manufactured reviewed flags.
-3. Persistent private deployment, authenticated wrappers and tests of two accepts, manual edits, expiry while waiting, lost-response replay and atomic rollback. Existing application consumers must refresh the same active goal.
-4. UI presentation/explicit acceptance/recovery and account E2E. TestFlight remains separately authorized.
+## Remaining
+1. Resolve the policy/guard contract before activation; no unsupported universal accumulated or intake ceiling.
+2. Wire trusted server bootstrap, eligibility refresh and proposal route, preserving actor identity and immutable baseline.
+3. Connect explicit acceptance/recovery UI and refresh all consumers of the same accepted goal.
+4. Validate the coherent release and own-account end-to-end scenarios. No automatic goal application.
 
-## Evidence and limitations
-MacroFactor describes weekly updates and initial convergence over several weeks:
+## Evidence and limits
+The 200 kcal maximum is the owner's product limit. Fourteen days and five percent are engineering choices, not universal clinical standards.
+MacroFactor describes smoothing and avoiding catch-up deficits, not a universal 400 kcal accumulated cap or 5000 kcal intake ceiling:
 https://help.macrofactorapp.com/en/articles/222-how-does-macrofactor-make-adjustments-for-a-weight-gain-or-weight-loss-goal
-https://help.macrofactorapp.com/en/articles/206-what-should-i-do-if-my-initial-expenditure-or-recommended-energy-intake-seems-too-high-or-too-low
 
-A proposed fourteen-day acceptance cadence is a product choice, not evidence that fourteen days always provide reliable data. The current observational engine retains its existing 21–28-day coverage checks.
+Weight response is dynamic; a fixed energy-per-weight approximation is not a complete individualized model:
+https://pmc.ncbi.nlm.nih.gov/articles/PMC3880593/
 
-PostgreSQL explains why a serializable acceptance transaction alone does not replace participating legacy writers:
-https://www.postgresql.org/docs/current/applevel-consistency.html
+Common calorie ranges in weight-management guidance are individualized treatment strategies, not guarantees that a floor is safe for every person:
+https://pmc.ncbi.nlm.nih.gov/articles/PMC5819889/
 
-Product floors and adjustment ceilings are not universally safe prescriptions. Eligibility and uncertainty handling still matter. No proprietary competitor algorithm has been copied or claimed.
+The estimator's numerical domain must not be represented as a clinical intake range. No proprietary competitor algorithm or clinical validation is claimed.
