@@ -44,6 +44,7 @@ export function parseSnapshotReviewContext(value:unknown,actor:string,proposalId
  !hash(r.profileBinding)||!hash(r.journeyBinding)||!hash(value.readinessFingerprint)||!rec(r.eligibility)||
  r.eligibility.current!==true||r.eligibility.adult!==true||r.eligibility.response!=='criteria_confirmed'||
  !Array.isArray(r.days)||r.days.length>29||!Number.isFinite(time(r.capturedAt))||time(r.capturedAt)>now||now-time(r.capturedAt)>30000)return block('readiness_unavailable');
+ if(a.journey_binding!==r.journeyBinding)return block('journey_binding_mismatch');
  const days=new Map<string,Obj>();
  for(const d of r.days){
  if(!rec(d)||typeof d.date!=='string'||dayNumber(d.date)===null||d.date>=r.today||!hash(d.contentHash)||
