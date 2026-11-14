@@ -45,3 +45,11 @@ test('observation snapshot cannot mark a recommendation actionable', () => {
   assert.match(sql, /'proposal',NULL/);
   assert.match(sql, /'safety',jsonb_build_object\('enabled',false,'eligibility','unverified'\)/);
 });
+
+test('scoped tester relies on verified authority, never owner or admin bypass', () => {
+  assert.match(sql, /THEN coalesce\(\(macrogoal_observed_private\.tester_access\(actor\)->>'allowed'\)::boolean,false\)/);
+  assert.doesNotMatch(statements, /owner_profile|is_admin|user_type/);
+});
+test('other users retain subscription entitlement and captured-time expiry logic', () => {
+  assert.match(sql, /ELSE EXISTS\(SELECT 1 FROM public\.subscriptions sub[\s\S]+sub\.expiration_at>captured_at\)\) END AS premium/);
+});
