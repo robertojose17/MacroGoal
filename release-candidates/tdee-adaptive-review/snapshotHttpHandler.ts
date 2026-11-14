@@ -1,6 +1,6 @@
 /** Explicit review request. POST may prepare baseline/eligibility/proposal; never GET. */
 export const SNAPSHOT_REVIEW_MODE='adaptive-review-v1';
-type Runtime=(request:unknown)=>Promise<{reason:string;proposal:unknown}>;
+type Runtime=(request:unknown)=>Promise<{reason:string;proposal:unknown;mayHaveWritten?:boolean}>;
 export function createSnapshotHttpHandler(runtime:Runtime,allowedOrigins:readonly string[]){
  const origins=new Set(allowedOrigins);
  return async(request:Request):Promise<Response>=>{
@@ -8,7 +8,7 @@ export function createSnapshotHttpHandler(runtime:Runtime,allowedOrigins:readonl
   const headers=new Headers({'Cache-Control':'private, no-store','Pragma':'no-cache','Vary':'Origin',
    'Content-Type':'application/json; charset=utf-8','X-Content-Type-Options':'nosniff'});
   if(origin&&origins.has(origin))headers.set('Access-Control-Allow-Origin',origin);
-  const reply=(status:number,reason:string,proposal:unknown=null)=>new Response(JSON.stringify({reason,proposal}),{status,headers});
+  const reply=(status:number,reason:string,proposal:unknown=null,mayHaveWritten=false)=>new Response(JSON.stringify({reason,proposal,...(mayHaveWritten?{mayHaveWritten:true}:{})}),{status,headers});
   if(origin&&!origins.has(origin))return reply(403,'origin_not_allowed');
   const url=new URL(request.url),modes=url.searchParams.getAll('mode');
   if(modes.length!==1||modes[0]!==SNAPSHOT_REVIEW_MODE||
@@ -25,7 +25,11 @@ export function createSnapshotHttpHandler(runtime:Runtime,allowedOrigins:readonl
   try{
    const result=await runtime({authorization});
    if(result.reason==='review_available'&&result.proposal!==null)return reply(200,'review_available',result.proposal);
-   if(result.reason==='authentication_required'||result.reason==='account_changed')return reply(401,result.reason);
+   // Preserve successful calibration and uncertain writes before auth/error mapping.
+    if(result.reason==='calibration_required'&&result.proposal===null&&result.mayHaveWritten===true)return reply(202,'calibration_required',null,true);
+    if(['same_anchored_target','policy_limit'].includes(result.reason)&&result.proposal===null)return reply(200,'no_change',null,result.mayHaveWritten===true);
+    if(result.mayHaveWritten===true)return reply(409,'reconciliation_required',null,true);
+    if(result.reason==='authentication_required'||result.reason==='account_changed')return reply(401,result.reason);
    if(result.reason==='safety_review_required')return reply(503,'safety_review_required');
    return reply(503,result.reason==='source_error'?'source_error':'review_not_ready');
   }catch{return reply(503,'source_error');}
