@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { supabase, SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
-import { readShadowAuthority, shadowFailureCategory } from '@/utils/premiumAuthority/shadowTransport';
+import { readShadowAuthority, shadowFailureDiagnostic } from '@/utils/premiumAuthority/shadowTransport';
 import { createShadowSingleFlight } from '@/utils/premiumAuthority/shadowSingleFlight';
 import type { Decision } from '@/utils/premiumAuthority/authorityClient';
 const shadowRequests = createShadowSingleFlight();
+const getShadowSession = () => supabase.auth.getSession();
 /** Read-only diagnostic. Native callers remain disabled.
  * Result is never an isPremium flag and must not be used to decide access during shadow migration.
  */
@@ -20,9 +21,9 @@ export function usePremiumAuthorityShadow(expectedOwner:string|null,enabled=fals
    const isCurrent=()=>active&&revision===rev;
    try{
     const result=await shadowRequests.read(expectedOwner,(signal,current)=>readShadowAuthority({endpoint:SUPABASE_PROJECT_URL+'/functions/v1/common-premium-authority',apiKey:supabasePublicKey,expectedOwner,
-     getSession:()=>supabase.auth.getSession(),request:fetch,signal,isCurrent:current}));
+     getSession:getShadowSession,request:(input,init)=>globalThis.fetch(input,init),signal,isCurrent:current}));
     if(isCurrent()){setObservation(result);setUnavailable(false);}
-   }catch(error){if(isCurrent()){setObservation(null);setUnavailable(true);console.warn('[PremiumAuthority] shadow unavailable:',shadowFailureCategory(error));}}
+   }catch(error){if(isCurrent()){setObservation(null);setUnavailable(true);const diagnostic=shadowFailureDiagnostic(error);console.warn('[PremiumAuthority] shadow unavailable:',diagnostic.category,diagnostic.code,diagnostic.status??'');}}
   };
   const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
    invalidate();if(session?.user.id!==expectedOwner)shadowRequests.invalidate(expectedOwner);if(session?.user.id===expectedOwner)queueMicrotask(()=>{if(active)void read();});
