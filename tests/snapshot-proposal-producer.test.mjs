@@ -29,3 +29,12 @@ test('readiness binding is explicit and preserved for acceptance revalidation',(
  binding.readinessFingerprint=value;assert.equal(prepareSnapshotProposal(input,binding).kind,'blocked');
  }
 });
+
+test('persisted snapshot payload preserves accepted protein and fiber',()=>{
+ for(const observed of [2300,2500]){
+ const {input,binding}=fixture();input.observedExpenditure=observed;const p=prepareSnapshotProposal(input,binding);
+ assert.equal(p.kind,'prepared');assert.equal(p.record.payload.target.proteinG,150);assert.equal(p.record.payload.target.fiberG,30);
+ assert.equal(p.record.payload.target.carbsG,observed===2300?200:230);
+ assert.equal(p.record.payload.target.fatsG,observed===2300?56:64);
+ }
+});
