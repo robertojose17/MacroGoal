@@ -235,3 +235,25 @@ test('unmarked fields do not become evidence and malformed marked fields block s
  assert.equal(diagnoseSnapshotRateReview(x,actor,now).reason,'observation_invalid');
  }
 });
+
+function explicitZeroNutrition(){
+ const v=markedNutrition(),sources=v.observation.sources;
+ sources.nutritionEvidenceVersion='user-entered-v1';
+ sources.items.forEach((i,n)=>Object.assign(i,{id:'20000000-0000-4000-8000-'+String(n+1).padStart(12,'0'),
+ nutrition_revision:null,nutrition_evidence:null}));
+ const i=sources.items.at(-1);i.protein=0;i.nutrition_revision='30000000-0000-4000-8000-000000000001';
+ i.nutrition_evidence={version:'user-entered-v1',ownerId:actor,itemId:i.id,revision:i.nutrition_revision,status:'active',
+ declaredFields:['protein'],values:{calories:i.calories,protein:i.protein,carbs:i.carbs,fats:i.fats,fiber:i.fiber}};
+ return v;
+}
+test('explicit current zero contributes to same confirmed-day denominator',()=>{
+ const v=explicitZeroNutrition(),r=diagnoseSnapshotRateReview(v,actor,now);
+ assert.equal(r.kind,'rate_diagnostic');assert.equal(r.loggedIntake.proteinG,540/14);
+ assert.equal(r.recommendation,null);
+});
+test('evidence marker absent keeps zero unknown and stale evidence fails closed',()=>{
+ const v=explicitZeroNutrition();delete v.observation.sources.nutritionEvidenceVersion;
+ assert.equal(diagnoseSnapshotRateReview(v,actor,now).loggedIntake.proteinG,null);
+ const x=explicitZeroNutrition();x.observation.sources.items.at(-1).nutrition_revision='30000000-0000-4000-8000-000000000002';
+ assert.equal(diagnoseSnapshotRateReview(x,actor,now).reason,'observation_invalid');
+});
