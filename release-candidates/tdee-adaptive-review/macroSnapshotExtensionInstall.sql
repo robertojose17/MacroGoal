@@ -41,5 +41,5 @@ BEGIN
 END $candidate$;
 SELECT md5(pg_get_functiondef('public.observed_get_tdee_snapshot_v1()'::regprocedure)) AS candidate_body_md5;
 COMMIT;
--- Not enough to install: consumer parser/averages, data provenance and authenticated
--- own-actor integration tests remain. Zero fiber is default0, not evidence of zero.
+-- This projection-only migration does not deploy the macro consumer or activate TDEE.
+-- Authenticated integration and recommendation validation remain separate release gates.
