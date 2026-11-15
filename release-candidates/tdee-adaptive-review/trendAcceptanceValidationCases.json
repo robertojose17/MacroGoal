@@ -1,0 +1,684 @@
+{
+  "version": "trend-acceptance-cases-v1",
+  "status": "PREPARED_NOT_EXECUTED",
+  "purpose": "Synthetic validation cases only; no runtime imports, policy values, clinical approval or production data.",
+  "sources": [
+    {
+      "url": "https://help.macrofactorapp.com/en/articles/21-weight-trend",
+      "supports": "Use multi-day trend rather than reacting to isolated scale readings. Exact proprietary smoothing and confidence interval are not specified."
+    },
+    {
+      "url": "https://help.macrofactorapp.com/en/articles/19-change-rate",
+      "supports": "Their reported change rate uses trend changes over 20 days expressed weekly; this is descriptive, not a selected MacroGoal window or clinical endorsement."
+    }
+  ],
+  "reviewAsOf": "2026-10-29T12:00:00Z",
+  "cases": [
+    {
+      "id": "stable_reference",
+      "weights": [
+        {
+          "date": "2026-10-01",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-02",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-03",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-04",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-05",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-06",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-07",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-08",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-09",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-10",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-11",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-12",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-13",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-14",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-15",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-16",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-17",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-18",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-19",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-20",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-21",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-22",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-23",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-24",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-25",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-26",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-27",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-28",
+          "kg": 80
+        }
+      ],
+      "oracle": [
+        "Deterministic output for identical inputs and algorithm version.",
+        "Finite values; zero drift for constant data if model supports this case.",
+        "No invented reliability from absence of noise."
+      ]
+    },
+    {
+      "id": "isolated_spike",
+      "weights": [
+        {
+          "date": "2026-10-01",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-02",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-03",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-04",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-05",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-06",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-07",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-08",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-09",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-10",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-11",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-12",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-13",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-14",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-15",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-16",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-17",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-18",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-19",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-20",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-21",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-22",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-23",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-24",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-25",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-26",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-27",
+          "kg": 82
+        },
+        {
+          "date": "2026-10-28",
+          "kg": 80
+        }
+      ],
+      "oracle": [
+        "Compare trend and rate to stable_reference; record sensitivity, do not invent numeric pass threshold.",
+        "A single weigh-in is not independently sufficient authorization to change a goal.",
+        "Any candidate obeys all existing gates and the user's200-kcal ceiling; no recommendation if uncertainty is unverified."
+      ]
+    },
+    {
+      "id": "sustained_change",
+      "weights": [
+        {
+          "date": "2026-10-01",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-02",
+          "kg": 79.95
+        },
+        {
+          "date": "2026-10-03",
+          "kg": 79.9
+        },
+        {
+          "date": "2026-10-04",
+          "kg": 79.85
+        },
+        {
+          "date": "2026-10-05",
+          "kg": 79.8
+        },
+        {
+          "date": "2026-10-06",
+          "kg": 79.75
+        },
+        {
+          "date": "2026-10-07",
+          "kg": 79.7
+        },
+        {
+          "date": "2026-10-08",
+          "kg": 79.65
+        },
+        {
+          "date": "2026-10-09",
+          "kg": 79.6
+        },
+        {
+          "date": "2026-10-10",
+          "kg": 79.55
+        },
+        {
+          "date": "2026-10-11",
+          "kg": 79.5
+        },
+        {
+          "date": "2026-10-12",
+          "kg": 79.45
+        },
+        {
+          "date": "2026-10-13",
+          "kg": 79.4
+        },
+        {
+          "date": "2026-10-14",
+          "kg": 79.35
+        },
+        {
+          "date": "2026-10-15",
+          "kg": 79.3
+        },
+        {
+          "date": "2026-10-16",
+          "kg": 79.25
+        },
+        {
+          "date": "2026-10-17",
+          "kg": 79.2
+        },
+        {
+          "date": "2026-10-18",
+          "kg": 79.15
+        },
+        {
+          "date": "2026-10-19",
+          "kg": 79.1
+        },
+        {
+          "date": "2026-10-20",
+          "kg": 79.05
+        },
+        {
+          "date": "2026-10-21",
+          "kg": 79
+        },
+        {
+          "date": "2026-10-22",
+          "kg": 78.95
+        },
+        {
+          "date": "2026-10-23",
+          "kg": 78.9
+        },
+        {
+          "date": "2026-10-24",
+          "kg": 78.85
+        },
+        {
+          "date": "2026-10-25",
+          "kg": 78.8
+        },
+        {
+          "date": "2026-10-26",
+          "kg": 78.75
+        },
+        {
+          "date": "2026-10-27",
+          "kg": 78.7
+        },
+        {
+          "date": "2026-10-28",
+          "kg": 78.65
+        }
+      ],
+      "oracle": [
+        "Signed trend direction should reflect sustained decrease after model eligibility is independently established.",
+        "Weekly units must be explicit; these synthetic data are not a prescribed weight-loss rate.",
+        "Record estimator lag and rate error for review; no arbitrary tolerance or claim of clinical validation."
+      ]
+    },
+    {
+      "id": "sparse",
+      "weights": [
+        {
+          "date": "2026-10-01",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-28",
+          "kg": 80
+        }
+      ],
+      "oracle": [
+        "Interpolated dates must never count as real observations or confirmed logging days.",
+        "Do not label sparse input reliable without an independently reviewed method.",
+        "Hold/no proposal while required sufficient-data evidence is absent."
+      ]
+    },
+    {
+      "id": "stale",
+      "weights": [
+        {
+          "date": "2026-05-01",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-02",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-03",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-04",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-05",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-06",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-07",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-08",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-09",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-10",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-11",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-12",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-13",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-14",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-15",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-16",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-17",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-18",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-19",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-20",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-21",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-22",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-23",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-24",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-25",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-26",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-27",
+          "kg": 80
+        },
+        {
+          "date": "2026-05-28",
+          "kg": 80
+        }
+      ],
+      "oracle": [
+        "No treating old records as recent by filling a long gap.",
+        "No new target without valid current source and policy freshness; preserve existing meta."
+      ]
+    },
+    {
+      "id": "future_exclusion",
+      "weights": [
+        {
+          "date": "2026-10-01",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-02",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-03",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-04",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-05",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-06",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-07",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-08",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-09",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-10",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-11",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-12",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-13",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-14",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-15",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-16",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-17",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-18",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-19",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-20",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-21",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-22",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-23",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-24",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-25",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-26",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-27",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-28",
+          "kg": 80
+        },
+        {
+          "date": "2026-10-30",
+          "kg": 50
+        }
+      ],
+      "oracle": [
+        "Future row must not enter calculation as of the specified review date.",
+        "Compare eligible source set to stable_reference, not merely rounded display."
+      ]
+    },
+    {
+      "id": "preview_accept_same_snapshot",
+      "oracle": [
+        "Bind actor, goal revision, profile/journey, source fingerprint, policy and engine versions, macro choice/version and expiry.",
+        "Accept exactly stored displayed targets, never independently recompute a different target from changed inputs.",
+        "Replay same request returns same receipt, not another goal change."
+      ]
+    },
+    {
+      "id": "preview_then_historical_edit",
+      "oracle": [
+        "Edit previous meal/weight or revoke macro choice after preview.",
+        "Acceptance must revalidate the declared authoritative contract and reject stale evidence where required.",
+        "Document approved snapshot-as-of race semantics: edits after source revalidation may enter next review; do not claim serializable food/weight writes."
+      ]
+    },
+    {
+      "id": "pending_accept_response_lost",
+      "oracle": [
+        "Reconcile exact request receipt; no automatic second POST or new request identity.",
+        "A missing receipt alone does not prove the first request did not commit.",
+        "After verified commit, refresh shared goal consumers even if modal closed."
+      ]
+    }
+  ],
+  "blockingDependencies": [
+    "Reviewed rate interval methodology and source provenance",
+    "Bound target-rate definition and reviewed conversion policy",
+    "Individual total-deficit review before reductions",
+    "Macro evidence revalidation at acceptance",
+    "Permitted backend test execution and real application E2E"
+  ],
+  "executionRules": [
+    "Do not execute with the previously rejected runner or evade its authorization review.",
+    "Fixtures are only synthetic source artifacts, not a new environment or user medical declarations.",
+    "No changes to production data, policy or release flags."
+  ]
+}
