@@ -30,14 +30,19 @@ export function macroPreferenceEvidence(actor:string,request:SnapshotMacroReques
   value.copyVersion!=='macro-choice-v1'||value.bindingStatus!=='available'||
   value.goalId!==requestCopy.binding.goalId||value.goalUpdatedAt!==requestCopy.binding.goalRevision||
   value.profileBinding!==requestCopy.profileBinding||value.journeyBinding!==requestCopy.journeyBinding||
-  !object(c)||c.current!==true||c.mode!=='smart'||c.copyVersion!=='macro-choice-v1'||c.splitBps!==null||
+  !object(c)||c.current!==true||!['smart','preserve_percent'].includes(c.mode as string)||c.copyVersion!=='macro-choice-v1'||
   !Number.isSafeInteger(value.choiceVersion)||(value.choiceVersion as number)<1||c.choiceVersion!==value.choiceVersion||
   c.goalUpdatedAt!==requestCopy.binding.goalRevision||c.profileBinding!==requestCopy.profileBinding||
   c.journeyBinding!==requestCopy.journeyBinding||!uuid(c.requestId))return out;
+ const split=c.splitBps;
+ if(c.mode==='smart'&&split!==null)return out;
+ if(c.mode==='preserve_percent'&&(!object(split)||Object.keys(split).length!==3||
+  !['protein','carbs','fats'].every(k=>Number.isSafeInteger(split[k])&&(split[k] as number)>=0&&(split[k] as number)<=10000)||
+  (split.protein as number)+(split.carbs as number)+(split.fats as number)!==10000))return out;
  const recorded=stamp(c.recordedAt);
  // A choice made after the source capture needs a new snapshot, not retroactive binding.
  if(!Number.isFinite(recorded)||recorded<0||recorded>source)return out;
- out.consent={mode:'smart',binding:structuredClone(requestCopy.binding),consentId:c.requestId as string,acceptedAt:recorded};
+ out.consent={mode:c.mode as 'smart'|'preserve_percent',binding:structuredClone(requestCopy.binding),consentId:c.requestId as string,acceptedAt:recorded,choiceVersion:value.choiceVersion as number,splitBps:structuredClone(split) as {protein:number;carbs:number;fats:number}|null};
  return out;
 }
 
