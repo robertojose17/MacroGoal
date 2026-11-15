@@ -1,7 +1,7 @@
 {
   "format": "macrogoal-static-bundle-review-v1",
   "repository": "robertojose17/MacroGoal",
-  "sourceCommit": "b64b0c25d4a61652fbdf2c0ffdae4596cbe18271",
+  "sourceCommit": "cbca250646ac55150d5aed8146a4aaf77b1926a0",
   "functionSlug": "progress-intelligence",
   "entrypoint": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts",
   "deploymentPerformed": false,
@@ -19,7 +19,8 @@
     "scopedMacroContext": "Connected load_macro phase reads own-actor preference and fixed service-only nutrition review getter. Empty administrative source installed; no reviewed rows. OFF. Source tests NOT RUN.",
     "futureWeightExclusion": "Candidate weightPace filters dates at or before as-of date. Two regressions prepared, NOT RUN.",
     "acceptanceErrors": "Static review: module load failures distinct from uncertain accepting-handler failures; uncertain outcomes require receipt reconciliation. Both immutable acceptance and recommendation switches required.",
-    "rateDiagnostic": "Program GET source invokes non-actionable 14-day summary only after existing context revalidation. No new reads or goal writes. Interval unverified; logging completeness unverified. Five endpoint tests prepared, NOT RUN. No deployment."
+    "rateDiagnostic": "Program GET source invokes non-actionable 14-day summary only after existing context revalidation. No new reads or goal writes. Interval unverified; logging completeness unverified. Five endpoint tests prepared, NOT RUN. No deployment.",
+    "explicitLoggingCoverage": "Internal same-statement review context adds explicit self-report day coverage after freshness, owner, date, hash shape and journey window checks. SQL read_state remains authority for content hash/confirmation; no separate client readiness read. Public program GET remains logging unverified. Three additional tests prepared NOT RUN."
   },
   "release": {
     "recommendationsEnabled": false,
@@ -154,7 +155,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts",
-      "gitBlobSha": "e0133f0c4a6461312d78293b3bb2b3087b39347f",
+      "gitBlobSha": "6349fec5f89a749ae5b097926a3fe4b74370a2c5",
       "imports": [
         "../../supabase/functions/observed-snapshot-release/functions/observed-program/snapshot.ts",
         "../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts",
