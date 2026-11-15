@@ -60,5 +60,12 @@ export function parseObservedSnapshot(value: unknown, owner: string): ObservedSn
       !rows.checkIns.every(r => inWindow(r.date) && finite(r.weight) && (r.updated_at === null || timestamp(r.updated_at)) && (r.created_at === null || timestamp(r.created_at))) ||
       !rows.meals.every(r => inWindow(r.date) && typeof r.meal_type === 'string') ||
       !rows.items.every(r => mealIds.has(r.meal_id) && finite(r.calories) && r.is_scheduled === false)) fail();
+  // Marker comes from the same fingerprinted SQL sources, never a client flag.
+  // Legacy snapshots remain valid; unmarked extra fields are not consumed.
+  if(Object.hasOwn(sources,'nutritionFieldsVersion')){
+    if(sources.nutritionFieldsVersion!=='logged-macros-v1')fail();
+    if(!rows.items.every(r=>['protein','carbs','fats','fiber'].every(k=>
+      Object.hasOwn(r,k)&&(r[k]===null||(finite(r[k])&&r[k]>=0)))))fail();
+  }
   return value as unknown as ObservedSnapshot;
 }
