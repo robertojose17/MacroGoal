@@ -137,3 +137,39 @@ test('macro port is only an additional pure phase, not a retry or implicit accep
  assert.equal(out.phase,'done');assert.equal(out.outcome.reason,'macro_evidence_binding_mismatch');
  assert.equal(out.outcome.mayHaveWritten,true);assert.deepEqual(advance(out,null),out);
 });
+
+function initial14Fixture(){
+ const v=fixture();v.policy.engine_version='rate-review-14d-v1';
+ v.currentGoal.loss_rate_lbs_per_week=1;v.observation.context.currentGoal.loss_rate_lbs_per_week=1;
+ v.profile.journeyStartDate='2026-10-01';v.observation.sources.journeyStartDate='2026-10-01';
+ // Synthetic source fixture only: no policy/review is persisted by this test.
+ v.anchor=null;v.eligibility=null;v.receiptChain=null;
+ return v;
+}
+function initial14(v=initial14Fixture()){
+ const b={...binding(),engineVersion:'rate-review-14d-v1'};
+ return advance(advance(beginSnapshotWorkflow(actor,actor,b),v.policy),v);
+}
+test('initial14 route does not bootstrap or require legacy21d when interval unavailable',()=>{
+ const v=initial14Fixture(),cut='2026-10-31';
+ v.observation.sources.checkIns=v.observation.sources.checkIns.filter(w=>w.date>=cut);
+ v.observation.counts.checkIns=v.observation.sources.checkIns.length;
+ const s=initial14(v);assert.equal(s.phase,'done');assert.equal(s.outcome.reason,'rate_uncertainty_unverified');
+ assert.equal(s.outcome.mayHaveWritten,false);assert.equal(s.outcome.proposal,null);
+ assert.equal(s.plan,undefined);assert.equal(s.record,undefined);
+});
+test('initial14 route rejects early journey and absent readiness without fallback',()=>{
+ for(const mutate of [v=>{v.profile.journeyStartDate='2026-11-05';v.observation.sources.journeyStartDate='2026-11-05';v.readiness.days=v.readiness.days.filter(d=>d.date>='2026-11-05');},v=>{v.readiness=null;}]){
+ const v=initial14Fixture();mutate(v);const s=initial14(v);
+ assert.equal(s.phase,'done');assert.equal(s.outcome.mayHaveWritten,false);assert.equal(s.outcome.proposal,null);
+ assert.notEqual(s.outcome.reason,'rate_uncertainty_unverified');assert.equal(s.plan,undefined);
+ }
+});
+test('initial14 server selection cannot enable OFF or accept request version override',async()=>{
+ let calls=0;const nope=()=>{calls++;throw Error('unexpected')};
+ const run=createSnapshotReviewOrchestrator({verifyAccessToken:nope,readPolicyExact:nope,loadOwnContext:nope,
+ bootstrapAsService:nope,refreshAsService:nope,issueAsService:nope}, {...binding(),engineVersion:'rate-review-14d-v1'});
+ assert.equal((await run({authorization:'Bearer token'})).reason,'safety_review_required');
+ assert.equal((await run({authorization:'Bearer token',engineVersion:'rate-review-14d-v1'})).reason,'invalid_request');
+ assert.equal(calls,0);
+});
