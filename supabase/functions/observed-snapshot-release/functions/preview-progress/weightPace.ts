@@ -13,7 +13,8 @@ export function computeWeightPace(points: WeightDataPoint[], todayStr: string): 
   const cutoff = new Date(todayStr + 'T00:00:00Z');
   cutoff.setDate(cutoff.getDate() - windowDays);
   const cutoffStr = cutoff.toISOString().split('T')[0];
-  const windowPoints = points.filter(p => p.date >= cutoffStr);
+  // An as-of calculation must never include future weigh-ins, even if a caller passes them.
+  const windowPoints = points.filter(p => p.date >= cutoffStr && p.date <= todayStr);
 
   const nullResult: WeightPace = {
     lbsPerWeek: null,
