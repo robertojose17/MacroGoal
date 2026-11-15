@@ -110,3 +110,6 @@ piecemeal. DDL takes transient locks even though runtime serialization is local.
 No backend runner or SQL was executed. The supplied rollback tail requires an
 explicit authorized own-account fixture and a reviewed authenticated harness.
 It does not create data automatically. Its final notes list unimplemented tests.
+
+## Reviewed scope correction
+Evidence asserts user-entered nutrients and portion for the item revision, not consumption or completeness on a date. Moving only the meal date does not revoke this nutritional assertion. Current ownership is always checked; item meal_id/portion/nutrients edits rotate revision. Snapshot/readiness must independently bind current dates and confirmed-day content hashes; never reuse nutrient evidence as a confirmation for the moved-to day. No additional meal-date trigger is proposed. Static reviewer accepted this scope; runtime testing remains pending.
