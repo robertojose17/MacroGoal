@@ -234,10 +234,11 @@ export function assessFourteenDaySnapshotReview(value:unknown,actor:string,now:n
  if(d.kind==='blocked')return d;
  const reason=!d.initialCoverage.coverageSufficient?d.initialCoverage.reason:
   d.paceComparison.status==='comparison'&&!d.paceComparison.outsideProductTolerance?'within_product_tolerance':
-  d.paceComparison.status!=='comparison'?d.paceComparison.reason:'rate_uncertainty_unverified';
+  d.paceComparison.status!=='comparison'?d.paceComparison.reason:
+  !d.sensitivity.outsideToleranceAcrossEnvelope?'rate_sensitivity_uncertain':'rate_uncertainty_unverified';
  return {version:'initial-rate-assessment-v1' as const,kind:'hold' as const,actionable:false as const,
   recommendation:null,reason,reevaluateAt:d.reevaluateAt,
-  coverage:d.initialCoverage,paceComparison:d.paceComparison,
+  coverage:d.initialCoverage,paceComparison:d.paceComparison,sensitivity:d.sensitivity,
   sourceCapturedAt:d.sourceCapturedAt,sourceFingerprint:d.sourceFingerprint,
   goalId:d.goalId,goalRevision:d.goalRevision};
 }
