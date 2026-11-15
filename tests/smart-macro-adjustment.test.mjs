@@ -50,7 +50,7 @@ test('custom consent must be explicit bound and smart',()=>{
 });
 test('absent expired restricted underage or truthy evidence blocks',()=>{
  const x=fixture();delete x.context;assert.equal(adjust(x).reason,'macro_context_required');
- for(const patch of [{status:true},{eligibility:'unknown'},{eligibility:'restricted'},{ageYears:18.99},{expiresAt:now},{reviewedAt:now+1},{expiresAt:Infinity}]){
+ for(const patch of [{status:true},{eligibility:'unknown'},{eligibility:'restricted'},{ageYears:18.99},{ageYears:101},{expiresAt:now},{reviewedAt:now+1},{expiresAt:Infinity}]){
  const y=fixture();Object.assign(y.context.review,patch);assert.equal(adjust(y).reason,'macro_review_required');
  }
 });
@@ -59,6 +59,7 @@ test('binding components and exact current target are checked',()=>{
  const x=fixture();x.context.binding[key]='other';assert.equal(adjust(x).reason,'macro_binding_mismatch');
  }
  const x=fixture();x.context.current.fiberG++;assert.equal(adjust(x).reason,'macro_binding_mismatch');
+ const y=fixture();y.binding.preset='unknown';y.context.binding.preset='unknown';assert.equal(adjust(y).reason,'macro_binding_mismatch');
 });
 test('malformed limits and numeric ranges fail closed',()=>{
  for(const v of [undefined,null,'130',NaN,Infinity,-1]){
