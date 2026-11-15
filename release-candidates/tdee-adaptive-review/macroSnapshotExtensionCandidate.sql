@@ -1,19 +1,23 @@
--- CANDIDATE ONLY. Not installed or executed. Transaction always rolls back.
+-- CANDIDATE ONLY. Not installed or executed. Contains explicit ROLLBACK; not a supported migration-tool dry run.
+-- Do not submit this file to apply_migration as a simulation.
 -- Patch current function in place inside transaction, preserving all authority logic.
 BEGIN;
 SET LOCAL lock_timeout='2s';
 SET LOCAL statement_timeout='15s';
 DO $candidate$
-DECLARE before_body text; after_body text; before_acl aclitem[]; after_acl aclitem[];
+DECLARE before_body text; after_body text; before_acl aclitem[]; after_acl aclitem[]; verified_body text; before_owner oid; after_owner oid;
  old_projection text := 'SELECT i.id,i.meal_id,i.calories,i.is_scheduled';
  new_projection text := 'SELECT i.id,i.meal_id,i.calories,i.is_scheduled,i.protein,i.carbs,i.fats,i.fiber';
  old_marker text := '''trackers'',a.trackers,''trackerWeights'',a.entries,''checkIns'',a.checkins,''meals'',a.meals,''items'',a.items)';
  new_marker text := '''nutritionFieldsVersion'',''logged-macros-v1'',''trackers'',a.trackers,''trackerWeights'',a.entries,''checkIns'',a.checkins,''meals'',a.meals,''items'',a.items)';
 BEGIN
- SELECT pg_get_functiondef(p.oid),p.proacl INTO before_body,before_acl
+ SELECT pg_get_functiondef(p.oid),p.proacl,p.proowner INTO before_body,before_acl,before_owner
  FROM pg_proc p WHERE p.oid='public.observed_get_tdee_snapshot_v1()'::regprocedure
  AND p.prosecdef=false AND p.provolatile='s'
  AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp'];
+ IF NOT FOUND THEN RAISE EXCEPTION 'snapshot_missing_or_properties_changed'; END IF;
+ IF before_acl IS DISTINCT FROM '{postgres=X/postgres,authenticated=X/postgres}'::aclitem[]
+ THEN RAISE EXCEPTION 'snapshot_acl_changed'; END IF;
  IF before_body IS NULL OR md5(before_body)<>'a8e6453f42dfcf4bbccb9640534c5130'
  THEN RAISE EXCEPTION 'snapshot_definition_changed'; END IF;
  IF (SELECT count(*) FROM information_schema.columns WHERE table_schema='public'
@@ -27,10 +31,13 @@ BEGIN
  IF replace(replace(after_body,new_projection,old_projection),new_marker,old_marker)<>before_body
  THEN RAISE EXCEPTION 'unrelated_change'; END IF;
  EXECUTE after_body;
- SELECT p.proacl INTO after_acl FROM pg_proc p
+ SELECT p.proacl,p.proowner,pg_get_functiondef(p.oid) INTO after_acl,after_owner,verified_body FROM pg_proc p
  WHERE p.oid='public.observed_get_tdee_snapshot_v1()'::regprocedure
  AND p.prosecdef=false AND p.provolatile='s'
  AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp'];
+ IF NOT FOUND THEN RAISE EXCEPTION 'snapshot_missing_or_properties_changed_after'; END IF;
+ IF verified_body IS DISTINCT FROM after_body OR after_owner IS DISTINCT FROM before_owner
+ THEN RAISE EXCEPTION 'snapshot_body_or_owner_changed'; END IF;
  IF after_acl IS DISTINCT FROM before_acl THEN RAISE EXCEPTION 'acl_or_security_changed'; END IF;
 END $candidate$;
 SELECT md5(pg_get_functiondef('public.observed_get_tdee_snapshot_v1()'::regprocedure)) AS candidate_body_md5;
