@@ -1,3 +1,4 @@
+import {adjustSmartMacros, type SmartMacroBinding, type SmartMacroContext} from './smartMacroAdjustment.ts';
 /**
  * Snapshot-as-of bidirectional engine. Pure, not an active application binding.
  * Thresholds are explicit policy inputs, not clinical assurances.
@@ -5,6 +6,7 @@
 export type SnapshotTarget={calories:number;proteinG:number;carbsG:number;fatsG:number;fiberG:number};
 export type SnapshotAdjustmentInput={
  current:SnapshotTarget;
+ macroBinding?:SmartMacroBinding;macroContext?:SmartMacroContext;
  anchor:{baselineCapturedAt:number;intake:number;expenditure:number;acceptedDelta:number;acceptedCount:number;receiptsVerified:boolean;lastAcceptedAt:number|null};
  observedExpenditure:number;
  policy:{reviewed:boolean;maxStepKcal:number;maxStepFraction:number;maxNetDeltaKcal:number;
@@ -51,14 +53,10 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
  const magnitude=Math.floor(Math.min(Math.abs(difference),p.maxStepKcal,g.calories*p.maxStepFraction,remaining,intakeRoom)/p.incrementKcal)*p.incrementKcal;
  if(!finite(magnitude)||magnitude<p.incrementKcal)return {kind:'no_change',reason:'policy_limit'};
  const delta=direction*magnitude,calories=g.calories+delta;
- // Preserve the accepted protein/fiber goals exactly. Only carbohydrate/fat
- // energy absorbs the adjustment, retaining their existing energy proportion.
- if(!Number.isInteger(g.proteinG)||!Number.isInteger(g.fiberG))return blocked('fixed_macros_invalid');
- const distributable=4*g.carbsG+9*g.fatsG,residual=calories-4*g.proteinG;
- if(!positive(distributable)||!positive(residual))return blocked('macro_energy_unavailable');
- const scale=residual/distributable;
- const target={calories,proteinG:g.proteinG,carbsG:Math.round(g.carbsG*scale),fatsG:Math.round(g.fatsG*scale),fiberG:g.fiberG};
- if(!Object.values(target).every(n=>Number.isInteger(n)&&n>=0)||Math.abs(calories-4*target.proteinG-4*target.carbsG-9*target.fatsG)>10)return blocked('macro_rounding_invalid');
+ // Reviewed macro context is required; never fall back to proportional C/F scaling.
+ const allocation=adjustSmartMacros({current:g,newCalories:calories,now,sourceFingerprint:e.fingerprint,binding:input.macroBinding,context:input.macroContext});
+ if(allocation.kind!=='candidate')return blocked(allocation.reason);
+ const target=allocation.target;
  return {kind:'draft',actionable:false,target,deltaKcal:delta,netDeltaKcal:a.acceptedDelta+delta,
   sourceFingerprint:e.fingerprint,sourceCapturedAt:e.capturedAt,contract:'as-of-revalidated-v1'};
 }
