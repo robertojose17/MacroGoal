@@ -4,7 +4,7 @@
 import type {SnapshotMacroRequest,SnapshotMacroEvidence} from './snapshotReviewContextParser.ts';
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const text=(v:unknown,max:number):v is string=>typeof v==='string'&&v.trim().length>0&&v.length<=max;
-const uuid=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{12}$/i.test(v);
+const uuid=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(v);
 const time=(v:unknown)=>typeof v==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|[+-]\d\d:\d\d)$/.test(v)?Date.parse(v):NaN;
 const goalKeys=['calories','proteinG','carbsG','fatsG','fiberG'] as const;
 const bindingKeys=['goalId','goalRevision','preset','profileUpdatedAt','profileBinding','journeyBinding','policyVersion','policyDigest','engineVersion'] as const;
@@ -25,7 +25,7 @@ export function nutritionReviewEvidence(actor:string,request:SnapshotMacroReques
   !object(limits)||Object.keys(limits).length!==8||
   !limitKeys.every(k=>typeof limits[k]==='number'&&Number.isFinite(limits[k]))||
   !object(p)||!text(p.approvalRef,2048)||typeof p.approvalSha256!=='string'||!/^[a-f0-9]{64}$/.test(p.approvalSha256)||
-  !text(p.approvalVersion,128)||!text(p.verifiedBy,256))return null;
+  !text(p.approvalVersion,128)||!text(p.verifiedBy,200))return null;
  const captured=time(value.capturedAt),source=time(request.sourceCapturedAt),reviewed=time(value.reviewedAt),expires=time(value.expiresAt),verified=time(p.verifiedAt);
  if(!Number.isFinite(now)||!Number.isFinite(captured)||captured>now||now-captured>30000||
   !Number.isFinite(source)||source>captured||now-source>30000||
