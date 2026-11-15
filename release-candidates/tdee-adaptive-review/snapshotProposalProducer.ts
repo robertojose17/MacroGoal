@@ -39,13 +39,25 @@ export function prepareSnapshotProposal(input:SnapshotAdjustmentInput,b:Snapshot
  }
  const draft=draftSnapshotAdjustment(input);
  if(draft.kind!=='draft')return draft;
+ // Persist the exact context that produced the displayed macros. This is a private
+ // comparison snapshot, NOT proof of authority or a substitute for acceptance checks.
+ // The current trusted loader has review:null and cannot reach this branch.
+ if(!input.macroBinding||!input.macroContext)return block('macro_context_required');
+ const mc=input.macroContext;
+ const macroEvidence={
+  version:'snapshot-macro-context-v1',
+  binding:structuredClone(input.macroBinding),
+  review:structuredClone(mc.review),
+  limits:structuredClone(mc.limits),
+  choice:mc.customChoice?structuredClone(mc.customChoice):null,
+ };
  // Clone the entire exact database goal; never synthesize missing columns.
  return {kind:'prepared',actionable:false,record:{id:b.proposalId,ownerId:b.ownerId,policyVersion:b.policyVersion,anchorId:b.anchorId,
  expiresAt:new Date(expiry).toISOString(),payload:{
  goalId:g.id,goalUpdatedAt:g.updated_at,profileUpdatedAt:b.profileUpdatedAt,goalSnapshot:structuredClone(g),
  sourceFingerprint:draft.sourceFingerprint,sourceCapturedAt:new Date(draft.sourceCapturedAt).toISOString(),
  snapshotSemantics:draft.contract,readinessFingerprint:b.readinessFingerprint,eligibilityDigest:b.eligibilityDigest,policyDigest:b.policyDigest,engineVersion:b.engineVersion,
- today:b.today,sourceDate:b.sourceDate,current:structuredClone(c),target:structuredClone(draft.target),deltaKcal:draft.deltaKcal}}};
+ macroEvidence,today:b.today,sourceDate:b.sourceDate,current:structuredClone(c),target:structuredClone(draft.target),deltaKcal:draft.deltaKcal}}};
 }
 export {validatePersistedProposal as validatePersistedSnapshotProposal};
 export interface SnapshotProducerDependencies{
