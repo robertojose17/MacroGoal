@@ -13,7 +13,7 @@ const text=(x:unknown):x is string=>typeof x==='string'&&x.trim().length>0;
 const finite=(x:unknown):x is number=>typeof x==='number'&&Number.isFinite(x);
 const stamp=(x:unknown):x is number=>finite(x)&&Number.isSafeInteger(x)&&x>=0&&x<=8640000000000000;
 const amount=(x:unknown):x is number=>finite(x)&&Number.isSafeInteger(x)&&x>=0&&x<=10000;
-const validBinding=(b:SmartMacroBinding)=>!!b&&keys.every(k=>text(b[k]))&&/^[a-f0-9]{64}$/.test(b.sourceFingerprint)&&/^[a-f0-9]{64}$/.test(b.policyDigest);
+const validBinding=(b:SmartMacroBinding)=>!!b&&keys.every(k=>text(b[k]))&&['balanced','high_protein','low_carb','lean_body','custom'].includes(b.preset)&&/^[a-f0-9]{64}$/.test(b.sourceFingerprint)&&/^[a-f0-9]{64}$/.test(b.policyDigest);
 const sameBinding=(a:SmartMacroBinding,b:SmartMacroBinding)=>validBinding(a)&&validBinding(b)&&keys.every(k=>a[k]===b[k]);
 const blocked=(reason:string)=>({kind:'blocked' as const,reason});
 /** Caller must source review/consent from trusted storage; equality is not authentication. */
@@ -27,7 +27,7 @@ export function adjustSmartMacros(input:{current:SmartTarget;newCalories:number;
  if(!sameBinding(b,c.binding)||b.sourceFingerprint!==input.sourceFingerprint||!targetKeys.every(k=>g[k]===c.current[k]))
   return blocked('macro_binding_mismatch');
  const r=c.review,l=c.limits;
- if(!r||r.status!=='reviewed'||!text(r.reviewId)||r.eligibility!=='eligible'||!finite(r.ageYears)||r.ageYears<19||
+ if(!r||r.status!=='reviewed'||!text(r.reviewId)||r.eligibility!=='eligible'||!finite(r.ageYears)||r.ageYears<19||r.ageYears>100||
   !stamp(r.reviewedAt)||!stamp(r.expiresAt)||r.reviewedAt>now||r.expiresAt<=now||r.expiresAt<=r.reviewedAt)
   return blocked('macro_review_required');
  if(!l||!['proteinMinG','proteinMaxG','carbsMinG','carbsMaxG','fatsMinG','fatsMaxG'].every(k=>finite(l[k as keyof typeof l])&&l[k as keyof typeof l]>=0&&l[k as keyof typeof l]<=10000)||
