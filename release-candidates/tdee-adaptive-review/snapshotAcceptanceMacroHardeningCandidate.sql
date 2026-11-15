@@ -6,16 +6,19 @@ BEGIN;
 
 CREATE FUNCTION macrogoal_snapshot_review_private.serialize_nutrition_review_write()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $guard$
-DECLARE owner_key uuid;
 BEGIN
- IF TG_OP='UPDATE' AND (NEW.owner_id IS DISTINCT FROM OLD.owner_id OR NEW.goal_id IS DISTINCT FROM OLD.goal_id) THEN
-  RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='review_identity_immutable';
+ IF TG_OP='UPDATE' THEN
+  RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='review_append_new_version';
  END IF;
- owner_key:=CASE WHEN TG_OP='DELETE' THEN OLD.owner_id ELSE NEW.owner_id END;
- PERFORM 1 FROM public.users WHERE id=owner_key FOR UPDATE;
- -- During an already-authorized user deletion, the cascading row may no longer
- -- find its parent. Do not break account deletion; no new DELETE right is granted.
- IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ IF TG_OP='DELETE' THEN
+  -- Normal account/goal cascade removes an already absent parent. Preserve that
+  -- behavior without taking a review-row -> user lock in reverse order.
+  IF NOT EXISTS(SELECT 1 FROM public.users WHERE id=OLD.owner_id) OR
+     NOT EXISTS(SELECT 1 FROM public.goals WHERE id=OLD.goal_id) THEN RETURN OLD; END IF;
+  RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='review_append_revocation_instead';
+ END IF;
+ -- INSERT only: serialize with acceptance before adding a possible latest row.
+ PERFORM 1 FROM public.users WHERE id=NEW.owner_id FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='23503',MESSAGE='review_owner_missing'; END IF;
  RETURN NEW;
 END $guard$;
@@ -158,7 +161,8 @@ BEGIN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'macro_review_changed'); END IF;
  IF date_part('year',age(today,u.date_of_birth))<19 THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'macro_review_age'); END IF;
- expected_review:=jsonb_build_object('status','reviewed','reviewId',nr.review_id,
+ expected_review:=jsonb_build_object('status','reviewed','reviewId',nr.review_id,'reviewVersion',nr.review_version,
+  'approvalDigest',nr.approval_digest,'approvalVersion',nr.approval_version,
   'reviewedAt',floor(extract(epoch FROM nr.reviewed_at)*1000),'expiresAt',floor(extract(epoch FROM nr.expires_at)*1000),
   'ageYears',date_part('year',age(today,u.date_of_birth))::integer,'eligibility','eligible');
  expected_limits:=jsonb_build_object('proteinMinG',nr.protein_min_g,'proteinMaxG',nr.protein_max_g,
@@ -206,7 +210,9 @@ BEGIN
  UPDATE macrogoal_snapshot_review_private.proposals SET consumed_request=(p_request->>'requestId')::uuid WHERE id=p.id;
  INSERT INTO macrogoal_snapshot_review_private.receipts(owner_id,request_id,request,status,anchor_id,accepted_goal_id,accepted_goal,acceptance_evidence)
  VALUES(actor,(p_request->>'requestId')::uuid,p_request,'committed',anchor.id,result.id,to_jsonb(result),
- jsonb_build_object('contract','as-of-revalidated-v1','fingerprint',snapshot->>'sourceFingerprint','capturedAt',snapshot->>'capturedAt'));
+ jsonb_build_object('contract','as-of-revalidated-v1','fingerprint',snapshot->>'sourceFingerprint','capturedAt',snapshot->>'capturedAt',
+ 'macroReviewId',nr.review_id,'macroReviewVersion',nr.review_version,'macroChoiceId',mc.request_id,'macroChoiceVersion',mc.choice_version,
+ 'macroAllocationMode','smart-preserve-adequate-protein-v1'));
  RETURN jsonb_build_object('version','adaptive-receipt-v1','status','committed','request',p_request,
    'acceptedGoal',jsonb_build_object('id',result.id,'updatedAt',result.updated_at),'goalState','current');
 END $fn$;
