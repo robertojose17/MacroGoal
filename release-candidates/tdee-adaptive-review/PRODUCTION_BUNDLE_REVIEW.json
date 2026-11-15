@@ -1,17 +1,17 @@
 {
   "format": "macrogoal-static-bundle-review-v1",
   "repository": "robertojose17/MacroGoal",
-  "sourceCommit": "cbca250646ac55150d5aed8146a4aaf77b1926a0",
+  "sourceCommit": "e5d878e7bd831a94b53d088587bf2607551d3d92",
   "functionSlug": "progress-intelligence",
   "entrypoint": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts",
   "deploymentPerformed": false,
   "deploymentAllowed": false,
   "verification": {
-    "relativeImportClosure": "reviewed",
+    "relativeImportClosure": "Previous closure unchanged paths; source imports reread at pinned commit",
     "fileCount": 64,
     "missingRelativeImports": 0,
     "repositoryEscapes": 0,
-    "sourceBlobs": "read back against sourceCommit",
+    "sourceBlobs": "64 source blobs read back at pinned sourceCommit; imports reread; no compilation or execution",
     "bundleCompilation": "NOT RUN",
     "backendExecution": "BLOCKED; do not bypass runner rejection",
     "productionE2E": "NOT RUN for this source release",
@@ -20,7 +20,9 @@
     "futureWeightExclusion": "Candidate weightPace filters dates at or before as-of date. Two regressions prepared, NOT RUN.",
     "acceptanceErrors": "Static review: module load failures distinct from uncertain accepting-handler failures; uncertain outcomes require receipt reconciliation. Both immutable acceptance and recommendation switches required.",
     "rateDiagnostic": "Program GET source invokes non-actionable 14-day summary only after existing context revalidation. No new reads or goal writes. Interval unverified; logging completeness unverified. Five endpoint tests prepared, NOT RUN. No deployment.",
-    "explicitLoggingCoverage": "Internal same-statement review context adds explicit self-report day coverage after freshness, owner, date, hash shape and journey window checks. SQL read_state remains authority for content hash/confirmation; no separate client readiness read. Public program GET remains logging unverified. Three additional tests prepared NOT RUN."
+    "explicitLoggingCoverage": "Internal same-statement review context adds explicit self-report day coverage after freshness, owner, date, hash shape and journey window checks. SQL read_state remains authority for content hash/confirmation; no separate client readiness read. Public program GET remains logging unverified. Three additional tests prepared NOT RUN.",
+    "initialCoverage": "Own atomic diagnostic connects 14 completed local days, >=10 explicitly confirmed days, >=8 unique weights, configurable per-half distribution (default1, not robustness/precision); elapsed journey14d required. Coverage is not confidence. No producer change or activation.",
+    "paceTolerance": "Own diagnostic compares target gap with BOTH configurable 0.25lb/week and20% target magnitude tolerances. No calendar-triggered adjustment, confidence, conversion or recommendations. Eight new coverage/comparison tests PREPARED NOT RUN."
   },
   "release": {
     "recommendationsEnabled": false,
@@ -46,7 +48,8 @@
     "Implement approved authoritative acceptance-time macro review and preference revalidation; existing SQL is not equivalent to latest producer.",
     "Complete reviewed manual-percentage allocation; persisted exact percentages must not be silently replaced with Smart.",
     "Verify actual own-account end-to-end proposal, acceptance, expiration, revocation, replay and restoration before claiming ready.",
-    "No TestFlight submission without separate owner approval."
+    "No TestFlight submission without separate owner approval.",
+    "Initial coverage/pace comparison is descriptive only. Legacy producer still uses expenditure model; no 14-day operational recommendations. Distribution default is weak product coverage, not statistical confidence."
   ],
   "files": [
     {
@@ -76,7 +79,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/rateAdjustmentDecision.ts",
-      "gitBlobSha": "2866222c43e431672087bf003cd27db71ecbd030",
+      "gitBlobSha": "b68fc6ba4b62bcaca6b5e712cf9c8bd26b0c4a52",
       "imports": []
     },
     {
@@ -155,7 +158,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts",
-      "gitBlobSha": "6349fec5f89a749ae5b097926a3fe4b74370a2c5",
+      "gitBlobSha": "401450c8d35e35a9ff53bc72bd9c218b8f6a0482",
       "imports": [
         "../../supabase/functions/observed-snapshot-release/functions/observed-program/snapshot.ts",
         "../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts",
