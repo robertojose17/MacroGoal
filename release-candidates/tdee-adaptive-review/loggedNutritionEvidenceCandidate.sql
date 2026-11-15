@@ -9,9 +9,27 @@ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.meal_items'::regclass
    AND attname='nutrition_revision' AND atttypid='uuid'::regtype AND NOT attisdropped)
  THEN RAISE EXCEPTION 'nutrition_revision_required'; END IF;
- IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.meal_items'::regclass
-   AND tgname='rotate_nutrition_revision_v1' AND tgenabled IN ('O','A'))
- THEN RAISE EXCEPTION 'nutrition_revision_trigger_required'; END IF;
+ IF NOT EXISTS(
+  SELECT 1 FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid
+  WHERE t.tgrelid='public.meal_items'::regclass
+   AND t.tgname='rotate_nutrition_revision_v1' AND t.tgenabled IN ('O','A')
+   AND NOT t.tgisinternal AND t.tgtype=23 AND t.tgconstraint=0
+   AND t.tgnargs=0 AND t.tgqual IS NULL AND t.tgoldtable IS NULL AND t.tgnewtable IS NULL
+   AND t.tgfoid=to_regprocedure('macrogoal_readiness_private.rotate_nutrition_revision_v1()')
+   AND p.proowner='postgres'::regrole AND p.prokind='f'
+   AND NOT p.prosecdef AND p.provolatile='v' AND NOT p.proretset
+   AND p.prorettype='trigger'::regtype AND NOT p.proleakproof
+   AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp']
+   AND p.prosrc IS NOT DISTINCT FROM $expected_trigger$
+BEGIN
+ NEW.nutrition_revision := pg_catalog.gen_random_uuid();
+ RETURN NEW;
+END;
+$expected_trigger$
+   AND ARRAY(SELECT a.attname::text FROM unnest(t.tgattr::smallint[]) x(attnum)
+     JOIN pg_attribute a ON a.attrelid=t.tgrelid AND a.attnum=x.attnum
+     ORDER BY a.attname::text)=ARRAY['calories','carbs','fats','fiber','food_brand','food_id','food_item_id','food_name','grams','is_scheduled','logged_at','meal_id','nutrition_revision','protein','quantity','serving_description','serving_unit']
+ ) THEN RAISE EXCEPTION 'nutrition_revision_trigger_requires_review'; END IF;
 END $precondition$;
 
 CREATE SCHEMA macrogoal_logged_nutrition_private;
