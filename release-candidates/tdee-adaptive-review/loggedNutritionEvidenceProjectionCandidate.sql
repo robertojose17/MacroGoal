@@ -23,7 +23,8 @@ BEGIN
  PERFORM 1 FROM pg_proc p WHERE p.oid=to_regprocedure('public.tdee_read_logged_nutrition_evidence_v1(uuid,uuid)')
  AND p.prosecdef AND p.provolatile='s' AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp']
  AND p.proacl='{postgres=X/postgres,authenticated=X/postgres}'::aclitem[]
- AND p.prosrc IS NOT DISTINCT FROM $expected_reader$DECLARE a uuid:=macrogoal_logged_nutrition_private.actor(); result jsonb;
+ AND p.prosrc IS NOT DISTINCT FROM $expected_reader$
+DECLARE a uuid:=macrogoal_logged_nutrition_private.actor(); result jsonb;
 BEGIN
  SELECT jsonb_build_object('version','logged-nutrition-evidence-state-v1',
   'ownerId',a,'itemId',i.id,'revision',i.nutrition_revision,
@@ -49,6 +50,31 @@ BEGIN
  RETURN result;
 END $expected_reader$;
  IF NOT FOUND THEN RAISE EXCEPTION 'evidence_reader_requires_review'; END IF;
+ PERFORM 1 FROM pg_proc p WHERE p.oid=to_regprocedure('macrogoal_logged_nutrition_private.actor()')
+ AND p.prosecdef=false AND p.provolatile='s' AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp']
+ AND p.prosrc IS NOT DISTINCT FROM $expected_actor$
+DECLARE a uuid:=auth.uid();
+BEGIN
+ IF a IS NULL OR auth.jwt()->>'role' IS DISTINCT FROM 'authenticated'
+    OR auth.jwt()->>'is_anonymous'='true' THEN
+  RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='authentication_required';
+ END IF;
+ RETURN a;
+END $expected_actor$;
+ IF NOT FOUND THEN RAISE EXCEPTION 'evidence_helper_requires_review'; END IF;
+ PERFORM 1 FROM pg_proc p WHERE p.oid=to_regprocedure('macrogoal_logged_nutrition_private.item_binding(jsonb,jsonb)')
+ AND p.prosecdef=false AND p.provolatile='i' AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp']
+ AND p.prosrc IS NOT DISTINCT FROM $expected_binding$
+ SELECT jsonb_build_object(
+  'values',jsonb_build_object('calories',i->'calories','protein',i->'protein',
+   'carbs',i->'carbs','fats',i->'fats','fiber',i->'fiber'),
+  'portion',jsonb_build_object('grams',i->'grams','quantity',i->'quantity',
+   'serving_description',i->'serving_description','serving_unit',i->'serving_unit',
+   'food_id',i->'food_id','food_item_id',i->'food_item_id','food_name',i->'food_name',
+   'food_brand',i->'food_brand','meal_id',i->'meal_id','is_scheduled',i->'is_scheduled',
+   'logged_at',i->'logged_at'))
+$expected_binding$;
+ IF NOT FOUND THEN RAISE EXCEPTION 'evidence_helper_requires_review'; END IF;
  IF (length(old_body)-length(replace(old_body,old_projection,'')))/length(old_projection)<>1
  OR (length(old_body)-length(replace(old_body,old_marker,'')))/length(old_marker)<>1
  THEN RAISE EXCEPTION 'snapshot_anchor_not_unique'; END IF;
