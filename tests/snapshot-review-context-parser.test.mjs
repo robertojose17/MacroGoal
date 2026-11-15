@@ -206,3 +206,32 @@ test('unverified readiness yields unknown intake rather than meal-type inference
  assert.equal(r.loggedIntake.status,'unverified');
  assert.equal(r.loggedIntake.averageLoggedCaloriesOnConfirmedDays,null);
 });
+
+function markedNutrition(){
+ const v=fixture();v.observation.sources.nutritionFieldsVersion='logged-macros-v1';
+ for(const i of v.observation.sources.items)Object.assign(i,{protein:20,carbs:30,fats:10,fiber:5});
+ return v;
+}
+test('marked macro means use the same confirmed-day denominator without fabricated zero',()=>{
+ const v=markedNutrition();const r=diagnoseSnapshotRateReview(v,actor,now);
+ assert.equal(r.loggedIntake.proteinG,40);assert.equal(r.loggedIntake.carbsG,60);
+ assert.equal(r.loggedIntake.fatsG,20);assert.equal(r.loggedIntake.fiberG,10);
+ assert.equal(r.loggedIntake.macroStatus,'logged_values');
+});
+test('legacy default0 and null make affected nutrient unknown without discarding energy',()=>{
+ for(const unknown of [0,null]){
+ const v=markedNutrition();v.observation.sources.items.at(-1).fiber=unknown;
+ const r=diagnoseSnapshotRateReview(v,actor,now);
+ assert.equal(r.loggedIntake.fiberG,null);assert.equal(r.loggedIntake.proteinG,40);
+ assert.equal(r.loggedIntake.averageLoggedCaloriesOnConfirmedDays,2500);
+ assert.equal(r.loggedIntake.macroStatus,'unknown_values');
+ }
+});
+test('unmarked fields do not become evidence and malformed marked fields block snapshot',()=>{
+ const v=markedNutrition();delete v.observation.sources.nutritionFieldsVersion;
+ assert.equal(diagnoseSnapshotRateReview(v,actor,now).loggedIntake.proteinG,null);
+ for(const bad of [-1,'20',Infinity,undefined]){
+ const x=markedNutrition();x.observation.sources.items.at(-1).protein=bad;
+ assert.equal(diagnoseSnapshotRateReview(x,actor,now).reason,'observation_invalid');
+ }
+});
