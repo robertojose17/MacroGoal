@@ -1,10 +1,10 @@
 # Macro preference persistence candidate
 
-Source only: macroChoicePersistenceCandidate.sql and macroChoicePersistenceRollbackTail.sql. Neither file has been installed, compiled or executed. The candidate ends in ROLLBACK. This is not a migration filename or deployment authorization.
+Source only: macroChoicePersistenceCandidate.sql and macroChoicePersistenceRollbackTail.sql. The SQL candidate and rollback tail from commit 65d8db1a72f27f7bff4cbf59c590cab7d44a5e1b were executed successfully together in an authorized database transaction, followed by ROLLBACK. They are not installed. The candidate ends in ROLLBACK. This is not a migration filename or deployment authorization.
 
 ## Data and API
 
-One append-only private table: macrogoal_snapshot_review_private.macro_choices. Owner and goal foreign keys cascade deletes; role access is denied on the table and RLS is enabled. The candidate includes narrowly scoped authenticated EXECUTE grants on only the three public own-actor wrappers, but no grants have been executed.
+One append-only private table: macrogoal_snapshot_review_private.macro_choices. Owner and goal foreign keys cascade deletes; role access is denied on the table and RLS is enabled. The candidate includes narrowly scoped authenticated EXECUTE grants on only the three public own-actor wrappers, but those grants existed only inside the rolled-back validation transaction; no new permissions persist.
 
 Functions: private macro_split_valid(jsonb), macro_choice_state(), macro_choice_write(jsonb); narrow public SECURITY DEFINER wrappers tdee_read_macro_choice_v1(), tdee_save_macro_choice_v1(p_request jsonb), tdee_revoke_macro_choice_v1(p_request jsonb). All use closed search paths. Public wrappers verify identity before private access and have no dynamic SQL. This avoids granting schema USAGE or helper EXECUTE on the existing private schema. The actor comes from the existing readiness actor() helper, rejecting anonymous identity, plus an authenticated-role check. There is no p_owner.
 
@@ -26,6 +26,12 @@ Existing custom UI does not save original percentages or Smart choice. No new UI
 
 ## Review and tests
 
-Rollback tail is PREPARED, NOT RUN. It requires an already verified own-account authenticated context supplied by an approved harness, creates no users/JWTs, checks exact split/type rejection, owner injection, wrong goal, CAS, replay, revocation and unchanged goals, then rolls back. Other-session races, anonymous context, deleted-account cascades and API ACL remain explicit additional tests. No claim of compilation or successful execution.
+Rollback tail validation PASSED on November 15, 2026 using a simulated authenticated database request context for the authorized existing Rivera account. This is SQL/role validation, NOT verification of a real signed-in HTTP session. It requires an already verified own-account authenticated context supplied by an approved harness, creates no users/JWTs, checks exact split/type rejection, owner injection, wrong goal, CAS, replay, revocation and unchanged goals, then rolls back. Other-session races, anonymous context, deleted-account cascades and API ACL remain explicit additional tests. No claim of compilation or successful execution.
 
 Relevant primary guidance consulted: https://supabase.com/docs/guides/database/functions and https://www.postgresql.org/docs/current/sql-createfunction.html. Changelog checked; no SDK/CLI upgrade is part of this candidate.
+
+## Verified rollback result
+
+The Supabase migration tool returned success after executing CREATE statements and all tail assertions. Subsequent independent readback found zero candidate tables and zero candidate functions. Before/after hashes of the complete own profile and goal rows matched exactly, and the policy table remained empty. No candidate consent rows, goals, limits, or release state were left changed. A technical migration history entry may exist; this is not an installed application migration.
+
+Covered assertions: exact split save/read, type and sum rejection, request ID replay/conflict, version CAS, owner-field injection, missing/foreign-ID goal rejection (not an existing other user's goal), restrictive revocation with stale supplied bindings, replay after revocation cannot reactivate, direct-table/helper denial, and public RPC privilege checks. Actual anonymous requests, another existing owner's records, concurrency, cascades, API transport and UI remain unverified. Do not generalize this result to those cases or to overall TDEE readiness. The separate blocked backend test runner was not retried.
