@@ -29,7 +29,7 @@ export function createSnapshotAcceptRuntime(ports:SnapshotAcceptPorts){
    !object(value.request)||typeof value.request.ownerId!=='string')return failure('invalid_request');
   const request=parseAdaptiveRequest(value.request,value.request.ownerId);
   if(!request)return failure('invalid_request');
-  if(!ADAPTIVE_RELEASE_STATE.recommendationsEnabled)return failure('safety_review_required');
+  if(!ADAPTIVE_RELEASE_STATE.recommendationsEnabled||!ADAPTIVE_RELEASE_STATE.acceptanceEnabled)return failure('safety_review_required');
   const token=value.authorization.slice(7);
   let accepting=false;
   try{
