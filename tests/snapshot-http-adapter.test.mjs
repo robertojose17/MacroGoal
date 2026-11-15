@@ -110,7 +110,7 @@ test('available proposal remains200 despite committed issuance evidence',async()
 });
 
 test('known no-change outcomes return200 only with no proposed targets',async()=>{
- for(const reason of ['same_anchored_target','policy_limit']){
+ for(const reason of ['same_anchored_target','policy_limit','same_rate_target','within_product_tolerance','coverage_insufficient','target_or_trend_unavailable','rate_uncertainty_unverified','rate_difference_uncertain']){
   for(const mayHaveWritten of [true,false,undefined]){
    const handler=createSnapshotHttpHandler(async()=>({reason,proposal:null,mayHaveWritten}),[origin]);
    const r=await handler(request());assert.equal(r.status,200);
