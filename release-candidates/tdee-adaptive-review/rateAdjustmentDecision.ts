@@ -1,5 +1,5 @@
 /**
- * Isolated research candidate, not imported by application/runtime or a grant.
+ * Shared source candidate imported by OFF server diagnostics; not a release grant.
  * Signed rates are kg/week: loss is negative, gain positive.
  * Conversion is an explicit reviewed server-policy input, not a clinical claim.
  */
@@ -165,6 +165,9 @@ export function diagnoseFourteenDayRate(today:unknown,rows:unknown,goal:unknown,
   window,eligiblePairCount:slopes.length,observedRateKgPerWeek:rate,
   targetRateKgPerWeek:targetRate,targetRateStatus:target.kind==='target_rate'?'available':target.reason,
   targetMinusObservedKgPerWeek:gap,
+  // Pair extrema are a deterministic sensitivity envelope, NOT a confidence interval.
+  // Pairwise slopes are dependent and cannot be treated as independent samples.
+  sensitivity:describeRateSensitivity(slopes,targetRate),
   interval:null,reliableInterval:false as const,recommendation:null,
   reason:rate===null?'insufficient_pair_span':'uncertainty_not_established',
   reevaluateAt};
@@ -234,4 +237,37 @@ export function compareInitialRateToTarget(
  absoluteToleranceKgPerWeek:absoluteKg,relativeToleranceKgPerWeek:relativeKg,
  outsideProductTolerance:outside,
  reason:outside?'deviation_requires_uncertainty_evaluation':'within_product_tolerance'};
+}
+
+/** Explicit product choices; no clinical policy approval or eligibility is implied. */
+export const RATE_PRODUCT_PARAMETERS=Object.freeze({
+ version:'rate-product-parameters-v1',windowDays:14,minCompleteDays:10,minWeightDays:8,
+ absoluteToleranceLbPerWeek:0.25,relativeToleranceFraction:0.20,
+ approximateKcalPerKg:7700,maxAdjustmentKcal:200,
+ minimumDaysAfterAcceptance:14,uncertainReassessmentDays:7,
+ evaluationTrigger:'daily-observation-not-calendar-adjustment',
+ statisticalValidation:false,recommendationsEnabled:false,
+});
+/**
+ * Uses the actual normalized trajectory. No resampling, invented measurement
+ * error, statistical confidence percentage or independent-pair sample claim.
+ * A narrow envelope can still miss correlated fluid shifts or logging bias.
+ */
+function describeRateSensitivity(dailySlopes:number[],target:number|null){
+ const base={method:'pair-slope-extrema-at-least-seven-days-v1' as const,
+  statisticalConfidenceEstablished:false as const,independentSamples:false as const,
+  recommendation:null,actionable:false as const};
+ if(dailySlopes.length===0)return {...base,status:'unavailable' as const,lowerKgPerWeek:null,upperKgPerWeek:null,
+  outsideToleranceAcrossEnvelope:false,reason:'insufficient_pair_span'};
+ // Caller sorts slopes and verifies each arithmetic result.
+ const lower=dailySlopes[0]*7,upper=dailySlopes[dailySlopes.length-1]*7;
+ if(!finite(lower)||!finite(upper)||lower>upper)return {...base,status:'unavailable' as const,
+  lowerKgPerWeek:null,upperKgPerWeek:null,outsideToleranceAcrossEnvelope:false,reason:'numeric_range_invalid'};
+ const lo=compareInitialRateToTarget(lower,target,true),hi=compareInitialRateToTarget(upper,target,true);
+ const sameSide=finite(target)&&(target<lower||target>upper);
+ const outside=sameSide&&lo.status==='comparison'&&hi.status==='comparison'&&
+  lo.outsideProductTolerance&&hi.outsideProductTolerance;
+ return {...base,status:'descriptive' as const,lowerKgPerWeek:lower,upperKgPerWeek:upper,
+  outsideToleranceAcrossEnvelope:outside,
+  reason:outside?'deviation_persists_across_pair_sensitivity_not_validation':'uncertain_or_within_tolerance'};
 }
