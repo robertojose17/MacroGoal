@@ -3,7 +3,7 @@
  * Enabled async execution is unverified; pure command tests are not live E2E proof.
  */
 import {ADAPTIVE_RELEASE_STATE} from './proposal.ts';
-import {SNAPSHOT_ENGINE_CONTRACT,parseSnapshotReviewContext} from './snapshotReviewContextParser.ts';
+import {SNAPSHOT_ENGINE_CONTRACT,parseSnapshotReviewContext,prepareSnapshotMacroContextRequest,type SnapshotMacroRequest} from './snapshotReviewContextParser.ts';
 import {planSnapshotBootstrap} from './snapshotBootstrapPlanner.ts';
 import {planSnapshotEligibilityRefresh} from './snapshotEligibilityRefreshPlanner.ts';
 import {prepareSnapshotProposal,validatePersistedSnapshotProposal} from './snapshotProposalProducer.ts';
@@ -15,9 +15,9 @@ const hash=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
 const same=(a:unknown,b:unknown):boolean=>a===b||(obj(a)&&obj(b)&&Object.keys(a).length===Object.keys(b).length&&Object.keys(a).every(k=>Object.hasOwn(b,k)&&same(a[k],b[k])));
 export type ServerPolicyBinding={version:string;digest:string;engineVersion:string};
 type Outcome={reason:string;proposal:unknown;mayHaveWritten:boolean};
-type Phase='read_policy'|'load_context'|'write_bootstrap'|'write_refresh'|'reload_context'|'issue'|'done';
+type Phase='read_policy'|'load_context'|'write_bootstrap'|'write_refresh'|'reload_context'|'load_macro'|'issue'|'done';
 export type SnapshotWorkflow={phase:Phase;actor:string;proposalId:string;binding:ServerPolicyBinding;policy?:Obj;plan?:Obj;
- branch?:'bootstrap'|'refresh';writer?:Obj;record?:ProposalRecord;outcome?:Outcome};
+ branch?:'bootstrap'|'refresh';writer?:Obj;record?:ProposalRecord;outcome?:Outcome;macroRequest?:SnapshotMacroRequest;macroRaw?:unknown};
 const done=(s:SnapshotWorkflow,reason:string,mayHaveWritten=false,proposal:unknown=null):SnapshotWorkflow=>
  ({...s,phase:'done',outcome:{reason,proposal,mayHaveWritten}});
 const policyMatches=(p:unknown,b:ServerPolicyBinding)=>obj(p)&&p.version===b.version&&p.digest===b.digest&&p.engine_version===b.engineVersion;
@@ -34,8 +34,8 @@ export function advanceSnapshotWorkflow(state:SnapshotWorkflow,result:{ok:boolea
  const s=structuredClone(state);
  if(s.phase==='done')return s;
  const writing=s.phase==='write_bootstrap'||s.phase==='write_refresh'||s.phase==='issue';
- if(result.ok!==true)return done(s,writing?'reconciliation_required':'source_error',writing||s.phase==='reload_context');
- if(!Number.isFinite(now))return done(s,'source_error',writing||s.phase==='reload_context');
+ if(result.ok!==true)return done(s,writing?'reconciliation_required':'source_error',writing||s.phase==='reload_context'||s.phase==='load_macro');
+ if(!Number.isFinite(now))return done(s,'source_error',writing||s.phase==='reload_context'||s.phase==='load_macro');
  const v=result.value;
  try{
  if(s.phase==='read_policy'){
@@ -85,22 +85,40 @@ export function advanceSnapshotWorkflow(state:SnapshotWorkflow,result:{ok:boolea
   if(!same(a,p.expectedAnchorSnapshot)||!obj(v.eligibility)||v.eligibility.digest!==s.writer?.eligibilityDigest)
    return done(s,'reload_binding_changed',true);
   const parsed=parseSnapshotReviewContext(v,s.actor,s.proposalId,now);
-  if(parsed.kind==='blocked')return done(s,parsed.reason,true);
+  if(parsed.kind==='blocked'){
+   if(parsed.reason!=='macro_context_required')return done(s,parsed.reason,true);
+   const requested=prepareSnapshotMacroContextRequest(v,s.actor,s.proposalId,now);
+   if(requested.kind==='blocked')return done(s,requested.reason,true);
+   return {...s,phase:'load_macro',macroRequest:structuredClone(requested.request),macroRaw:structuredClone(v)};
+  }
   const prepared=prepareSnapshotProposal(parsed.input,parsed.binding);
   if(prepared.kind!=='prepared')return done(s,prepared.reason,true);
   return {...s,phase:'issue',record:structuredClone(prepared.record)};
+ }
+ if(s.phase==='load_macro'){
+  if(!s.macroRequest||!s.macroRaw)return done(s,'macro_context_required',true);
+  const requested=prepareSnapshotMacroContextRequest(s.macroRaw,s.actor,s.proposalId,now);
+  if(requested.kind==='blocked')return done(s,requested.reason,true);
+  if(!same(requested.request,s.macroRequest))return done(s,'macro_evidence_binding_mismatch',true);
+  const parsed=parseSnapshotReviewContext(s.macroRaw,s.actor,s.proposalId,now,v);
+  if(parsed.kind==='blocked')return done(s,parsed.reason,true);
+  const prepared=prepareSnapshotProposal(parsed.input,parsed.binding);
+  if(prepared.kind!=='prepared')return done(s,prepared.reason,true);
+  return {...s,phase:'issue',record:structuredClone(prepared.record),macroRaw:undefined,macroRequest:undefined};
  }
  if(s.phase==='issue'){
   if(!s.record)return done(s,'source_error',true);
   return done(s,'review_available',true,validatePersistedSnapshotProposal(s.record,v,now));
  }
  return done(s,'source_error');
- }catch{return done(s,writing?'reconciliation_required':'source_error',writing||s.phase==='reload_context');}
+ }catch{return done(s,writing?'reconciliation_required':'source_error',writing||s.phase==='reload_context'||s.phase==='load_macro');}
 }
 export interface SnapshotOrchestrationPorts{
  verifyAccessToken(token:string):Promise<{id:string}|null>;
  readPolicyExact(binding:ServerPolicyBinding):Promise<unknown>;
  loadOwnContext(token:string):Promise<unknown>;
+ // Optional trusted-server evidence store. No raw request flags or fabricated records.
+ loadReviewedMacroContext?(actor:string,request:SnapshotMacroRequest):Promise<unknown>;
  bootstrapAsService(record:Obj):Promise<unknown>;
  refreshAsService(record:Obj):Promise<unknown>;
  issueAsService(record:ProposalRecord):Promise<unknown>;
@@ -121,14 +139,16 @@ export function createSnapshotReviewOrchestrator(ports:SnapshotOrchestrationPort
   try{state=beginSnapshotWorkflow(actor.id,(ports.newProposalId??(()=>crypto.randomUUID()))(),configured);}
   catch{return {reason:'source_error',proposal:null,mayHaveWritten:false};}
   // Finite sequence, no retry or hidden rebootstrap after uncertainty.
-  for(let steps=0;state.phase!=='done'&&steps<6;steps++){
+  for(let steps=0;state.phase!=='done'&&steps<7;steps++){
    let result:{ok:boolean;value?:unknown};
    try{
     const value=state.phase==='read_policy'?await ports.readPolicyExact({version:configured.version,digest:configured.digest,engineVersion:configured.engineVersion}):
      state.phase==='load_context'||state.phase==='reload_context'?await ports.loadOwnContext(token):
      state.phase==='write_bootstrap'?await ports.bootstrapAsService(structuredClone(state.plan!)):
      state.phase==='write_refresh'?await ports.refreshAsService(structuredClone(state.plan!)):
-     await ports.issueAsService(structuredClone(state.record!));
+     state.phase==='load_macro'?(ports.loadReviewedMacroContext?await ports.loadReviewedMacroContext(actor.id,structuredClone(state.macroRequest!)):null):
+     state.phase==='issue'?await ports.issueAsService(structuredClone(state.record!)):
+     await Promise.reject(new Error('invalid_workflow_phase'));
     result={ok:true,value};
    }catch{result={ok:false};}
    let now:number;try{now=(ports.now??Date.now)();}catch{now=NaN;}
