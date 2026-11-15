@@ -1,21 +1,22 @@
 {
   "format": "macrogoal-static-bundle-review-v1",
   "repository": "robertojose17/MacroGoal",
-  "sourceCommit": "888e83172c8542eb713fdac8952571d08e5d2f86",
+  "sourceCommit": "ca9df0f84516a9b8cf55297a964a7432c1a13e88",
   "functionSlug": "progress-intelligence",
   "entrypoint": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts",
   "deploymentPerformed": false,
   "deploymentAllowed": false,
   "verification": {
     "relativeImportClosure": "reviewed",
-    "fileCount": 59,
+    "fileCount": 60,
     "missingRelativeImports": 0,
     "repositoryEscapes": 0,
     "sourceBlobs": "read back against sourceCommit",
     "bundleCompilation": "NOT RUN",
     "backendExecution": "BLOCKED; do not bypass runner rejection",
     "productionE2E": "NOT RUN for this source release",
-    "scopedTesterPreflight": "Existing helper reused before context reads; included in static closure; new adapter tests NOT RUN."
+    "scopedTesterPreflight": "Existing helper reused before context reads; included in static closure; new adapter tests NOT RUN.",
+    "scopedMacroContext": "Connected server-only load_macro phase; concrete evidence port returns null; OFF. Static inspection only; tests NOT RUN."
   },
   "release": {
     "recommendationsEnabled": false,
@@ -33,25 +34,14 @@
   "externalDependencies": [
     "npm:@supabase/supabase-js@2.83.0"
   ],
-  "previousDeployment": {
-    "version": 17,
-    "fileCount": 43,
-    "logicDifferences": [
-      "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts"
-    ],
-    "typeOnlyDifferences": [
-      "supabase/functions/observed-snapshot-release/functions/progress-intelligence/types.ts",
-      "supabase/functions/observed-snapshot-release/functions/preview-progress/types.ts"
-    ],
-    "unchangedLiveFiles": 40,
-    "newSourceFiles": 16
-  },
   "remainingGates": [
     "Resolve blocked backend test execution without bypassing the rejection.",
     "Compile the complete preserved-path Deno bundle and check production dispatcher regressions.",
     "Review and define policy values and individual total-deficit controls; no clinical review is implied by boolean flags.",
     "Verify actual own-account end-to-end behavior and restoration before claiming ready.",
-    "No TestFlight submission without separate owner approval."
+    "No TestFlight submission without separate owner approval.",
+    "Install an authorized trusted macro-review/consent data source and acceptance-time revalidation; no current evidence port may invent reviewed records.",
+    "Custom percentage consent/persistence is incomplete; never infer original percentages or consent from rounded grams."
   ],
   "files": [
     {
@@ -78,9 +68,16 @@
       "imports": []
     },
     {
-      "path": "release-candidates/tdee-adaptive-review/snapshotAdjustment.ts",
-      "gitBlobSha": "2dd96b197506c2a6b92abce41f3882176131162e",
+      "path": "release-candidates/tdee-adaptive-review/smartMacroAdjustment.ts",
+      "gitBlobSha": "1a553feb001cee0605ee0410428d11f7f8a85cc5",
       "imports": []
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/snapshotAdjustment.ts",
+      "gitBlobSha": "fe358e71dfebec75f920d218e6241f55a91a69e8",
+      "imports": [
+        "./smartMacroAdjustment.ts"
+      ]
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotBootstrapPlanner.ts",
@@ -110,7 +107,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotOrchestrationSupabaseAdapter.ts",
-      "gitBlobSha": "5b6e615ae700342ffebff5db69de5374ff935656",
+      "gitBlobSha": "b526c5b3695763a75e5dc1c88d159a83b509f2bd",
       "imports": [
         "./snapshotReviewOrchestration.ts",
         "./snapshotServerRuntime.ts",
@@ -120,7 +117,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotProposalProducer.ts",
-      "gitBlobSha": "fbadab3e780695a25c6a19ba9dc85608e4fa888a",
+      "gitBlobSha": "6ddae210d928f8222042cf907d8c2cf18a71fd74",
       "imports": [
         "./snapshotAdjustment.ts",
         "./proposal.ts",
@@ -129,19 +126,20 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts",
-      "gitBlobSha": "28e0fae518f784337e1fb7ab4842ab32428bd71e",
+      "gitBlobSha": "cbb01f2e50019e61cc38eac1f46fa682d0e055e3",
       "imports": [
         "../../supabase/functions/observed-snapshot-release/functions/observed-program/snapshot.ts",
         "../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts",
         "../../supabase/functions/observed-snapshot-release/functions/_shared/dynamic-tdee.ts",
         "./receiptChain.ts",
         "./snapshotAdjustment.ts",
+        "./smartMacroAdjustment.ts",
         "./snapshotProposalProducer.ts"
       ]
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotReviewOrchestration.ts",
-      "gitBlobSha": "8979a8a45327df65f92a918a3888e503c6b67c10",
+      "gitBlobSha": "f4fab39211e4b35a963a7c0255db6443ec5f469d",
       "imports": [
         "./proposal.ts",
         "./snapshotReviewContextParser.ts",
