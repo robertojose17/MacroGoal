@@ -9,14 +9,17 @@ const key=(request:{ownerId:string;requestId:string})=>prefix(request.ownerId)+r
 export function makeTdeeReviewServices(actor:()=>string|undefined):TdeeReviewServices {
  const current=(owner:string)=>{if(actor()!==owner)throw Error('account_changed');};
  const rpc=async(name:string,request:unknown,owner:string)=>{
+  const accepting=name==='adaptive-accept-v1';
+  if(accepting)request=parseTdeeAcceptRequest(request,owner);
   current(owner);const {data,error}=await supabase.auth.getSession();current(owner);
   if(error||!data.session||data.session.user.id!==owner)throw Error('account_changed');
   const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),30000);
-  try{const response=await fetch(SUPABASE_PROJECT_URL+'/rest/v1/rpc/'+name,{method:'POST',signal:abort.signal,cache:'no-store',headers:{apikey:supabasePublicKey,Authorization:'Bearer '+data.session.access_token,'Content-Type':'application/json'},body:JSON.stringify({p_request:request})});if(!response.ok)throw Error('review_unavailable');const raw=await response.json();
+  try{const response=await fetch(SUPABASE_PROJECT_URL+(accepting?'/functions/v1/progress-intelligence?mode=adaptive-accept-v1':'/rest/v1/rpc/'+name),{method:'POST',signal:abort.signal,cache:'no-store',headers:{apikey:supabasePublicKey,Authorization:'Bearer '+data.session.access_token,'Content-Type':'application/json'},body:JSON.stringify(accepting?request:{p_request:request})});if(!response.ok||(accepting&&response.status!==200))throw Error('review_unavailable');const raw=await response.json();
    if(name!=='tdee_read_snapshot_offer_v1'){
     // Receipt reconciliation outlives the screen. Never expose old-account results,
     // but invalidate same-account consumers even if navigation unmounted the hook.
     const exact=parseTdeeReceipt(raw,parseTdeeAcceptRequest(request,owner));
+    if(accepting&&exact.status==='not_found')throw Error('invalid_receipt');
     if(exact.status==='committed'){const latest=await supabase.auth.getSession();if(latest.error||latest.data.session?.user.id!==owner)throw Error('account_changed');emitGoalChanged(owner);}
    }
    current(owner);return raw;
@@ -26,7 +29,7 @@ export function makeTdeeReviewServices(actor:()=>string|undefined):TdeeReviewSer
   readPending:async owner=>{current(owner);const keys=(await AsyncStorage.getAllKeys()).filter(k=>k.startsWith(prefix(owner))).sort();current(owner);for(const candidate of keys){const raw=await AsyncStorage.getItem(candidate);current(owner);if(raw===null)continue;const request=parseTdeeAcceptRequest(JSON.parse(raw),owner);if(key(request)!==candidate)throw Error('invalid_journal');return request;}return null;},
   writePending:async(owner,request)=>{current(owner);const safe=parseTdeeAcceptRequest(request,owner);await AsyncStorage.setItem(key(safe),JSON.stringify(safe));current(owner);},
   clearPending:async request=>{current(request.ownerId);const safe=parseTdeeAcceptRequest(request,request.ownerId);await AsyncStorage.removeItem(key(safe));current(request.ownerId);},
-  accept:request=>rpc('tdee_accept_snapshot_proposal_v1',request,request.ownerId),
+  accept:request=>rpc('adaptive-accept-v1',request,request.ownerId),
   receipt:request=>rpc('tdee_read_snapshot_receipt_v1',request,request.ownerId),
   offer:request=>rpc('tdee_read_snapshot_offer_v1',request,request.ownerId),
   closeExpired:request=>rpc('tdee_close_expired_snapshot_request_v1',request,request.ownerId)
