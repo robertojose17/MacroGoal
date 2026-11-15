@@ -1,6 +1,6 @@
 # Nutrition review persistence candidate
 
-Status: source only, OFF. SQL has not been installed, compiled or executed. Test cases below are a plan, not passed tests. No production rows or nutritional policies have been created.
+Status: source only, OFF. SQL is not installed. A limited compilation/ACL validation ran in a transaction ending ROLLBACK; see verified scope below. Remaining test cases below are a plan, not passed tests. No production rows or nutritional policies have been created.
 
 ## Administrative source, not an automatic approver
 
@@ -65,3 +65,9 @@ Synthetic test approval is not authorization to create a real reviewed decision.
 ## Remaining gates
 
 An actual verified administrative approval act with explicit limits and scope; authorized schema verification/installation; verification of the prepared trusted loader integration; acceptance-time review and consent revalidation; approved test execution and real application verification. The rejected SQL change is untouched. No release switch, policy seed, API mount or deployment is part of these files.
+
+## Verified limited rollback validation — 2026-11-15
+
+Pinned SQL9537adf67163a9578e9849b8ce4ac131a098f318 compiled through the Supabase migration connector within BEGIN/ROLLBACK. Assertions passed: table RLS enabled; anon/authenticated/service_role have no table SELECT/INSERT/UPDATE/DELETE; getter EXECUTE restricted to service_role; actual authenticated-role call denied; service_role with incorrect JWT role denied; service_role null input returns null. No review rows were inserted. This was not HTTP authentication or an application E2E test.
+
+Independent post-transaction metadata read confirmed both table and getter absent, as before. No persistent installation, review, policy, goal or release change occurred. Positive eligible-record mapping, latest-version suppression, bindings, concurrent changes and full acceptance still need verification. TypeScript regressions remain prepared and unexecuted because the earlier runner blocker was not retried.
