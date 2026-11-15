@@ -65,3 +65,36 @@ test('offer cannot outlive reviewed macro context',()=>{
  const p=prepareSnapshotProposal(input,binding);assert.equal(Date.parse(p.record.expiresAt),now+10000);
  input.macroContext.review.expiresAt=NaN;assert.equal(prepareSnapshotProposal(input,binding).reason,'offer_expired');
 });
+
+/** Macro binding payload regressions PREPARED, NOT RUN: existing runner remains blocked. */
+test('private payload preserves exact reviewed macro inputs independently of later mutation',()=>{
+ const {input,binding}=fixture();
+ const original=structuredClone(input.macroContext);
+ const p=prepareSnapshotProposal(input,binding);
+ assert.equal(p.kind,'prepared');
+ const evidence=p.record.payload.macroEvidence;
+ assert.deepEqual(evidence,{version:'snapshot-macro-context-v1',binding:input.macroBinding,review:original.review,limits:original.limits,choice:null});
+ input.macroContext.review.reviewId='changed';
+ input.macroContext.limits.proteinMinG=999;
+ input.macroBinding.policyDigest='b'.repeat(64);
+ assert.equal(evidence.review.reviewId,original.review.reviewId);
+ assert.deepEqual(evidence.limits,original.limits);
+ assert.equal(evidence.binding.policyDigest,binding.policyDigest);
+});
+test('custom Smart consent identity is preserved, not manufactured for acceptance',()=>{
+ const {input,binding}=fixture();
+ binding.goalSnapshot.macro_preset='custom';
+ input.macroBinding.preset='custom';input.macroContext.binding.preset='custom';
+ input.macroContext.customChoice={mode:'smart',binding:structuredClone(input.macroBinding),consentId:actor,acceptedAt:now-5000};
+ const expected=structuredClone(input.macroContext.customChoice);
+ const p=prepareSnapshotProposal(input,binding);
+ assert.equal(p.kind,'prepared');
+ assert.deepEqual(p.record.payload.macroEvidence.choice,expected);
+ input.macroContext.customChoice.acceptedAt=now;
+ assert.equal(p.record.payload.macroEvidence.choice.acceptedAt,now-5000);
+});
+test('missing nutritional review cannot become persisted evidence',()=>{
+ const {input,binding}=fixture();
+ input.macroContext.review=null;
+ assert.notEqual(prepareSnapshotProposal(input,binding).kind,'prepared');
+});
