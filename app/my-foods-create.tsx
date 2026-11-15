@@ -1,5 +1,6 @@
 import type { Tables } from '@/lib/supabase/types';
 import { foodLogIds } from '@/utils/foodPersistence';
+import { useManualNutritionEvidence } from '@/hooks/useManualNutritionEvidence';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, Alert, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
@@ -70,6 +71,12 @@ export default function MyFoodsCreateScreen() {
       ? 'diary'
       : 'library';
 
+  const evidence = useManualNutritionEvidence(effectiveMode === 'diary' && !recoveryManual,
+    JSON.stringify([effectiveMode, recoveryManual, mealType, date, context, returnTo, myMealId,
+      prefillName, prefillCalories, prefillProtein, prefillCarbs, prefillFats, prefillFiber]),
+    i18n.language.startsWith('es'), () => router.dismiss());
+  const evidenceDiarySave = useRef(false), evidenceFoodSaved = useRef(false);
+
   // Pre-fill form when component mounts (from AI Estimator)
   useEffect(() => {
     console.log('[MyFoodsCreate] Checking for pre-fill data');
@@ -105,8 +112,15 @@ export default function MyFoodsCreateScreen() {
       Alert.alert(t('common.error'),i18n.language.startsWith('es')?'Ingresa una porción en gramos y calorías, proteína, carbohidratos, grasa y fibra válidos. Ingresa 0 solo si la etiqueta indica cero.':'Enter a serving in grams and valid calories, protein, carbohydrates, fat and fiber. Enter 0 only when the label says zero.');return;
     }
     if(recoveryManual&&recoverySaving.current)return;
+    // Only the reviewed metadata release adds a synchronous double-tap guard.
+    if(evidence.enabled && (evidenceDiarySave.current || evidence.isBusy()))return;
+    if(evidence.enabled)evidenceDiarySave.current=true;
     if(recoveryManual)recoverySaving.current=true;
     const generation=recoveryGeneration.current;
+    // Capture the exact user edits before the first await, never reconstruct AI prefills.
+    const savedValues = { calories: parseFloat(calories) || 0, protein: parseFloat(protein) || 0,
+      carbs: parseFloat(carbs) || 0, fats: parseFloat(fats) || 0, fiber: parseFloat(fiber) || 0 };
+    const evidenceSnapshot = evidence.snapshot(savedValues);
     setSaving(true);
 
     try {
@@ -219,6 +233,9 @@ export default function MyFoodsCreateScreen() {
       // ── MODE: diary ───────────────────────────────────────────────────────
       if (effectiveMode === 'diary') {
         console.log('[MyFoodsCreate] Calling log_food RPC for food:', foodData.name, 'mealType:', mealType, 'date:', date);
+        const loggedAt = new Date().toISOString();
+        const loggedGrams = parseFloat(servingAmount) || 100;
+        const loggedDescription = `${servingAmount} ${servingUnit}`;
         const { data: rpcData, error: rpcError } = await supabase.rpc('log_food', {
           p_user_id: user.id,
           p_date: date,
@@ -230,9 +247,9 @@ export default function MyFoodsCreateScreen() {
           p_carbs: baseCarbs,
           p_fats: baseFats,
           p_fiber: baseFiber,
-          p_serving_description: `${servingAmount} ${servingUnit}`,
-          p_grams: parseFloat(servingAmount) || 100,
-          p_logged_at: new Date().toISOString(),
+          p_serving_description: loggedDescription,
+          p_grams: loggedGrams,
+          p_logged_at: loggedAt,
         });
 
         if (rpcError) {
@@ -243,6 +260,7 @@ export default function MyFoodsCreateScreen() {
         }
 
         const loggedIds = foodLogIds(rpcData);
+        if(evidence.enabled)evidenceFoodSaved.current=true;
         const mealId = loggedIds.meal_id;
         console.log('[MyFoodsCreate] log_food RPC success, meal_id:', mealId, 'meal_item_id:', loggedIds.meal_item_id);
 
@@ -252,6 +270,20 @@ export default function MyFoodsCreateScreen() {
 
 
         trackFirstMealIfNeeded();
+
+        // Food persistence is complete. Optional metadata failure must never enter the food error/retry path.
+        if(evidence.enabled && loggedIds.meal_id && loggedIds.meal_item_id) {
+          try {
+            const handled = await evidence.finish(evidenceSnapshot, {
+              authenticatedOwnerId: user.id, confirmedItemId: loggedIds.meal_item_id,
+              loggedIntent: { values: savedValues, portion: {
+                food_id: foodData.id, meal_id: loggedIds.meal_id, grams: loggedGrams, quantity: 1,
+                serving_description: loggedDescription, serving_unit: null, is_scheduled: false, logged_at: loggedAt,
+              } },
+            });
+            if(handled)return;
+          } catch { /* Keep the saved food; no metadata failure is a failed food save. */ }
+        }
 
         setSaving(false);
         console.log('[MyFoodsCreate] Diary add complete, dismissing modal');
@@ -287,7 +319,9 @@ export default function MyFoodsCreateScreen() {
       Alert.alert(t('common.error'), t('common.unexpectedError'));
     } finally {
       recoverySaving.current=false;
-      setSaving(false);
+      evidence.releaseSave(evidenceSnapshot);
+      if(!evidenceFoodSaved.current)evidenceDiarySave.current=false;
+      if(!evidence.enabled || evidence.isCurrent(evidenceSnapshot))setSaving(false);
     }
   };
 
@@ -462,7 +496,7 @@ export default function MyFoodsCreateScreen() {
                 placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 keyboardType="decimal-pad"
                 value={calories}
-                onChangeText={setCalories}
+                onChangeText={text => { evidence.edited('calories', text); setCalories(text); }}
                 returnKeyType="next"
               />
             </View>
@@ -482,7 +516,7 @@ export default function MyFoodsCreateScreen() {
                   placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                   keyboardType="decimal-pad"
                   value={protein}
-                  onChangeText={setProtein}
+                  onChangeText={text => { evidence.edited('protein', text); setProtein(text); }}
                   returnKeyType="next"
                 />
               </View>
@@ -497,7 +531,7 @@ export default function MyFoodsCreateScreen() {
                   placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                   keyboardType="decimal-pad"
                   value={carbs}
-                  onChangeText={setCarbs}
+                  onChangeText={text => { evidence.edited('carbs', text); setCarbs(text); }}
                   returnKeyType="next"
                 />
               </View>
@@ -514,7 +548,7 @@ export default function MyFoodsCreateScreen() {
                   placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                   keyboardType="decimal-pad"
                   value={fats}
-                  onChangeText={setFats}
+                  onChangeText={text => { evidence.edited('fats', text); setFats(text); }}
                   returnKeyType="next"
                 />
               </View>
@@ -529,7 +563,7 @@ export default function MyFoodsCreateScreen() {
                   placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                   keyboardType="decimal-pad"
                   value={fiber}
-                  onChangeText={setFiber}
+                  onChangeText={text => { evidence.edited('fiber', text); setFiber(text); }}
                   returnKeyType="done"
                 />
               </View>
@@ -550,6 +584,15 @@ export default function MyFoodsCreateScreen() {
             )}
           </TouchableOpacity>
 
+          {evidence.enabled && <View style={{marginTop:16}}>
+            <TouchableOpacity disabled={saving || evidence.pendingBusy} onPress={()=>void evidence.reviewPending()}>
+              <Text style={{color:colors.primary}}>{i18n.language.startsWith('es')?'Revisar registros nutricionales pendientes':'Review pending nutrient records'}</Text>
+            </TouchableOpacity>
+            {evidence.pendingBusy && <ActivityIndicator />}
+            {evidence.pendingRows.map(row=><TouchableOpacity key={row.requestId} disabled={saving || evidence.pendingBusy} onPress={()=>evidence.selectPending(row)} style={{paddingVertical:12}}>
+              <Text style={{color:isDark?colors.textDark:colors.text}}>{i18n.language.startsWith('es')?'Registro':'Record'} {row.requestId.slice(0,8)} · {row.invalid ? (i18n.language.startsWith('es')?'Registro local no válido':'Invalid local record') : `${i18n.language.startsWith('es')?'alimento':'food'} ${row.itemId?.slice(0,8) ?? ''}`}</Text>
+            </TouchableOpacity>)}
+          </View>}
           <View style={styles.bottomSpacer} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -672,3 +715,4 @@ const styles = StyleSheet.create({
     height: 100,
   },
 });
+
