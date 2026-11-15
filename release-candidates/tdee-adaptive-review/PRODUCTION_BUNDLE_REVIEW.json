@@ -1,14 +1,14 @@
 {
   "format": "macrogoal-static-bundle-review-v1",
   "repository": "robertojose17/MacroGoal",
-  "sourceCommit": "ca9df0f84516a9b8cf55297a964a7432c1a13e88",
+  "sourceCommit": "3c843d8d966193600f0b0a2735a316de91dba8cf",
   "functionSlug": "progress-intelligence",
   "entrypoint": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts",
   "deploymentPerformed": false,
   "deploymentAllowed": false,
   "verification": {
     "relativeImportClosure": "reviewed",
-    "fileCount": 60,
+    "fileCount": 61,
     "missingRelativeImports": 0,
     "repositoryEscapes": 0,
     "sourceBlobs": "read back against sourceCommit",
@@ -16,7 +16,8 @@
     "backendExecution": "BLOCKED; do not bypass runner rejection",
     "productionE2E": "NOT RUN for this source release",
     "scopedTesterPreflight": "Existing helper reused before context reads; included in static closure; new adapter tests NOT RUN.",
-    "scopedMacroContext": "Connected server-only load_macro phase; concrete evidence port returns null; OFF. Static inspection only; tests NOT RUN."
+    "scopedMacroContext": "Connected load_macro phase reads own-actor preference and fixed service-only nutrition review getter. Empty administrative source installed; no reviewed rows. OFF. Source tests NOT RUN.",
+    "futureWeightExclusion": "Candidate weightPace filters dates at or before as-of date. Two regressions prepared, NOT RUN."
   },
   "release": {
     "recommendationsEnabled": false,
@@ -37,17 +38,25 @@
   "remainingGates": [
     "Resolve blocked backend test execution without bypassing the rejection.",
     "Compile the complete preserved-path Deno bundle and check production dispatcher regressions.",
-    "Review and define policy values and individual total-deficit controls; no clinical review is implied by boolean flags.",
-    "Verify actual own-account end-to-end behavior and restoration before claiming ready.",
-    "No TestFlight submission without separate owner approval.",
-    "Install an authorized trusted macro-review/consent data source and acceptance-time revalidation; no current evidence port may invent reviewed records.",
-    "Custom percentage consent/persistence is incomplete; never infer original percentages or consent from rounded grams."
+    "Populate only genuinely reviewed administrative limits with verified original approval and exact applicability; do not fabricate evidence.",
+    "Define reviewed policy and individual total-deficit controls; preserve all existing calorie guards.",
+    "Implement approved authoritative acceptance-time macro review and preference revalidation; existing SQL is not equivalent to latest producer.",
+    "Complete reviewed manual-percentage allocation; persisted exact percentages must not be silently replaced with Smart.",
+    "Verify actual own-account end-to-end proposal, acceptance, expiration, revocation, replay and restoration before claiming ready.",
+    "No TestFlight submission without separate owner approval."
   ],
   "files": [
     {
       "path": "release-candidates/tdee-adaptive-review/apiContract.ts",
       "gitBlobSha": "0f95cf462520f0a52fb54b1bac8643ffe37b1939",
       "imports": []
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/nutritionReviewEvidence.ts",
+      "gitBlobSha": "21d100e5132aff6a50ff1044ded306641998ee0a",
+      "imports": [
+        "./snapshotReviewContextParser.ts"
+      ]
     },
     {
       "path": "release-candidates/tdee-adaptive-review/proposal.ts",
@@ -69,7 +78,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/smartMacroAdjustment.ts",
-      "gitBlobSha": "1a553feb001cee0605ee0410428d11f7f8a85cc5",
+      "gitBlobSha": "37d4b990b9b485d92d08b1602b6bf7dc60b3f91d",
       "imports": []
     },
     {
@@ -107,17 +116,19 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotOrchestrationSupabaseAdapter.ts",
-      "gitBlobSha": "b526c5b3695763a75e5dc1c88d159a83b509f2bd",
+      "gitBlobSha": "4ce0ae7aafe9859188bcd423535bd340f97a6b75",
       "imports": [
+        "./nutritionReviewEvidence.ts",
         "./snapshotReviewOrchestration.ts",
         "./snapshotServerRuntime.ts",
         "../../supabase/functions/observed-snapshot-release/functions/observed-program/scoped-tester-refresh.mjs",
+        "./snapshotReviewContextParser.ts",
         "./snapshotSupabaseAdapter.ts"
       ]
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotProposalProducer.ts",
-      "gitBlobSha": "6ddae210d928f8222042cf907d8c2cf18a71fd74",
+      "gitBlobSha": "9b5bd4dbb3e9673e36cfc72d0b2ed8d61913f4f0",
       "imports": [
         "./snapshotAdjustment.ts",
         "./proposal.ts",
@@ -126,7 +137,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts",
-      "gitBlobSha": "cbb01f2e50019e61cc38eac1f46fa682d0e055e3",
+      "gitBlobSha": "2709e337786f43d5f8f0ed8cadef8a04adf5091f",
       "imports": [
         "../../supabase/functions/observed-snapshot-release/functions/observed-program/snapshot.ts",
         "../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts",
@@ -139,7 +150,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotReviewOrchestration.ts",
-      "gitBlobSha": "f4fab39211e4b35a963a7c0255db6443ec5f469d",
+      "gitBlobSha": "396308f2393d65cf0039d3d17b105a5e740ac904",
       "imports": [
         "./proposal.ts",
         "./snapshotReviewContextParser.ts",
@@ -307,9 +318,7 @@
         "./types.ts",
         "./queries.ts",
         "./weightSource.ts",
-        "./types.ts",
         "./loggingReliability.ts",
-        "./types.ts",
         "./config.ts"
       ]
     },
@@ -344,8 +353,6 @@
       "gitBlobSha": "4ac4d5bbd6a5da4db6a92dd358187d66fead2367",
       "imports": [
         "./config.ts",
-        "./accepted-goal-history.ts",
-        "./accepted-goal-history.ts",
         "./accepted-goal-history.ts"
       ]
     },
@@ -390,7 +397,7 @@
     },
     {
       "path": "supabase/functions/observed-snapshot-release/functions/preview-progress/weightPace.ts",
-      "gitBlobSha": "9bfbe536b590d732fb0fd594e1842f1a06f9770a",
+      "gitBlobSha": "a2d32bbf789d8d44da94ad5fcd59e2eb5dcd61c1",
       "imports": [
         "./weightSource.ts",
         "./types.ts",
@@ -419,7 +426,6 @@
         "./types.ts",
         "./queries.ts",
         "./weightSource.ts",
-        "./types.ts",
         "./loggingReliability.ts",
         "./progressStatus.ts",
         "./config.ts"
