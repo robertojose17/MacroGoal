@@ -248,7 +248,8 @@ export function assessFourteenDaySnapshotReview(value:unknown,actor:string,now:n
  * Average of explicitly confirmed days ONLY, not imputed14-day intake or TDEE.
  * The caller already validated the same-statement readiness envelope. SQL is
  * authority for content hashes; never accept independent client confirmations.
- * Snapshot items currently carry energy only: macro averages remain unknown.
+ * Legacy snapshot items carry energy only. Versioned macro fields are consumed
+ * without treating default/unknown zero as informed data.
  */
 function confirmedDayLoggedCalories(value:Obj,sources:import('../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts').DataSources,
  today:string,readinessStatus:string){
@@ -280,7 +281,26 @@ function confirmedDayLoggedCalories(value:Obj,sources:import('../../supabase/fun
  // Do not cherry-pick known confirmed days after one confirmed day becomes unknown.
  const total=valid.reduce((sum,d)=>sum+d.sum,0);
  const average=dates.size>0&&unknownCount===0&&Number.isFinite(total)?total/dates.size:null;
- return {...unknown,status:average===null?'unknown_calories' as const:'explicit_confirmed_days' as const,
+ const macros:Record<'proteinG'|'carbsG'|'fatsG'|'fiberG',number|null>={proteinG:null,carbsG:null,fatsG:null,fiberG:null};
+ const marked=sources.nutritionFieldsVersion==='logged-macros-v1';
+ if(marked&&dates.size>0){
+  for(const [stored,output] of [['protein','proteinG'],['carbs','carbsG'],['fats','fatsG'],['fiber','fiberG']] as const){
+   let total=0,known=true;
+   const seen=new Set<string>();
+   for(const item of sources.items){
+    const meal=meals.get(item.meal_id);
+    if(!meal||!dates.has(meal.date)||item.is_scheduled===true)continue;
+    const amount=item[stored];
+    // Snapshot version certifies field presence, not zero-value provenance.
+    // Legacy default0/unknown0 is not silently interpreted as a known nutrient.
+    if(item.is_scheduled!==false||typeof amount!=='number'||!Number.isFinite(amount)||amount<=0){known=false;continue;}
+    total+=amount;seen.add(meal.date);
+   }
+   if(known&&seen.size===dates.size&&Number.isFinite(total))macros[output]=total/dates.size;
+  }
+ }
+ return {...unknown,...macros,status:average===null?'unknown_calories' as const:'explicit_confirmed_days' as const,
+  macroStatus:!marked?'not_in_snapshot' as const:Object.values(macros).every(v=>v!==null)?'logged_values' as const:'unknown_values' as const,
   confirmedDayCount:dates.size,validCalorieDayCount:valid.length,unknownCalorieDayCount:unknownCount,
   averageLoggedCaloriesOnConfirmedDays:average};
 }
