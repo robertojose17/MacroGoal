@@ -1,4 +1,5 @@
 /** Smart Macro fail-closed expectations prepared, NOT EXECUTED: runner remains blocked. */
+import {estimateFromSources,normalizedDatedWeights} from '../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseSnapshotReviewContext,prepareSnapshotMacroContextRequest,diagnoseSnapshotRateReview} from '../release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts';
@@ -133,4 +134,21 @@ test('restart excludes older weights and does not fill fourteen days',()=>{
  const r=diagnoseSnapshotRateReview(v,actor,now);
  assert.equal(r.window.weightDays,4);assert.equal(r.observedRateKgPerWeek,null);
  assert.equal(r.reason,'insufficient_pair_span');assert.equal(r.recommendation,null);
+});
+
+test('shared normalizer keeps flat expenditure and original intake rejection semantics',()=>{
+ const s=fixture().observation.sources;
+ const original=structuredClone(s);
+ const result=estimateFromSources(s,new Date(now));
+ assert.equal(result.status,'estimated');assert.equal(result.kcalPerDay,2500);
+ assert.deepEqual(s,original);
+ s.items[0].calories=0;assert.equal(estimateFromSources(s,new Date(now)).reason,'unknown_calorie_provenance');
+});
+test('normalizer preserves latest dated reading and existing conflict ordering',()=>{
+ const s=fixture().observation.sources,day='2026-11-13';
+ s.checkIns.push({id:'latest',date:day,weight:81,updated_at:day+'T10:00:00Z',created_at:day+'T09:00:00Z'});
+ assert.equal(normalizedDatedWeights(s,'2026-11-14','2026-10-16').find(w=>w.date===day).kg,81);
+ s.checkIns.push({id:'conflict',date:day,weight:82,updated_at:day+'T10:00:00Z',created_at:day+'T09:00:00Z'});
+ assert.equal(normalizedDatedWeights(s,'2026-11-14','2026-10-16'),null);
+ assert.equal(estimateFromSources(s,new Date(now)).reason,'invalid_data');
 });
