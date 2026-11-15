@@ -118,7 +118,7 @@ export interface SnapshotOrchestrationPorts{
  readPolicyExact(binding:ServerPolicyBinding):Promise<unknown>;
  loadOwnContext(token:string):Promise<unknown>;
  // Optional trusted-server evidence store. No raw request flags or fabricated records.
- loadReviewedMacroContext?(actor:string,request:SnapshotMacroRequest):Promise<unknown>;
+ loadReviewedMacroContext?(actor:string,request:SnapshotMacroRequest,token:string):Promise<unknown>;
  bootstrapAsService(record:Obj):Promise<unknown>;
  refreshAsService(record:Obj):Promise<unknown>;
  issueAsService(record:ProposalRecord):Promise<unknown>;
@@ -146,7 +146,7 @@ export function createSnapshotReviewOrchestrator(ports:SnapshotOrchestrationPort
      state.phase==='load_context'||state.phase==='reload_context'?await ports.loadOwnContext(token):
      state.phase==='write_bootstrap'?await ports.bootstrapAsService(structuredClone(state.plan!)):
      state.phase==='write_refresh'?await ports.refreshAsService(structuredClone(state.plan!)):
-     state.phase==='load_macro'?(ports.loadReviewedMacroContext?await ports.loadReviewedMacroContext(actor.id,structuredClone(state.macroRequest!)):null):
+     state.phase==='load_macro'?(ports.loadReviewedMacroContext?await ports.loadReviewedMacroContext(actor.id,structuredClone(state.macroRequest!),token):null):
      state.phase==='issue'?await ports.issueAsService(structuredClone(state.record!)):
      await Promise.reject(new Error('invalid_workflow_phase'));
     result={ok:true,value};
