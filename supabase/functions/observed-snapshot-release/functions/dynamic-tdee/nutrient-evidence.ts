@@ -21,8 +21,9 @@ export function validLoggedNutritionEvidence(item:unknown,owner:string):boolean{
  e.declaredFields.length===0||e.declaredFields.length>5||
  new Set(e.declaredFields).size!==e.declaredFields.length||
  !e.declaredFields.every(k=>NUTRIENT_FIELDS.includes(k as NutrientField))||!rec(e.values))return false;
- return NUTRIENT_FIELDS.every(k=>typeof e.values![k]==='number'&&Number.isFinite(e.values![k])&&
- (e.values![k] as number)>=0&&e.values![k]===item[k]);
+ const values=e.values;
+ return NUTRIENT_FIELDS.every(k=>typeof values[k]==='number'&&Number.isFinite(values[k])&&
+ (values[k] as number)>=0&&values[k]===item[k]);
 }
 export function explicitlyDeclaredNutrient(item:unknown,owner:string,field:NutrientField):boolean{
  if(!validLoggedNutritionEvidence(item,owner)||!rec(item)||!rec(item.nutrition_evidence))return false;
