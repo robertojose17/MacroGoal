@@ -30,7 +30,9 @@
     "productParameters": "Explicit14d/10complete/8weights, both0.25lb and20% tolerance, approximate7700, max200, minimum14d afteracceptance and7d uncertain reassessment; these constants are NOT installed reviewed DB policy or automatic schedule.",
     "confirmedLoggedIntake": "Internal own-snapshot assessment averages energy only across explicitly confirmed days; no zero-fill, unknown/zero-provenance or empty confirmedday nulls average. Macros remain null because current snapshot omits them. Three tests PREPARED NOT RUN. Narrow projection plan documented but not applied.",
     "optionalLoggedMacros": "Consumer validates logged-macros-v1 marker and nullable nonnegative fields; legacy extra fields ignored. Same confirmed-day denominator, zero without provenance stays unknown, nutrient missing does not invent energy. Three regressions PREPARED NOT RUN. SQL extension remains NOT installed.",
-    "macroProjectionSQL": "Live catalog/ACL checked. EXPLAIN projection WHERE false succeeded without data execution. Pure JSON hash test passed. Installed function md5/security/ACL unchanged verified. Full replacement transaction NOT executed; execute_sql directs DDL to migration tool, no persistent migration substituted for rollback QA."
+    "macroProjectionSQL": "Live catalog/ACL checked. EXPLAIN projection WHERE false succeeded without data execution. Pure JSON hash test passed. Installed function md5/security/ACL unchanged verified. Full replacement transaction NOT executed; execute_sql directs DDL to migration tool, no persistent migration substituted for rollback QA.",
+    "currentMainReviewed": false,
+    "nutrientEvidenceUpdate": "Source after this pinned historical review adds nutrient-evidence.ts and modifies data/snapshot/diagnostic parser. Complete import closure, backend compilation and tests MUST be repeated through permitted tooling before deployment. SQL writer/read candidate and UI integration not installed. No marker currently emitted by production snapshot. Tests prepared, NOT RUN."
   },
   "release": {
     "recommendationsEnabled": false,
@@ -57,7 +59,8 @@
     "Complete reviewed manual-percentage allocation; persisted exact percentages must not be silently replaced with Smart.",
     "Verify actual own-account end-to-end proposal, acceptance, expiration, revocation, replay and restoration before claiming ready.",
     "No TestFlight submission without separate owner approval.",
-    "Initial coverage/pace comparison is descriptive only. Legacy producer still uses expenditure model; no 14-day operational recommendations. Distribution default is weak product coverage, not statistical confidence."
+    "Initial coverage/pace comparison is descriptive only. Legacy producer still uses expenditure model; no 14-day operational recommendations. Distribution default is weak product coverage, not statistical confidence.",
+    "Rebuild complete source manifest after revision-bound explicit-zero consumer changes; preserve OFF and do not deploy this stale historical manifest."
   ],
   "files": [
     {
