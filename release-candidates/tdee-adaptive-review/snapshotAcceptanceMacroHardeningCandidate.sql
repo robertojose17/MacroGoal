@@ -37,6 +37,7 @@ DECLARE actor uuid:=macrogoal_snapshot_review_private.assert_request(p_request);
  nr macrogoal_snapshot_review_private.nutrition_review_versions;
  mc macrogoal_snapshot_review_private.macro_choices;
  me jsonb; mb jsonb; expected_review jsonb; expected_limits jsonb; expected_choice jsonb;
+ final_tester_access jsonb;
 BEGIN
  -- Replay is available even when the feature/policy is OFF or proposal expired.
  prior:=macrogoal_snapshot_review_private.read_receipt(p_request);
@@ -201,6 +202,19 @@ BEGIN
  IF p.expires_at<=clock_timestamp() OR policy.expires_at<=clock_timestamp() OR e.expires_at<=clock_timestamp() OR nr.expires_at<=clock_timestamp() OR
     NOT macrogoal_snapshot_review_private.snapshot_time_valid(snapshot->>'capturedAt',clock_timestamp()) THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'source_expired'); END IF;
+ -- Recheck managed tester authority after review/preference locks, not just at
+ -- snapshot capture. This never extends proof/binding expiry or grants access.
+ final_tester_access:=macrogoal_observed_private.tester_access(actor);
+ IF jsonb_typeof(final_tester_access) IS DISTINCT FROM 'object' OR
+    jsonb_typeof(final_tester_access->'managed') IS DISTINCT FROM 'boolean' THEN
+  RETURN macrogoal_snapshot_review_private.reject_request(p_request,'premium_authority_unavailable'); END IF;
+ IF final_tester_access->'managed'='true'::jsonb THEN
+  IF final_tester_access->'allowed' IS DISTINCT FROM 'true'::jsonb OR
+     jsonb_typeof(final_tester_access->'validUntil') IS DISTINCT FROM 'number' THEN
+   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'premium_authority_expired'); END IF;
+  IF (final_tester_access->>'validUntil')::numeric<=extract(epoch FROM clock_timestamp())*1000 THEN
+   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'premium_authority_expired'); END IF;
+ END IF;
  accepted_at:=macrogoal_goal_write_private.accepted_timestamp(g.created_at);
  UPDATE public.goals SET is_active=false WHERE id=g.id AND user_id=actor;
  INSERT INTO public.goals(user_id,goal_type,goal_intensity,target_weight,daily_calories,protein_g,carbs_g,fats_g,fiber_g,is_active,
