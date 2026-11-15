@@ -1,7 +1,7 @@
 /** Smart Macro fail-closed expectations prepared, NOT EXECUTED: runner remains blocked. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseSnapshotReviewContext} from '../release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts';
+import {parseSnapshotReviewContext,prepareSnapshotMacroContextRequest} from '../release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts';
 const actor='11111111-1111-4111-8111-111111111111',hash='a'.repeat(64),now=Date.parse('2026-11-14T12:00:00Z');
 function fixture(){
  const dates=Array.from({length:29},(_,i)=>new Date(Date.parse('2026-10-16T00:00:00Z')+i*86400000).toISOString().slice(0,10));
@@ -53,4 +53,53 @@ test('raw macro flags cannot bypass the missing authoritative context',()=>{
  const v=fixture();v.macroContext={status:'reviewed',eligible:true,proteinAdequate:true};
  v.macroBinding={ownerId:actor,sourceFingerprint:hash};
  assert.deepEqual(parseSnapshotReviewContext(v,actor,actor,now),{kind:'blocked',reason:'macro_context_required'});
+});
+
+// Synthetic context for arithmetic tests only. Not persisted/reviewed clinical evidence.
+function withPreset(v,preset='balanced'){
+ v.currentGoal.macro_preset=preset;v.observation.context.currentGoal.macro_preset=preset;
+ v.anchor.baseline_goal_snapshot.macro_preset=preset;
+ v.receiptChain.currentGoal.macro_preset=preset;v.receiptChain.anchor=structuredClone(v.anchor);
+ return v;
+}
+function macroEvidence(v){
+ const result=prepareSnapshotMacroContextRequest(v,actor,actor,now);
+ assert.equal(result.kind,'macro_request');const request=result.request;
+ return {version:'snapshot-macro-evidence-v1',request:structuredClone(request),consent:null,
+ review:{binding:structuredClone(request.binding),current:structuredClone(request.current),
+ review:{status:'reviewed',reviewId:'synthetic-review',reviewedAt:now-1000,expiresAt:now+60000,ageYears:request.ageYears,eligibility:'eligible'},
+ limits:{proteinMinG:140,proteinMaxG:160,carbsMinG:130,carbsMaxG:400,fatsMinG:40,fatsMaxG:90,fatMinFraction:.2,fatMaxFraction:.35}}};
+}
+
+test('independent server evidence binds exact snapshot and yields non-actionable context',()=>{
+ const v=withPreset(fixture()),e=macroEvidence(v),before=structuredClone({v,e});
+ const parsed=parseSnapshotReviewContext(v,actor,actor,now,e);assert.equal(parsed.kind,'prepared_context');
+ assert.equal(parsed.actionable,false);assert.equal(parsed.input.macroContext.review.ageYears,36);
+ parsed.input.macroContext.limits.proteinMinG=1;assert.deepEqual({v,e},before);
+});
+test('raw evidence ignored and request preparation preserves previous gates',()=>{
+ const v=withPreset(fixture());v.macroEvidence=macroEvidence(v);
+ assert.equal(parseSnapshotReviewContext(v,actor,actor,now).reason,'macro_context_required');
+ for(const item of v.observation.sources.items)item.calories=1150;
+ assert.equal(prepareSnapshotMacroContextRequest(v,actor,actor,now).reason,'individual_deficit_review_required');
+});
+test('every outer binding and age mismatch is rejected after port load',()=>{
+ for(const key of ['sourceCapturedAt','profileUpdatedAt','profileBinding','journeyBinding','today','ageYears']){
+ const v=withPreset(fixture()),e=macroEvidence(v);e.request[key]='other';
+ assert.equal(parseSnapshotReviewContext(v,actor,actor,now,e).reason,'macro_evidence_binding_mismatch');
+ }
+ const v=withPreset(fixture()),e=macroEvidence(v);e.review.review.ageYears=35;
+ assert.equal(parseSnapshotReviewContext(v,actor,actor,now,e).reason,'macro_evidence_invalid');
+ assert.equal(parseSnapshotReviewContext(v,actor,actor,now+30000,e).reason,'source_expired');
+});
+test('review cannot smuggle custom consent; preserve-percent cannot silently become Smart',()=>{
+ const v=withPreset(fixture(),'custom'),e=macroEvidence(v);
+ const consent={mode:'smart',binding:structuredClone(e.request.binding),consentId:'synthetic-consent',acceptedAt:now-1};
+ e.review.customChoice=consent;
+ assert.equal(parseSnapshotReviewContext(v,actor,actor,now,e).reason,'macro_evidence_invalid');
+ delete e.review.customChoice;
+ assert.equal(parseSnapshotReviewContext(v,actor,actor,now,e).reason,'custom_macro_consent_required');
+ e.consent=consent;assert.equal(parseSnapshotReviewContext(v,actor,actor,now,e).kind,'prepared_context');
+ e.consent.mode='preserve_percent';
+ assert.equal(parseSnapshotReviewContext(v,actor,actor,now,e).reason,'custom_percentage_review_required');
 });
