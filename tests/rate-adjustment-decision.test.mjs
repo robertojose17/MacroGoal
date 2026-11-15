@@ -1,7 +1,7 @@
 /** Prepared contract tests, NOT RUN. Runner remains blocked; no alternative execution. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {decideRateAdjustment as decide} from '../release-candidates/tdee-adaptive-review/rateAdjustmentDecision.ts';
+import {decideRateAdjustment as decide,readPersistedTargetRate as readRate,decidePersistedGoalRateAdjustment as decideGoal} from '../release-candidates/tdee-adaptive-review/rateAdjustmentDecision.ts';
 const now=Date.parse('2026-11-15T12:00:00Z');
 function fixture(){return {now,targetRateKgPerWeek:-0.5,observedRateKgPerWeek:-0.3,
  interval:{lower:-0.4,upper:-0.2},data:{sufficient:true,stable:true,reliableInterval:true},
@@ -81,4 +81,30 @@ test('sufficient evidence still requires policy conversion and interval',()=>{
 });
 test('misconfigured above200 step is rejected consistently with snapshot engine',()=>{
  for(const maximum of [201,500,1000]){const f=fixture();f.policy.maxStepKcal=maximum;assert.equal(decide(f).reason,'policy_invalid');}
+});
+
+test('persisted loss magnitude converts pounds to negative kilograms without rounding',()=>{
+ assert.deepEqual(readRate({goal_type:'lose',loss_rate_lbs_per_week:1}),
+ {kind:'target_rate',targetRateKgPerWeek:-0.45359237,source:'loss_rate_lbs_per_week'});
+ assert.equal(readRate({goal_type:'lose',loss_rate_lbs_per_week:0.5}).targetRateKgPerWeek,-0.226796185);
+});
+test('missing or malformed loss rate never falls back to intensity or calorie deficit',()=>{
+ for(const rate of [undefined,null,'1',0,-1,NaN,Infinity,Number.MIN_VALUE]){
+ assert.equal(readRate({goal_type:'lose',loss_rate_lbs_per_week:rate,goal_intensity:1,daily_calories:1800,base_daily_calories:2300}).kind,'blocked');
+ }
+ for(const goal of [null,[],{}, {goal_type:'unknown'}])assert.equal(readRate(goal).kind,'blocked');
+});
+test('maintain ignores legacy loss rate and gain cannot borrow it',()=>{
+ assert.deepEqual(readRate({goal_type:'maintain',loss_rate_lbs_per_week:2}),
+ {kind:'target_rate',targetRateKgPerWeek:0,source:'maintain'});
+ assert.equal(readRate({goal_type:'gain',loss_rate_lbs_per_week:2,goal_intensity:1}).reason,'target_gain_rate_unavailable');
+});
+test('goal adapter overrides untrusted target field and preserves input and guards',()=>{
+ const f=fixture(),goal={goal_type:'lose',loss_rate_lbs_per_week:1};
+ const before=structuredClone(f),beforeGoal=structuredClone(goal);
+ assert.deepEqual(decideGoal(goal,f),decide({...f,targetRateKgPerWeek:-0.45359237}));
+ assert.deepEqual(f,before);assert.deepEqual(goal,beforeGoal);
+ f.data.reliableInterval=false;f.policy=undefined;
+ assert.equal(decideGoal(goal,f).reason,'insufficient_or_uncertain_data');
+ assert.equal(decideGoal(goal,f).reevaluateAt,now+7*86400000);
 });
