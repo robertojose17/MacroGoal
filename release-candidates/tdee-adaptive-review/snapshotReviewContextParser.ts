@@ -1,11 +1,12 @@
 /** Private pure adapter for read_review_context. No RPC, seeds, or release activation. */
 import {parseObservedSnapshot} from '../../supabase/functions/observed-snapshot-release/functions/observed-program/snapshot.ts';
-import {estimateFromSources} from '../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts';
-import {dayNumber,dateForDay} from '../../supabase/functions/observed-snapshot-release/functions/_shared/dynamic-tdee.ts';
+import {estimateFromSources,normalizedDatedWeights} from '../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts';
+import {dayNumber,dateForDay,hasSupportedAdultAge} from '../../supabase/functions/observed-snapshot-release/functions/_shared/dynamic-tdee.ts';
 import {verifySnapshotReceiptChain} from './receiptChain.ts';
 import {draftSnapshotAdjustment, type SnapshotAdjustmentInput} from './snapshotAdjustment.ts';
 import type {SmartMacroBinding,SmartMacroContext,SmartTarget} from './smartMacroAdjustment.ts';
 import type {SnapshotBinding} from './snapshotProposalProducer.ts';
+import {diagnoseFourteenDayRate} from './rateAdjustmentDecision.ts';
 type Obj=Record<string,unknown>;
 const rec=(v:unknown):v is Obj=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const hash=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
@@ -139,4 +140,39 @@ export function parseSnapshotReviewContext(value:unknown,actor:string,proposalId
 export function prepareSnapshotMacroContextRequest(value:unknown,actor:string,proposalId:string,now:number):MacroRequestResult|{kind:'blocked';reason:string}{
  const result=parseInternal(value,actor,proposalId,now,undefined,true);
  return result.kind==='prepared_context'?{kind:'blocked',reason:'macro_review_not_needed'}:result;
+}
+
+/**
+ * Internal diagnostic from the SAME atomic own-actor review context as proposals.
+ * No extra reads, policy fabrication, expenditure-threshold relaxation or writes.
+ * Never serialize raw diagnostic weights as a public endpoint response.
+ */
+export function diagnoseSnapshotRateReview(value:unknown,actor:string,now:number){
+ const block=(reason:string)=>({kind:'blocked' as const,actionable:false as const,reason});
+ if(!uuid(actor)||!Number.isSafeInteger(now)||!rec(value)||value.version!=='snapshot-review-context-v1'||
+ value.actor!==actor||value.actionable!==false||value.evidenceStatus!=='unverified')return block('review_context_invalid');
+ let observation;
+ try{observation=parseObservedSnapshot(value.observation,actor);}catch{return block('observation_invalid');}
+ const captured=time(observation.capturedAt);
+ if(!Number.isFinite(captured)||captured>now||now-captured>30000||value.capturedAt!==observation.capturedAt)return block('source_expired');
+ if(!observation.context.premium||!observation.context.enabled||!observation.sources)return block('source_unavailable');
+ if(observation.context.accessValidUntil!==undefined&&observation.context.accessValidUntil<=now)return block('source_expired');
+ if(!hasSupportedAdultAge(observation.sources.dateOfBirth,observation.context.today))return block('unsupported_age');
+ const g=value.currentGoal,profile=value.profile;
+ if(!rec(g)||g.user_id!==actor||g.is_active!==true||!uuid(g.id)||!Number.isFinite(time(g.updated_at))||
+ time(g.updated_at)>captured||!observation.context.currentGoal||g.id!==observation.context.currentGoal.id||
+ !['daily_calories','protein_g','carbs_g','fats_g','fiber_g','goal_type','loss_rate_lbs_per_week'].every(k=>g[k]===(observation.context.currentGoal as unknown as Obj)[k]))return block('goal_binding_mismatch');
+ if(!rec(profile)||profile.id!==actor||profile.timezone!==observation.sources.timezone||
+ profile.journeyStartDate!==(observation.sources.journeyStartDate??null)||
+ !Number.isFinite(time(profile.updatedAt))||time(profile.updatedAt)>captured)return block('profile_binding_mismatch');
+ const today=observation.context.today,cutoff=dateForDay(dayNumber(today)!-14);
+ const journey=observation.sources.journeyStartDate;
+ if(journey!=null&&dayNumber(journey)===null)return block('journey_binding_mismatch');
+ const minDate=journey&&journey>cutoff?journey:cutoff;
+ const weights=normalizedDatedWeights(observation.sources,today,minDate);
+ if(weights===null)return block('rate_weight_source_conflict');
+ const diagnostic=diagnoseFourteenDayRate(today,weights.map(w=>({date:w.date,weightKg:w.kg})),g,now);
+ if(diagnostic.kind==='blocked')return diagnostic;
+ return {...diagnostic,sourceCapturedAt:observation.capturedAt,sourceFingerprint:observation.sourceFingerprint,
+  goalId:g.id as string,goalRevision:g.updated_at as string};
 }
