@@ -1,7 +1,7 @@
 {
   "format": "macrogoal-static-bundle-review-v1",
   "repository": "robertojose17/MacroGoal",
-  "sourceCommit": "785eed4b07e250a041510d38d772048801b33070",
+  "sourceCommit": "8e499e7ccb72717d95037674e0a413106dbaf9a5",
   "functionSlug": "progress-intelligence",
   "entrypoint": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts",
   "deploymentPerformed": false,
@@ -25,7 +25,9 @@
     "paceTolerance": "Own diagnostic compares target gap with BOTH configurable 0.25lb/week and20% target magnitude tolerances. No calendar-triggered adjustment, confidence, conversion or recommendations. Eight new coverage/comparison tests PREPARED NOT RUN.",
     "rateDraft": "Optional engine branch uses bound rate review and nearest reviewed interval edge with explicit approximate7700 model; all prior guards/caps retained, reductions still blocked. No trusted interval loader available; no activation. Five additional tests PREPARED NOT RUN.",
     "initialAssessment": "Server-selected rate-review-14d-v1 in existing OFF orchestration invokes assessment after own context read, before any bootstrap/refresh/issue. Terminates with no proposal/no writes while uncertainty unavailable. Legacy engine selection unchanged. Request cannot choose version or enable. Three orchestration regressions PREPARED NOT RUN. No daily scheduler or live deployment.",
-    "rateHttp": "Known rate no-change reasons explicitly mapped; unknown errors/uncertain writes retain reconciliation. Existing test expanded, NOT RUN."
+    "rateHttp": "Known rate no-change reasons explicitly mapped; unknown errors/uncertain writes retain reconciliation. Existing test expanded, NOT RUN.",
+    "rateSensitivity": "Own normalized14d trajectory now supplies min/max eligible pair slopes as descriptive sensitivity ONLY. Dependent pairs, no CI/confidence/review claim. Initial assessment abstains if envelope crosses tolerance; even coherent envelope still does not authorize recommendation. Five tests PREPARED NOT RUN.",
+    "productParameters": "Explicit14d/10complete/8weights, both0.25lb and20% tolerance, approximate7700, max200, minimum14d afteracceptance and7d uncertain reassessment; these constants are NOT installed reviewed DB policy or automatic schedule."
   },
   "release": {
     "recommendationsEnabled": false,
@@ -82,7 +84,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/rateAdjustmentDecision.ts",
-      "gitBlobSha": "b68fc6ba4b62bcaca6b5e712cf9c8bd26b0c4a52",
+      "gitBlobSha": "354f310cc79e4fdbf29f3fbe962ea3f380c90ec3",
       "imports": []
     },
     {
@@ -162,7 +164,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts",
-      "gitBlobSha": "b31b36819a8d7b54f7e309a4f270811c67902a83",
+      "gitBlobSha": "8e0390e63617f659f3db300a97270c539d257430",
       "imports": [
         "../../supabase/functions/observed-snapshot-release/functions/observed-program/snapshot.ts",
         "../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts",
