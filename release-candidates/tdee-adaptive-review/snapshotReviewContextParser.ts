@@ -161,8 +161,8 @@ export function diagnoseSnapshotRateReview(value:unknown,actor:string,now:number
  const g=value.currentGoal,profile=value.profile;
  if(!rec(g)||g.user_id!==actor||g.is_active!==true||!uuid(g.id)||!Number.isFinite(time(g.updated_at))||
  time(g.updated_at)>captured||!observation.context.currentGoal||g.id!==observation.context.currentGoal.id||
- !['daily_calories','protein_g','carbs_g','fats_g','fiber_g','goal_type','loss_rate_lbs_per_week'].every(k=>g[k]===(observation.context.currentGoal as unknown as Obj)[k]))return block('goal_binding_mismatch');
- if(!rec(profile)||profile.id!==actor||profile.timezone!==observation.sources.timezone||
+ !['daily_calories','protein_g','carbs_g','fats_g','fiber_g','goal_type','loss_rate_lbs_per_week','macro_preset'].every(k=>g[k]===(observation.context.currentGoal as unknown as Obj)[k]))return block('goal_binding_mismatch');
+ if(!rec(profile)||profile.id!==actor||profile.dateOfBirth!==observation.sources.dateOfBirth||profile.timezone!==observation.sources.timezone||
  profile.journeyStartDate!==(observation.sources.journeyStartDate??null)||
  !Number.isFinite(time(profile.updatedAt))||time(profile.updatedAt)>captured)return block('profile_binding_mismatch');
  const today=observation.context.today,cutoff=dateForDay(dayNumber(today)!-14);
