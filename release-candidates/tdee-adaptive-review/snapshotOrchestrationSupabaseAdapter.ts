@@ -75,6 +75,8 @@ export function createSnapshotOrchestrationSupabasePorts(config:SnapshotOrchestr
     throw new Error('source_error');
    return serviceRpc(RPC.policy,{p_version:fixed.version,p_digest:fixed.digest,p_engine_version:fixed.engineVersion});
   },
+  // No verified macro-review/consent storage is wired. Never synthesize approval.
+  async loadReviewedMacroContext(_actor,_request){return null;},
   async bootstrapAsService(record){return serviceRpc(RPC.bootstrap,{p_record:record});},
   async refreshAsService(record){return serviceRpc(RPC.refresh,{p_record:record});},
   async issueAsService(record){try{return await serviceRpc(RPC.issue,snapshotIssueArguments(record));}catch{throw new Error('source_error');}}
