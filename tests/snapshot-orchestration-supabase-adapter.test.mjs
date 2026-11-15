@@ -176,3 +176,24 @@ test('macro port rejects wrong actor before network and sanitizes read errors wi
  h.setError({message:'sensitive'});await assert.rejects(()=>ports.loadReviewedMacroContext(preferenceActor,f.request,'token'),/^Error: source_error$/);
  assert.equal(h.calls.length,1);
 });
+
+test('verified manual choice retains exact basis points/version instead of being treated as absent',()=>{
+ const {request,state,now}=preferenceFixture();
+ request.binding.preset='balanced';
+ state.choice.mode='preserve_percent';
+ state.choice.splitBps={protein:3333,carbs:3333,fats:3334};
+ const before=structuredClone(state);
+ const out=macroPreferenceEvidence(preferenceActor,request,state,now);
+ assert.equal(out.review,null);assert.equal(out.consent.mode,'preserve_percent');
+ assert.equal(out.consent.choiceVersion,2);
+ assert.deepEqual(out.consent.splitBps,before.choice.splitBps);
+ state.choice.splitBps.protein=1;
+ assert.deepEqual(out.consent.splitBps,before.choice.splitBps);
+});
+test('manual choice invalid percentages cannot become a valid consent context',()=>{
+ for(const split of [null,{}, {protein:3333,carbs:3333,fats:3333},{protein:'3333',carbs:3333,fats:3334},{protein:3333,carbs:3333,fats:3334,extra:0}]){
+  const {request,state,now}=preferenceFixture();
+  state.choice.mode='preserve_percent';state.choice.splitBps=split;
+  assert.equal(macroPreferenceEvidence(preferenceActor,request,state,now).consent,null);
+ }
+});
