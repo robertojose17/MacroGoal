@@ -47,7 +47,8 @@ BEGIN
 END $fn$;
 
 -- Exact JSON comparisons retain database numeric precision and NULL values.
--- Food identity, consumed status, portion and meal date are part of the binding.
+-- Evidence covers item nutrients/portion/identity, NOT consumption on a date.
+-- Current owner is checked separately; daily completeness belongs to readiness.
 CREATE FUNCTION macrogoal_logged_nutrition_private.item_binding(i jsonb,m jsonb)
 RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $fn$
  SELECT jsonb_build_object(
@@ -57,7 +58,7 @@ RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $fn$
    'serving_description',i->'serving_description','serving_unit',i->'serving_unit',
    'food_id',i->'food_id','food_item_id',i->'food_item_id','food_name',i->'food_name',
    'food_brand',i->'food_brand','meal_id',i->'meal_id','is_scheduled',i->'is_scheduled',
-   'logged_at',i->'logged_at'),'mealDate',m->'date')
+   'logged_at',i->'logged_at'))
 $fn$;
 
 -- STABLE fixes the view at the invoking SQL query's snapshot, so a future
