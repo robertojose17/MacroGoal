@@ -1,7 +1,7 @@
 /** Smart Macro fail-closed expectations prepared, NOT EXECUTED: runner remains blocked. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseSnapshotReviewContext,prepareSnapshotMacroContextRequest} from '../release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts';
+import {parseSnapshotReviewContext,prepareSnapshotMacroContextRequest,diagnoseSnapshotRateReview} from '../release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts';
 const actor='11111111-1111-4111-8111-111111111111',hash='a'.repeat(64),now=Date.parse('2026-11-14T12:00:00Z');
 function fixture(){
  const dates=Array.from({length:29},(_,i)=>new Date(Date.parse('2026-10-16T00:00:00Z')+i*86400000).toISOString().slice(0,10));
@@ -102,4 +102,35 @@ test('review cannot smuggle custom consent; preserve-percent cannot silently bec
  e.consent=consent;assert.equal(parseSnapshotReviewContext(v,actor,actor,now,e).kind,'prepared_context');
  e.consent.mode='preserve_percent';
  assert.equal(parseSnapshotReviewContext(v,actor,actor,now,e).reason,'custom_percentage_review_required');
+});
+
+test('snapshot diagnostic reads bound sources but grants no confidence or proposal',()=>{
+ const v=fixture();v.currentGoal.loss_rate_lbs_per_week=1;v.observation.context.currentGoal.loss_rate_lbs_per_week=1;v.policy=null;v.anchor=null;v.eligibility=null;
+ const before=structuredClone(v),r=diagnoseSnapshotRateReview(v,actor,now);
+ assert.equal(r.kind,'rate_diagnostic');assert.equal(r.window.startDate,'2026-10-31');assert.equal(r.window.weightDays,14);
+ assert.equal(r.observedRateKgPerWeek,0);assert.equal(r.targetRateKgPerWeek,-0.45359237);
+ assert.equal(r.reliableInterval,false);assert.equal(r.recommendation,null);assert.equal(r.sourceFingerprint,hash);
+ assert.equal(r.goalRevision,v.currentGoal.updated_at);assert.deepEqual(v,before);
+});
+test('snapshot diagnostic rejects cross-actor stale disabled and expired sources',()=>{
+ for(const mutate of [v=>v.actor='other',v=>v.currentGoal.user_id='other',v=>v.profile.timezone='America/New_York',
+ v=>v.observation.context.enabled=false,v=>v.observation.context.accessValidUntil=now,
+ v=>v.observation.sources.dateOfBirth='2020-01-01']){
+ const v=fixture();mutate(v);assert.equal(diagnoseSnapshotRateReview(v,actor,now).kind,'blocked');
+ }
+ assert.equal(diagnoseSnapshotRateReview(fixture(),actor,now+30000).reason,'source_expired');
+});
+test('shared normalization honors explicit pounds and rejects cross-source conflict',()=>{
+ const v=fixture(),s=v.observation.sources;
+ s.trackers=[{id:'tracker',unit:'lb'}];s.trackerWeights=[{id:'tw',tracker_id:'tracker',date:'2026-11-13',value:80*2.2046226218,created_at:'2026-11-13T09:00:00Z'}];
+ v.observation.counts.trackers=1;v.observation.counts.trackerWeights=1;
+ assert.equal(diagnoseSnapshotRateReview(v,actor,now).kind,'rate_diagnostic');
+ s.trackerWeights[0].value=90*2.2046226218;assert.equal(diagnoseSnapshotRateReview(v,actor,now).reason,'rate_weight_source_conflict');
+ s.trackers[0].unit='unknown';assert.equal(diagnoseSnapshotRateReview(v,actor,now).reason,'rate_weight_source_conflict');
+});
+test('restart excludes older weights and does not fill fourteen days',()=>{
+ const v=fixture();v.profile.journeyStartDate='2026-11-10';v.observation.sources.journeyStartDate='2026-11-10';
+ const r=diagnoseSnapshotRateReview(v,actor,now);
+ assert.equal(r.window.weightDays,4);assert.equal(r.observedRateKgPerWeek,null);
+ assert.equal(r.reason,'insufficient_pair_span');assert.equal(r.recommendation,null);
 });
