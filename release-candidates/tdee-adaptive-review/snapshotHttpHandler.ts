@@ -27,7 +27,7 @@ export function createSnapshotHttpHandler(runtime:Runtime,allowedOrigins:readonl
    if(result.reason==='review_available'&&result.proposal!==null)return reply(200,'review_available',result.proposal);
    // Preserve successful calibration and uncertain writes before auth/error mapping.
     if(result.reason==='calibration_required'&&result.proposal===null&&result.mayHaveWritten===true)return reply(202,'calibration_required',null,true);
-    if(['same_anchored_target','policy_limit'].includes(result.reason)&&result.proposal===null)return reply(200,'no_change',null,result.mayHaveWritten===true);
+    if(['same_anchored_target','policy_limit','same_rate_target','within_product_tolerance','coverage_insufficient','target_or_trend_unavailable','rate_uncertainty_unverified','rate_difference_uncertain'].includes(result.reason)&&result.proposal===null)return reply(200,'no_change',null,result.mayHaveWritten===true);
     if(result.mayHaveWritten===true)return reply(409,'reconciliation_required',null,true);
     if(result.reason==='authentication_required'||result.reason==='account_changed')return reply(401,result.reason);
    if(result.reason==='safety_review_required')return reply(503,'safety_review_required');
