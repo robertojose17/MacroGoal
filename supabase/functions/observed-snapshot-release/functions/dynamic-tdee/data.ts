@@ -24,15 +24,28 @@ function sourceNumber(value: unknown): number {
   const number = Number(value);
   return Number.isFinite(number) ? number : NaN;
 }
-/** Compare instants, not ISO spelling: offsets can differ for the same instant.
- * Missing optional check-in timestamps retain lowest precedence, not current time.
- * A malformed nonempty timestamp cannot select a trustworthy latest reading. */
-function readingInstant(value: unknown): number | null {
-  if (value === '' || value === null || value === undefined) return Number.NEGATIVE_INFINITY;
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) ||
-      dayNumber(value.slice(0, 10)) === null) return null;
-  const instant = Date.parse(value);
-  return Number.isFinite(instant) ? instant : null;
+/** PostgreSQL timestamps have microsecond precision. Keep exact integer instants.
+ * Missing optional check-in timestamps rank below every supported civil date.
+ * Reject normalized/noncanonical clock fields (including 24:00) instead of guessing. */
+const MISSING_READING_INSTANT = -1000000000000000000000000n;
+function readingInstant(value: unknown): bigint | null {
+  if (value === '' || value === null || value === undefined) return MISSING_READING_INSTANT;
+  if (typeof value !== 'string') return null;
+  const m = /^(\\d{4}-\\d{2}-\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,6}))?(Z|([+-])(\\d{2}):(\\d{2}))$/.exec(value);
+  if (!m) return null;
+  const day = dayNumber(m[1]), hours = Number(m[2]), minutes = Number(m[3]), seconds = Number(m[4]);
+  const offsetHours = Number(m[8] ?? 0), offsetMinutes = Number(m[9] ?? 0);
+  if (day === null || hours > 23 || minutes > 59 || seconds > 59 || offsetHours > 23 || offsetMinutes > 59) return null;
+  const offset = m[6] === 'Z' ? 0 : (m[7] === '+' ? 1 : -1) * (offsetHours * 60 + offsetMinutes);
+  const wholeSeconds = day * 86400 + hours * 3600 + minutes * 60 + seconds - offset * 60;
+  return BigInt(wholeSeconds) * 1000000n + BigInt((m[5] ?? '').padEnd(6, '0'));
+}
+type LatestReading = { kg: number; at: bigint; conflict: boolean };
+/** Only a contradictory maximum-instant group blocks. Row order cannot decide. */
+function collectLatest(map: Map<string, LatestReading>, date: string, kg: number, at: bigint): void {
+  const previous = map.get(date);
+  if (!previous || at > previous.at) map.set(date, {kg, at, conflict:false});
+  else if (at === previous.at && kg !== previous.kg) previous.conflict = true;
 }
 export function estimateFromSources(data: DataSources, now: Date): DynamicTdeeResult {
   let today: string;
@@ -77,30 +90,28 @@ export function weightAtEstimateDate(data: DataSources, date: string | null): nu
 /** Shared weight normalization only; null means source conflict/unknown unit. */
 export function normalizedDatedWeights(data: DataSources, today: string, minDate: string): TdeeWeight[] | null {
   if (dayNumber(today) === null || dayNumber(minDate) === null) return null;
-  const checkIns = new Map<string, { kg: number; at: number }>();
-  const trackerWeights = new Map<string, { kg: number; at: number }>();
+  const checkIns = new Map<string, LatestReading>();
+  const trackerWeights = new Map<string, LatestReading>();
   const validDate = (date: string) => date >= minDate && date < today;
   for (const row of data.checkIns) {
     if (!validDate(row.date)) continue;
     const at = readingInstant(row.updated_at ?? row.created_at ?? '');
     if (at === null) return null;
     const kg = sourceNumber(row.weight);
-    if (checkIns.has(row.date) && at === checkIns.get(row.date)!.at && kg !== checkIns.get(row.date)!.kg) return null;
-    if (!checkIns.has(row.date) || at > checkIns.get(row.date)!.at) checkIns.set(row.date, { kg, at });
+    collectLatest(checkIns, row.date, kg, at);
   }
   const units = new Map(data.trackers.map(t => [t.id, t.unit]));
   for (const row of data.trackerWeights) {
     if (!validDate(row.date)) continue;
     const at = readingInstant(row.created_at);
-    if (at === null || at === Number.NEGATIVE_INFINITY) return null;
+    if (at === null || at === MISSING_READING_INSTANT) return null;
     const unit = units.get(row.tracker_id)?.toLowerCase();
     // Storage contract: app weight tracker is lb; honor explicitly tagged kg, never guess.
     if (!unit || !['kg', 'lb', 'lbs'].includes(unit)) return null;
     const kg = sourceNumber(row.value) / (unit === 'kg' ? 1 : 2.2046226218);
-    if (trackerWeights.has(row.date) && at === trackerWeights.get(row.date)!.at && kg !== trackerWeights.get(row.date)!.kg) return null;
-    if (!trackerWeights.has(row.date) || at > trackerWeights.get(row.date)!.at) trackerWeights.set(row.date, { kg, at });
+    collectLatest(trackerWeights, row.date, kg, at);
   }
-  if ([...checkIns.values(), ...trackerWeights.values()].some(value => !Number.isFinite(value.kg))) return null;
+  if ([...checkIns.values(), ...trackerWeights.values()].some(value => value.conflict || !Number.isFinite(value.kg))) return null;
   const merged = new Map(checkIns);
   for (const [date, value] of trackerWeights) {
     const check = checkIns.get(date);
