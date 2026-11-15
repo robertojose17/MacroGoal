@@ -1,3 +1,4 @@
+import {validLoggedNutritionEvidence} from '../dynamic-tdee/nutrient-evidence.ts';
 import type { ObservationContext } from './handler.ts';
 import { todayInZone, type DataSources } from '../dynamic-tdee/data.ts';
 import { dayNumber, dateForDay } from '../_shared/dynamic-tdee.ts';
@@ -66,6 +67,11 @@ export function parseObservedSnapshot(value: unknown, owner: string): ObservedSn
     if(sources.nutritionFieldsVersion!=='logged-macros-v1')fail();
     if(!rows.items.every(r=>['protein','carbs','fats','fiber'].every(k=>
       Object.hasOwn(r,k)&&(r[k]===null||(finite(r[k])&&r[k]>=0)))))fail();
+  }
+  if(Object.hasOwn(sources,'nutritionEvidenceVersion')){
+    if(sources.nutritionEvidenceVersion!=='user-entered-v1'||
+       sources.nutritionFieldsVersion!=='logged-macros-v1'||
+       !rows.items.every(item=>validLoggedNutritionEvidence(item,owner)))fail();
   }
   return value as unknown as ObservedSnapshot;
 }
