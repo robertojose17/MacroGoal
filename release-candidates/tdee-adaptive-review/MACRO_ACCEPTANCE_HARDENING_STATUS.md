@@ -1,6 +1,6 @@
 # Macro-aware acceptance hardening candidate
 
-Status: candidate source only; existing production acceptance remains unchanged; recommendations OFF. No TestFlight or Edge deployment.
+Status: full macro-aware acceptance remains candidate-only. The separately validated minimal final tester-authority guard is now installed on the existing production acceptance body; all other behavior is preserved. Recommendations remain OFF. No TestFlight or Edge deployment.
 
 ## Different from the rejected operation
 This candidate does not make calorie caps nullable, replace caps with defaults, change table/API grants or weaken the existing checks. It adds mandatory versioned Smart evidence revalidation and retains the existing engine's reduction suspension. It is not a workaround for the earlier rejected operation.
@@ -31,3 +31,10 @@ Verification for this addition: six pure SQL SELECT predicate cases matched expe
 A later authorized single attempt used an immediate UI Settings-entry signal instead of waiting for the screen to finish loading. The SQL tool took 28.4 seconds and the harness again stopped at the real-Premium check before fixture writes. The legitimate sandbox evidence recorded checkedAt 2026-11-15T12:45:16.690Z and validUntil 2026-11-15T12:45:46.690Z; no TTL or purchase was modified. This method does not provide a reliable fresh-authority execution window. No further retries were made.
 
 Independent readback after this attempt matched all recorded own-account baseline hashes for profile, 68 goals and observation settings; no readiness, macro choice, nutrition review, proposal, receipt, anchor or eligibility fixture rows existed. The production acceptance definition hash remained 4b3c81d0729836f63eafda8a94317cb7 and the candidate trigger remained absent. Positive acceptance, replay under the updated candidate, and simultaneous-writer tests remain NOT COMPLETED. Further execution needs a legitimately authenticated server-adjacent verified path, not an entitlement bypass or fabricated proof.
+
+## Installed minimal final tester guard (separate scope)
+At the owner's explicit request, only the final tester-authority freshness check was isolated onto the then-current production acceptance definition. It added one local variable and the final own-actor authority check, preserving the entire pre-existing body otherwise. It does NOT install this document's macro-aware checks or nutrition-review trigger, enable policies, change grants, alter calorie limits or implement manual-percent allocation.
+
+The exact minimal source is finalTesterGuardCandidate.sql, source commit 855488bc9f0363e427dbe71494147000774c9c70. Its transaction first asserts the previous production definition hash and verifies unchanged ACL/security metadata before finishing. Rollback compilation and metadata checks passed, then the authorized installation used COMMIT. Independent post-install readback matched the prepared definition exactly, with hash e7dc77b7470a63bc1f079a3b1de0d3a2. ACL remains {postgres=X/postgres,authenticated=X/postgres}; anon and service_role EXECUTE remain false, authenticated true, SECURITY DEFINER and closed search_path unchanged. Enabled policies=0, nutrition review rows=0 and macro candidate trigger absent. Own-goal count68/hash b60c03452f4daa4f434c8a84438783ec and observation settings hash a5642af573deb835f7b94f78bb1c3fe9 matched recorded baselines.
+
+This is a verified installation/readback plus predicate and rollback compilation testing, NOT a successful end-to-end acceptance. Full positive/replay/concurrency validation remains pending. No entitlement TTL extension, purchase change, goal write, Edge deployment, TestFlight submission or recommendation activation occurred.
