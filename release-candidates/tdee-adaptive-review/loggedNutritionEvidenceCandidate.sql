@@ -36,7 +36,7 @@ ALTER TABLE macrogoal_logged_nutrition_private.evidence_events ENABLE ROW LEVEL 
 REVOKE ALL ON TABLE macrogoal_logged_nutrition_private.evidence_events FROM PUBLIC,anon,authenticated,service_role;
 
 CREATE FUNCTION macrogoal_logged_nutrition_private.actor()
-RETURNS uuid LANGUAGE plpgsql VOLATILE SET search_path=pg_catalog,pg_temp AS $fn$
+RETURNS uuid LANGUAGE plpgsql STABLE SET search_path=pg_catalog,pg_temp AS $fn$
 DECLARE a uuid:=auth.uid();
 BEGIN
  IF a IS NULL OR auth.jwt()->>'role' IS DISTINCT FROM 'authenticated'
@@ -60,10 +60,12 @@ RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $fn$
    'logged_at',i->'logged_at'),'mealDate',m->'date')
 $fn$;
 
--- One read statement: historical receipt and current evidence are distinct.
--- No row locks on read. This is as-of evidence, not a commit-time guarantee.
+-- STABLE fixes the view at the invoking SQL query's snapshot, so a future
+-- same-statement source projection can call this without private SELECT grants.
+-- Historical receipt and current evidence are distinct. No locks on read.
+-- This is as-of evidence, not a commit-time guarantee or read-after-write proof.
 CREATE FUNCTION public.tdee_read_logged_nutrition_evidence_v1(p_item_id uuid,p_request_id uuid DEFAULT NULL)
-RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $fn$
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $fn$
 DECLARE a uuid:=macrogoal_logged_nutrition_private.actor(); result jsonb;
 BEGIN
  SELECT jsonb_build_object('version','logged-nutrition-evidence-state-v1',
@@ -157,6 +159,15 @@ BEGIN
   IF item.nutrition_revision IS NULL OR item.nutrition_revision IS DISTINCT FROM req_revision
    OR item.is_scheduled IS DISTINCT FROM false OR p_request->'expected' IS DISTINCT FROM binding
   THEN RAISE EXCEPTION USING ERRCODE='40001',MESSAGE='nutrition_binding_changed'; END IF;
+  -- Match the consumer contract for ALL stored values, not merely declared ones.
+  -- Declaration controls provenance; it does not repair an unknown stored value.
+  FOREACH k IN ARRAY ARRAY['calories','protein','carbs','fats','fiber'] LOOP
+   IF jsonb_typeof(binding#>ARRAY['values',k]) IS DISTINCT FROM 'number'
+   THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='stored_nutrient_unknown'; END IF;
+   n:=(binding#>>ARRAY['values',k])::numeric;
+   IF n<0 OR n::text IN ('NaN','Infinity','-Infinity')
+   THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='stored_nutrient_invalid'; END IF;
+  END LOOP;
   fields:=p_request->'declaredFields';
   IF jsonb_typeof(fields) IS DISTINCT FROM 'array'
   THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_declared_fields'; END IF;
