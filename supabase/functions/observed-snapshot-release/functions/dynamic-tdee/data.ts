@@ -31,7 +31,7 @@ const MISSING_READING_INSTANT = -1000000000000000000000000n;
 function readingInstant(value: unknown): bigint | null {
   if (value === '' || value === null || value === undefined) return MISSING_READING_INSTANT;
   if (typeof value !== 'string') return null;
-  const m = /^(\\d{4}-\\d{2}-\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,6}))?(Z|([+-])(\\d{2}):(\\d{2}))$/.exec(value);
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
   if (!m) return null;
   const day = dayNumber(m[1]), hours = Number(m[2]), minutes = Number(m[3]), seconds = Number(m[4]);
   const offsetHours = Number(m[8] ?? 0), offsetMinutes = Number(m[9] ?? 0);
