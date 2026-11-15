@@ -169,3 +169,43 @@ export function diagnoseFourteenDayRate(today:unknown,rows:unknown,goal:unknown,
   reason:rate===null?'insufficient_pair_span':'uncertainty_not_established',
   reevaluateAt};
 }
+
+/** Product coverage thresholds, NOT statistical precision or nutritional review. */
+export const INITIAL_RATE_COVERAGE=Object.freeze({
+ windowDays:14 as const,minCompleteDays:10,minWeightDays:8,minWeightsPerHalf:1,
+});
+export type InitialRateCoverageRules={windowDays:14;minCompleteDays:number;minWeightDays:number;minWeightsPerHalf:number};
+/**
+ * Invoked only with the own-actor snapshot's hash-validated readiness summary.
+ * Distribution means readings in both seven-day halves; configurable, not a CI.
+ * Passing coverage permits further evaluation, NEVER a recommendation by itself.
+ * A daily caller may evaluate this repeatedly; cadence after acceptance is separate.
+ */
+export function assessInitialRateCoverage(
+ window:RateReviewWindow,coverage:{status:string;confirmedDays:number|null;windowDays:number},
+ rules:InitialRateCoverageRules=INITIAL_RATE_COVERAGE
+){
+ const base={actionable:false as const,recommendation:null,statisticalConfidenceEstablished:false as const};
+ const fail=(reason:string)=>({...base,coverageSufficient:false,reason});
+ if(!rules||rules.windowDays!==14||
+ ![rules.minCompleteDays,rules.minWeightDays,rules.minWeightsPerHalf].every(Number.isSafeInteger)||
+ rules.minCompleteDays<10||rules.minCompleteDays>14||rules.minWeightDays<8||rules.minWeightDays>14||
+ rules.minWeightsPerHalf<1||rules.minWeightsPerHalf>7)return fail('coverage_rules_invalid');
+ if(window.kind!=='window'||calendarDay(window.endDateExclusive)===null||
+ calendarDay(window.startDate)!==calendarDay(window.endDateExclusive)!-14)return fail('rate_window_invalid');
+ if(!coverage||coverage.status!=='explicit_self_report'||coverage.windowDays!==14||
+ !Number.isSafeInteger(coverage.confirmedDays)||coverage.confirmedDays!<0||coverage.confirmedDays!>14)
+ return fail('complete_days_unverified');
+ // Revalidate dates/count rather than trusting a caller-supplied weightDays value.
+ const checked=selectFourteenDayRateWindow(window.endDateExclusive,window.weights);
+ if(checked.kind!=='window'||checked.weightDays!==window.weightDays)return fail('rate_window_invalid');
+ const midpoint=calendarDay(window.startDate)!+7;
+ const first=checked.weights.filter(w=>calendarDay(w.date)!<midpoint).length;
+ const second=checked.weightDays-first;
+ const counts={completeDays:coverage.confirmedDays,weightDays:checked.weightDays,
+ firstHalfWeightDays:first,secondHalfWeightDays:second,thresholds:{...rules}};
+ if(coverage.confirmedDays!<rules.minCompleteDays)return {...fail('complete_days_insufficient'),...counts};
+ if(checked.weightDays<rules.minWeightDays)return {...fail('weight_days_insufficient'),...counts};
+ if(first<rules.minWeightsPerHalf||second<rules.minWeightsPerHalf)return {...fail('weight_distribution_insufficient'),...counts};
+ return {...base,...counts,coverageSufficient:true,reason:'coverage_met_uncertainty_requires_evaluation'};
+}
