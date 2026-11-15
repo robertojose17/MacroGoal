@@ -128,3 +128,44 @@ export function selectFourteenDayRateWindow(today:unknown,rows:unknown):RateRevi
  return {kind:'window',actionable:false,startDate:dateFor(start),endDateExclusive:today as string,
  weights,weightDays:weights.length,missingWeightDates};
 }
+
+/**
+ * Descriptive 14-day diagnostic, separate from the 21-day expenditure model.
+ * Reuses its median-of-pair-slopes convention (pairs >=7 calendar days apart).
+ * Pair count is NOT an independent sample count and does not establish confidence.
+ * No plateau classification, calorie conversion or recommendation is produced.
+ * reevaluateAt is metadata, not a scheduled task. No user data are fetched here.
+ */
+export function diagnoseFourteenDayRate(today:unknown,rows:unknown,goal:unknown,now:number){
+ const reevaluateAt=now+7*86400000;
+ if(!Number.isSafeInteger(now)||Math.abs(now)>8640000000000000||
+ !Number.isSafeInteger(reevaluateAt)||Math.abs(reevaluateAt)>8640000000000000)return blocked('invalid_time');
+ const window=selectFourteenDayRateWindow(today,rows);
+ if(window.kind==='blocked')return window;
+ const target=readPersistedTargetRate(goal);
+ const slopes:number[]=[];
+ for(let a=0;a<window.weights.length;a++)for(let b=a+1;b<window.weights.length;b++){
+  const left=window.weights[a],right=window.weights[b];
+  const gap=calendarDay(right.date)!-calendarDay(left.date)!;
+  if(gap<7)continue;
+  const slope=(right.weightKg-left.weightKg)/gap;
+  if(!finite(slope))return blocked('rate_numeric_range_invalid');
+  slopes.push(slope);
+ }
+ slopes.sort((a,b)=>a-b);
+ const middle=Math.floor(slopes.length/2);
+ // Halve each term before adding to avoid overflowing the median average.
+ const slope=slopes.length===0?null:slopes.length%2?slopes[middle]:slopes[middle-1]/2+slopes[middle]/2;
+ const rate=slope===null?null:slope*7;
+ if(rate!==null&&!finite(rate))return blocked('rate_numeric_range_invalid');
+ const targetRate=target.kind==='target_rate'?target.targetRateKgPerWeek:null;
+ const gap=rate===null||targetRate===null?null:targetRate-rate;
+ if(gap!==null&&!finite(gap))return blocked('rate_numeric_range_invalid');
+ return {kind:'rate_diagnostic' as const,actionable:false as const,
+  window,eligiblePairCount:slopes.length,observedRateKgPerWeek:rate,
+  targetRateKgPerWeek:targetRate,targetRateStatus:target.kind==='target_rate'?'available':target.reason,
+  targetMinusObservedKgPerWeek:gap,
+  interval:null,reliableInterval:false as const,recommendation:null,
+  reason:rate===null?'insufficient_pair_span':'uncertainty_not_established',
+  reevaluateAt};
+}
