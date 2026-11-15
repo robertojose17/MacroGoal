@@ -21,7 +21,8 @@ BEGIN
  OR before_acl IS DISTINCT FROM '{postgres=X/postgres,authenticated=X/postgres}'::aclitem[]
  THEN RAISE EXCEPTION 'snapshot_requires_fresh_review'; END IF;
  PERFORM 1 FROM pg_proc p WHERE p.oid=to_regprocedure('public.tdee_read_logged_nutrition_evidence_v1(uuid,uuid)')
- AND p.prosecdef AND p.provolatile='s' AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp']
+ AND p.proowner='postgres'::regrole AND p.prokind='f' AND NOT p.proretset AND NOT p.proleakproof
+ AND p.prorettype='jsonb'::regtype AND p.prosecdef AND p.provolatile='s' AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp']
  AND p.proacl='{postgres=X/postgres,authenticated=X/postgres}'::aclitem[]
  AND p.prosrc IS NOT DISTINCT FROM $expected_reader$
 DECLARE a uuid:=macrogoal_logged_nutrition_private.actor(); result jsonb;
@@ -51,6 +52,7 @@ BEGIN
 END $expected_reader$;
  IF NOT FOUND THEN RAISE EXCEPTION 'evidence_reader_requires_review'; END IF;
  PERFORM 1 FROM pg_proc p WHERE p.oid=to_regprocedure('macrogoal_logged_nutrition_private.actor()')
+ AND p.proowner='postgres'::regrole AND p.prokind='f' AND NOT p.proretset AND NOT p.proleakproof
  AND p.prosecdef=false AND p.provolatile='s' AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp']
  AND p.prosrc IS NOT DISTINCT FROM $expected_actor$
 DECLARE a uuid:=auth.uid();
@@ -63,6 +65,7 @@ BEGIN
 END $expected_actor$;
  IF NOT FOUND THEN RAISE EXCEPTION 'evidence_helper_requires_review'; END IF;
  PERFORM 1 FROM pg_proc p WHERE p.oid=to_regprocedure('macrogoal_logged_nutrition_private.item_binding(jsonb,jsonb)')
+ AND p.proowner='postgres'::regrole AND p.prokind='f' AND NOT p.proretset AND NOT p.proleakproof
  AND p.prosecdef=false AND p.provolatile='i' AND p.proconfig=ARRAY['search_path=pg_catalog, pg_temp']
  AND p.prosrc IS NOT DISTINCT FROM $expected_binding$
  SELECT jsonb_build_object(
