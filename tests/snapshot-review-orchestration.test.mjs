@@ -1,4 +1,5 @@
 /** Smart Macro regression changes prepared, NOT EXECUTED: runner remains blocked. */
+import {prepareSnapshotMacroContextRequest} from '../release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {beginSnapshotWorkflow,advanceSnapshotWorkflow,createSnapshotReviewOrchestrator} from '../release-candidates/tdee-adaptive-review/snapshotReviewOrchestration.ts';
@@ -25,7 +26,7 @@ function loaded(v=fixture()){
 const refreshResponse=()=>({version:'snapshot-eligibility-refresh-v1',status:'refreshed',ownerId:actor,anchorId:actor,eligibilityDigest:hash,actionable:false});
 test('OFF invokes no auth policy context writers clock or IDs',async()=>{
  let calls=0;const nope=()=>{calls++;throw Error('not allowed')};
- const run=createSnapshotReviewOrchestrator({verifyAccessToken:nope,readPolicyExact:nope,loadOwnContext:nope,bootstrapAsService:nope,refreshAsService:nope,issueAsService:nope,now:nope,newProposalId:nope},binding());
+ const run=createSnapshotReviewOrchestrator({verifyAccessToken:nope,readPolicyExact:nope,loadOwnContext:nope,loadReviewedMacroContext:nope,bootstrapAsService:nope,refreshAsService:nope,issueAsService:nope,now:nope,newProposalId:nope},binding());
  assert.deepEqual(await run({authorization:'Bearer token'}),{reason:'safety_review_required',proposal:null,mayHaveWritten:false});
  assert.equal((await run({authorization:'Bearer token',enabled:true})).reason,'invalid_request');
  assert.equal((await run({authorization:'Bearer token',ownerId:actor})).reason,'invalid_request');assert.equal(calls,0);
@@ -87,4 +88,52 @@ test('concurrent existing bootstrap with different baseline never resets or issu
 test('no tokens or request credentials enter pure workflow state',()=>{
  const s=loaded();assert.equal(JSON.stringify(s).includes('Bearer'),false);assert.equal('authorization' in s,false);
  assert.equal('token' in s,false);assert.equal(s.actor,actor);
+});
+
+// Synthetic context for arithmetic tests only. Not persisted/reviewed clinical evidence.
+function withPreset(v,preset='balanced'){
+ v.currentGoal.macro_preset=preset;v.observation.context.currentGoal.macro_preset=preset;
+ v.anchor.baseline_goal_snapshot.macro_preset=preset;
+ v.receiptChain.currentGoal.macro_preset=preset;v.receiptChain.anchor=structuredClone(v.anchor);
+ return v;
+}
+function macroEvidence(v){
+ const result=prepareSnapshotMacroContextRequest(v,actor,actor,now);
+ assert.equal(result.kind,'macro_request');const request=result.request;
+ return {version:'snapshot-macro-evidence-v1',request:structuredClone(request),consent:null,
+ review:{binding:structuredClone(request.binding),current:structuredClone(request.current),
+ review:{status:'reviewed',reviewId:'synthetic-review',reviewedAt:now-1000,expiresAt:now+60000,ageYears:request.ageYears,eligibility:'eligible'},
+ limits:{proteinMinG:140,proteinMaxG:160,carbsMinG:130,carbsMaxG:400,fatsMinG:40,fatsMaxG:90,fatMinFraction:.2,fatMaxFraction:.35}}};
+}
+
+function macroPhase(){
+ const v=withPreset(fixture());let s=loaded(v);s=advance(s,refreshResponse());s=advance(s,v);
+ assert.equal(s.phase,'load_macro');assert.equal(s.record,undefined);return {s,v};
+}
+test('separate macro load is required before issue; null and failed port retain write uncertainty',()=>{
+ const {s}=macroPhase();let end=advance(s,null);
+ assert.equal(end.phase,'done');assert.equal(end.outcome.reason,'macro_context_required');
+ assert.equal(end.outcome.mayHaveWritten,true);assert.equal(end.record,undefined);
+ end=advanceSnapshotWorkflow(s,{ok:false},now);assert.equal(end.outcome.reason,'source_error');assert.equal(end.outcome.mayHaveWritten,true);
+ end=advanceSnapshotWorkflow(s,{ok:true,value:null},NaN);assert.equal(end.outcome.mayHaveWritten,true);
+});
+test('real parser receives separate synthetic evidence, then issuer phase only',()=>{
+ const {s,v}=macroPhase();const next=advance(s,macroEvidence(v));
+ assert.equal(next.phase,'issue');assert.equal(next.record.ownerId,actor);
+ assert.equal(next.record.payload.target.proteinG,150);assert.equal(next.record.payload.target.fatsG,60);
+ assert.equal(next.macroRaw,undefined);assert.equal(next.macroRequest,undefined);
+});
+test('source age and mutated actor or profile across macro await cannot issue',()=>{
+ const {s,v}=macroPhase(),e=macroEvidence(v);
+ const expired=advanceSnapshotWorkflow(s,{ok:true,value:e},now+30000);
+ assert.equal(expired.outcome.reason,'source_expired');assert.equal(expired.outcome.mayHaveWritten,true);
+ for(const mutate of [x=>x.macroRaw.actor='other',x=>x.macroRequest.profileUpdatedAt='other',x=>x.macroRequest.binding.goalId='other']){
+  const changed=structuredClone(s);mutate(changed);const out=advance(changed,e);
+  assert.equal(out.phase,'done');assert.equal(out.outcome.proposal,null);assert.equal(out.outcome.mayHaveWritten,true);
+ }
+});
+test('macro port is only an additional pure phase, not a retry or implicit acceptance',()=>{
+ const {s}=macroPhase();const out=advance(s,{reviewed:true,eligible:true});
+ assert.equal(out.phase,'done');assert.equal(out.outcome.reason,'macro_evidence_binding_mismatch');
+ assert.equal(out.outcome.mayHaveWritten,true);assert.deepEqual(advance(out,null),out);
 });
