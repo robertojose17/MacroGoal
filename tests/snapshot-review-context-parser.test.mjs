@@ -179,3 +179,30 @@ test('foreign stale malformed and mixed-day readiness stays unverified',()=>{
  assert.equal(r.recommendation,null);assert.equal(r.reliableInterval,false);
  }
 });
+
+test('confirmed-day calorie mean excludes partial days without treating them as zero',()=>{
+ const v=fixture();const recent=v.readiness.days.filter(d=>d.date>='2026-10-31');
+ recent.slice(0,4).forEach(d=>{d.confirmed=false;});
+ const r=diagnoseSnapshotRateReview(v,actor,now);
+ assert.equal(r.loggedIntake.confirmedDayCount,10);
+ assert.equal(r.loggedIntake.averageLoggedCaloriesOnConfirmedDays,2500);
+ assert.equal(r.loggedIntake.imputedDays,0);
+ for(const k of ['proteinG','carbsG','fatsG','fiberG'])assert.equal(r.loggedIntake[k],null);
+ assert.equal(r.loggedIntake.macroStatus,'not_in_snapshot');
+});
+test('unknown calories or empty confirmed day nulls mean rather than cherry-picking',()=>{
+ for(const remove of [false,true]){
+ const v=fixture(),mealIds=new Set(v.observation.sources.meals.filter(m=>m.date==='2026-11-13').map(m=>m.id));
+ if(remove){v.observation.sources.items=v.observation.sources.items.filter(i=>!mealIds.has(i.meal_id));v.observation.counts.items=v.observation.sources.items.length;}
+ else v.observation.sources.items.find(i=>mealIds.has(i.meal_id)).calories=0;
+ const r=diagnoseSnapshotRateReview(v,actor,now);
+ assert.equal(r.loggedIntake.averageLoggedCaloriesOnConfirmedDays,null);
+ assert.equal(r.loggedIntake.unknownCalorieDayCount,1);
+ }
+});
+test('unverified readiness yields unknown intake rather than meal-type inference',()=>{
+ const v=fixture();v.readiness=null;
+ const r=diagnoseSnapshotRateReview(v,actor,now);
+ assert.equal(r.loggedIntake.status,'unverified');
+ assert.equal(r.loggedIntake.averageLoggedCaloriesOnConfirmedDays,null);
+});
