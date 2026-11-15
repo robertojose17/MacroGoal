@@ -40,7 +40,7 @@ function same(a: AdaptiveRequest, b: unknown) {
   const parsed = parseAdaptiveRequest(b,a.ownerId);
   return parsed && Object.keys(a).every(k => a[k as keyof AdaptiveRequest] === parsed[k as keyof AdaptiveRequest]);
 }
-function validReceipt(value: unknown, request: AdaptiveRequest): value is AdaptiveReceipt {
+export function validReceipt(value: unknown, request: AdaptiveRequest): value is AdaptiveReceipt {
   if (!record(value) || value.version !== 'adaptive-receipt-v1') return false;
   if (value.status === 'not_found') return Object.keys(value).length === 2;
   if (!same(request,value.request)) return false;
