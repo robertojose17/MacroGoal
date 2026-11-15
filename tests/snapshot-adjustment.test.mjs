@@ -103,3 +103,40 @@ test('missing reviewed macro context blocks only after prior safety gates',()=>{
  f.observedExpenditure=2300;assert.equal(draft(f).reason,'individual_deficit_review_required');
  f.observedExpenditure=2500;assert.equal(draft(f).kind,'no_change');
 });
+
+function rateFixture(){
+ const f=fixture();
+ f.rateReview={version:'rate-review-14d-v1',sourceFingerprint:f.evidence.fingerprint,capturedAt:f.evidence.capturedAt,
+ coverageSufficient:true,targetKgPerWeek:-0.2,observedKgPerWeek:-0.5,
+ uncertainty:{status:'reviewed',lowerKgPerWeek:-0.6,upperKgPerWeek:-0.4},
+ conversion:{model:'approximate-energy-equivalent-v1',kcalPerKg:7700},
+ tolerance:{absoluteLbPerWeek:0.25,relativeFraction:0.20}};
+ return f;
+}
+test('rate mode uses explicit approximate7700 and retains caps and non-actionable draft',()=>{
+ const f=rateFixture();f.policy.maxStepFraction=1;
+ const r=draft(f);assert.equal(r.kind,'draft');assert.equal(r.deltaKcal,200);
+ assert.equal(r.actionable,false);
+});
+test('rate mode unknown interval or insufficient coverage holds7d without target',()=>{
+ for(const patch of [{uncertainty:{status:'unverified'}},{coverageSufficient:false}]){
+ const f=rateFixture();Object.assign(f.rateReview,patch);
+ const r=draft(f);assert.equal(r.kind,'no_change');assert.equal(r.reevaluateAt,now+7*86400000);
+ assert.equal('target' in r,false);
+ }
+});
+test('rate mode binds exact source, validates conversion and preserves reduction block',()=>{
+ let f=rateFixture();f.rateReview.sourceFingerprint='b'.repeat(64);assert.equal(draft(f).reason,'rate_review_binding_mismatch');
+ f=rateFixture();f.rateReview.conversion.kcalPerKg=7000;assert.equal(draft(f).reason,'rate_conversion_contract_invalid');
+ f=rateFixture();f.rateReview.targetKgPerWeek=-1;assert.equal(draft(f).reason,'individual_deficit_review_required');
+});
+test('interval spanning tolerance abstains even when point estimate is far outside',()=>{
+ const f=rateFixture();f.rateReview.uncertainty.upperKgPerWeek=-0.21;
+ assert.equal(draft(f).reason,'rate_difference_uncertain');
+});
+test('rate mode does not bypass cooldown or reviewed-policy guards',()=>{
+ const f=rateFixture();f.anchor.baselineCapturedAt=now-13*86400000;
+ assert.equal(draft(f).reason,'review_cooldown');
+ f.anchor.baselineCapturedAt=now-14*86400000;f.policy.reviewed=false;
+ assert.equal(draft(f).reason,'review_required');
+});
