@@ -1,7 +1,7 @@
 {
   "format": "macrogoal-static-bundle-review-v1",
   "repository": "robertojose17/MacroGoal",
-  "sourceCommit": "e5d878e7bd831a94b53d088587bf2607551d3d92",
+  "sourceCommit": "2dac1e5017da577fe399f2a7ae0f86bf050a5fc4",
   "functionSlug": "progress-intelligence",
   "entrypoint": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts",
   "deploymentPerformed": false,
@@ -22,7 +22,10 @@
     "rateDiagnostic": "Program GET source invokes non-actionable 14-day summary only after existing context revalidation. No new reads or goal writes. Interval unverified; logging completeness unverified. Five endpoint tests prepared, NOT RUN. No deployment.",
     "explicitLoggingCoverage": "Internal same-statement review context adds explicit self-report day coverage after freshness, owner, date, hash shape and journey window checks. SQL read_state remains authority for content hash/confirmation; no separate client readiness read. Public program GET remains logging unverified. Three additional tests prepared NOT RUN.",
     "initialCoverage": "Own atomic diagnostic connects 14 completed local days, >=10 explicitly confirmed days, >=8 unique weights, configurable per-half distribution (default1, not robustness/precision); elapsed journey14d required. Coverage is not confidence. No producer change or activation.",
-    "paceTolerance": "Own diagnostic compares target gap with BOTH configurable 0.25lb/week and20% target magnitude tolerances. No calendar-triggered adjustment, confidence, conversion or recommendations. Eight new coverage/comparison tests PREPARED NOT RUN."
+    "paceTolerance": "Own diagnostic compares target gap with BOTH configurable 0.25lb/week and20% target magnitude tolerances. No calendar-triggered adjustment, confidence, conversion or recommendations. Eight new coverage/comparison tests PREPARED NOT RUN.",
+    "rateDraft": "Optional engine branch uses bound rate review and nearest reviewed interval edge with explicit approximate7700 model; all prior guards/caps retained, reductions still blocked. No trusted interval loader available; no activation. Five additional tests PREPARED NOT RUN.",
+    "initialAssessment": "Separate initial-rate-assessment-v1 returns hold from own atomic14d diagnostic without invoking legacy21d parser, draft or writes. No reviewed interval invented. Not wired to live Edge.",
+    "rateHttp": "Known rate no-change reasons explicitly mapped; unknown errors/uncertain writes retain reconciliation. Existing test expanded, NOT RUN."
   },
   "release": {
     "recommendationsEnabled": false,
@@ -104,8 +107,9 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotAdjustment.ts",
-      "gitBlobSha": "fe358e71dfebec75f920d218e6241f55a91a69e8",
+      "gitBlobSha": "ff9c74f9e77cb1edd72b75f129fa88e1bca7b063",
       "imports": [
+        "./rateAdjustmentDecision.ts",
         "./smartMacroAdjustment.ts"
       ]
     },
@@ -132,7 +136,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotHttpHandler.ts",
-      "gitBlobSha": "d204e886688a22a2bdc903f32e77519e8d2b55c2",
+      "gitBlobSha": "83e3c0b255cbefdb82955fbb81a11f23c4379f92",
       "imports": []
     },
     {
@@ -158,7 +162,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts",
-      "gitBlobSha": "401450c8d35e35a9ff53bc72bd9c218b8f6a0482",
+      "gitBlobSha": "b31b36819a8d7b54f7e309a4f270811c67902a83",
       "imports": [
         "../../supabase/functions/observed-snapshot-release/functions/observed-program/snapshot.ts",
         "../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts",
