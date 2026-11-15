@@ -1,7 +1,7 @@
 /** Prepared contract tests, NOT RUN. Runner remains blocked; no alternative execution. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {decideRateAdjustment as decide,readPersistedTargetRate as readRate,decidePersistedGoalRateAdjustment as decideGoal,selectFourteenDayRateWindow as selectWindow} from '../release-candidates/tdee-adaptive-review/rateAdjustmentDecision.ts';
+import {decideRateAdjustment as decide,readPersistedTargetRate as readRate,decidePersistedGoalRateAdjustment as decideGoal,selectFourteenDayRateWindow as selectWindow,diagnoseFourteenDayRate as diagnose} from '../release-candidates/tdee-adaptive-review/rateAdjustmentDecision.ts';
 const now=Date.parse('2026-11-15T12:00:00Z');
 function fixture(){return {now,targetRateKgPerWeek:-0.5,observedRateKgPerWeek:-0.3,
  interval:{lower:-0.4,upper:-0.2},data:{sufficient:true,stable:true,reliableInterval:true},
@@ -133,4 +133,47 @@ test('in-window duplicate invalid or unnormalized weights fail closed',()=>{
  for(const weightKg of [null,0,-1,NaN,Infinity,'80'])assert.equal(selectWindow('2026-11-15',[{date:'2026-11-14',weightKg}]).kind,'blocked');
  assert.equal(selectWindow('2026-11-15',[{date:'2026-11-14',weightKg:80},{date:'2026-11-14',weightKg:80}]).reason,'rate_weight_date_conflict');
  assert.equal(selectWindow('2026-11-15',[{date:'not-a-date',weightKg:80}]).kind,'blocked');
+});
+
+test('flat fourteen-day diagnosis never becomes a plateau recommendation',()=>{
+ const rows=selectWindow('2026-11-15',[]).missingWeightDates.map(date=>({date,weightKg:80}));
+ const r=diagnose('2026-11-15',rows,{goal_type:'lose',loss_rate_lbs_per_week:1},now);
+ assert.equal(r.kind,'rate_diagnostic');assert.equal(r.observedRateKgPerWeek,0);
+ assert.equal(r.targetMinusObservedKgPerWeek,-0.45359237);
+ assert.equal(r.reliableInterval,false);assert.equal(r.interval,null);assert.equal(r.recommendation,null);
+ assert.equal(r.reason,'uncertainty_not_established');assert.equal(r.actionable,false);
+ assert.equal('plateau' in r,false);assert.equal('deltaKcal' in r,false);assert.equal(r.reevaluateAt,now+7*86400000);
+});
+test('sustained linear change is descriptive and preserves signed units',()=>{
+ const dates=selectWindow('2026-11-15',[]).missingWeightDates;
+ const rows=dates.map((date,i)=>({date,weightKg:80-i*0.1}));
+ const r=diagnose('2026-11-15',rows,{goal_type:'maintain'},now);
+ assert.ok(Math.abs(r.observedRateKgPerWeek+0.7)<1e-10);
+ assert.ok(Math.abs(r.targetMinusObservedKgPerWeek-0.7)<1e-10);assert.equal(r.reliableInterval,false);
+});
+test('isolated spike does not receive confidence from pair count',()=>{
+ const rows=selectWindow('2026-11-15',[]).missingWeightDates.map((date,i)=>({date,weightKg:i===6?85:80}));
+ const r=diagnose('2026-11-15',rows,{goal_type:'maintain'},now);
+ assert.equal(r.observedRateKgPerWeek,0);assert.ok(r.eligiblePairCount>0);
+ assert.equal(r.recommendation,null);assert.equal(r.reliableInterval,false);
+});
+test('sparse and old data abstain without filling missing days',()=>{
+ for(const rows of [[],[{date:'2026-11-14',weightKg:80}],[{date:'2026-11-10',weightKg:80},{date:'2026-11-14',weightKg:79}],
+ [{date:'2026-10-15',weightKg:80},{date:'2026-10-30',weightKg:79}]]){
+ const r=diagnose('2026-11-15',rows,{goal_type:'maintain'},now);
+ assert.equal(r.observedRateKgPerWeek,null);assert.equal(r.reason,'insufficient_pair_span');
+ assert.equal(r.recommendation,null);assert.equal(r.reevaluateAt,now+7*86400000);
+ }
+});
+test('future readings and caller arrays cannot alter completed-window diagnostic',()=>{
+ const rows=[{date:'2026-11-01',weightKg:80},{date:'2026-11-14',weightKg:79}],before=structuredClone(rows);
+ const base=diagnose('2026-11-15',rows,{goal_type:'maintain'},now);
+ const extra=diagnose('2026-11-15',[...rows,{date:'2026-11-15',weightKg:60},{date:'2026-11-16',weightKg:40}],{goal_type:'maintain'},now);
+ assert.deepEqual(base,extra);assert.deepEqual(rows,before);
+});
+test('unavailable target never invents gain rate; invalid time blocks',()=>{
+ const r=diagnose('2026-11-15',[{date:'2026-11-01',weightKg:80},{date:'2026-11-14',weightKg:79}],{goal_type:'gain'},now);
+ assert.equal(r.targetRateKgPerWeek,null);assert.equal(r.targetMinusObservedKgPerWeek,null);
+ assert.equal(r.targetRateStatus,'target_gain_rate_unavailable');assert.equal(r.recommendation,null);
+ for(const value of [NaN,Infinity,8640000000000000])assert.equal(diagnose('2026-11-15',[],{goal_type:'maintain'},value).kind,'blocked');
 });
