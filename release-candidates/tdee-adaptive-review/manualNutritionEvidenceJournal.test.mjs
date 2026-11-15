@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createManualNutritionEvidenceJournal} from './manualNutritionEvidenceJournal.mjs';
+const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const entry=(owner,rid)=>({version:'manual-evidence-journal-v1',ownerId:id(owner),itemId:id(2),request:{version:'user-entered-v1',kind:'register',itemId:id(2),requestId:id(rid)}});
+function fixture(){const map=new Map();return {map,storage:{getItem:async k=>map.get(k)??null,setItem:async(k,v)=>{map.set(k,v);},getAllKeys:async()=>[...map.keys()],removeItem:async k=>{map.delete(k);}}};}
+test('two requests on same item stay independent; actors stay isolated',async()=>{const f=fixture(),j=createManualNutritionEvidenceJournal(f.storage);await Promise.all([j.append(entry(1,3)),j.append(entry(1,4)),j.append(entry(9,5))]);assert.equal((await j.listPending(id(1),id(2))).length,2);assert.equal((await j.listPending(id(9),id(2))).length,1);});
+test('existing request cannot be overwritten with changed payload',async()=>{const f=fixture(),j=createManualNutritionEvidenceJournal(f.storage),e=entry(1,3);await j.append(e);assert.equal(await j.append({...e,request:{...e.request,extra:true}}),false);assert.deepEqual(await j.read(id(1),id(3)),e);});
+test('clear only exact request payload; no other request removed',async()=>{const f=fixture(),j=createManualNutritionEvidenceJournal(f.storage),e=entry(1,3);await j.append(e);await j.append(entry(1,4));assert.equal(await j.clearExact(id(1),id(3),{...e,itemId:id(8)}),false);assert.equal(await j.clearExact(id(1),id(3),e),true);assert.ok(await j.read(id(1),id(4)));});
+test('bad namespace and identities rejected; corrupted storage is not silently ignored',async()=>{const f=fixture();assert.throws(()=>createManualNutritionEvidenceJournal(f.storage,'../bad'));const j=createManualNutritionEvidenceJournal(f.storage);await assert.rejects(j.read('bad',id(3)));f.map.set(`macrogoal:manual-nutrition-evidence:v1:${id(1)}:${id(3)}`,'broken');await assert.rejects(j.listPending(id(1),id(2)));});
