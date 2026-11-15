@@ -1,0 +1,17 @@
+# Isolated variable rate-adjustment decision candidate
+
+Not mounted or imported by application code; excluded from the live runtime bundle manifest. Recommendations remain OFF. No SQL, existing engine, release flag, live goal or macro is changed. Contract tests are prepared, NOT RUN because the runner remains blocked.
+
+## Contract and units
+Target and observed rates use kg/week, with negative values for weight loss and positive values for gain. A finite ordered interval must contain the observed rate and have an explicitly reliable classification in addition to sufficient and stable data. The module neither constructs that interval nor asserts a statistical confidence level.
+
+If the target falls inside the interval (including its boundaries), or evidence is insufficient/unstable/unreliable, the result is hold with reevaluation seven days later. Existing intake or accumulated change outside the supplied policy also holds without widening limits. Malformed inputs and missing/unreviewed conversion are blocked. Nonfinite intermediate arithmetic holds for reevaluation instead of clamping infinity to a200kcal change.
+
+Outside the interval, the candidate daily calorie delta is (target rate minus nearest interval edge) times the explicitly reviewed kcal/kg conversion divided by seven. The nearest edge, rather than the point estimate, avoids treating residual uncertainty as evidence for the full point-estimate adjustment. Magnitude is capped by200kcal, supplied step cap, current-intake fraction, existing net-change cap and intake floor/ceiling. Integer magnitude is truncated toward zero, not rounded up. There are no default numeric conversion/cap values. Test fixtures use synthetic7000 only for arithmetic; it is not a recommended or clinically validated conversion.
+
+Outputs are non-actionable candidate deltas or hold/blocked states, never macro targets. The function does not accept, persist or schedule anything. A seven-day reevaluation suggestion does not shorten or restart the existing14-day acceptance cadence. Explicit user acceptance and preservation of the user's configured macro distribution remain downstream requirements. The current engine preserves protein/fiber while distributing residual energy between carbs/fat; it does not yet implement preservation of the configured macro split. This module returns no macro targets and does not resolve that pending integration.
+
+## Integration blockers
+The current observational estimator exports a weight trend but no reviewed reliable rate interval; its low-confidence expenditure sensitivity band must not be repurposed into a rate interval. Estimated status is not proof of reliable evidence. Current integration also lacks a bound quantified desired-rate contract and reviewed conversion policy. The observational7700 approximation is NOT a default for this module.
+
+Server policy provenance, actor/goal/source bindings and reviewed interval methodology must be established before any live use; caller booleans are not independent proof of review. The existing individual-total-deficit guard still suspends every reduction. A negative candidate here cannot bypass that guard, floors, caps, cadence or acceptance. No clinical efficacy or individualized safety claim is made. A future professionally reviewed method may supply these inputs; no mandatory professional visit or new user-facing requirement is introduced here.
