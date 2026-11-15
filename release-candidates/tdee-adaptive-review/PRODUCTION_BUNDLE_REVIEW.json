@@ -1,14 +1,14 @@
 {
   "format": "macrogoal-static-bundle-review-v1",
   "repository": "robertojose17/MacroGoal",
-  "sourceCommit": "7a61307d1f62c16aa2d74c4b9bc57a9c2e5548a9",
+  "sourceCommit": "b64b0c25d4a61652fbdf2c0ffdae4596cbe18271",
   "functionSlug": "progress-intelligence",
   "entrypoint": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts",
   "deploymentPerformed": false,
   "deploymentAllowed": false,
   "verification": {
     "relativeImportClosure": "reviewed",
-    "fileCount": 62,
+    "fileCount": 64,
     "missingRelativeImports": 0,
     "repositoryEscapes": 0,
     "sourceBlobs": "read back against sourceCommit",
@@ -18,7 +18,8 @@
     "scopedTesterPreflight": "New OFF acceptance route reads receipt then reuses scoped tester refresh immediately before own-bearer acceptance; no TTL extension. Eleven backend tests prepared, NOT RUN.",
     "scopedMacroContext": "Connected load_macro phase reads own-actor preference and fixed service-only nutrition review getter. Empty administrative source installed; no reviewed rows. OFF. Source tests NOT RUN.",
     "futureWeightExclusion": "Candidate weightPace filters dates at or before as-of date. Two regressions prepared, NOT RUN.",
-    "acceptanceErrors": "Static review: module load failures distinct from uncertain accepting-handler failures; uncertain outcomes require receipt reconciliation. Both immutable acceptance and recommendation switches required."
+    "acceptanceErrors": "Static review: module load failures distinct from uncertain accepting-handler failures; uncertain outcomes require receipt reconciliation. Both immutable acceptance and recommendation switches required.",
+    "rateDiagnostic": "Program GET source invokes non-actionable 14-day summary only after existing context revalidation. No new reads or goal writes. Interval unverified; logging completeness unverified. Five endpoint tests prepared, NOT RUN. No deployment."
   },
   "release": {
     "recommendationsEnabled": false,
@@ -71,6 +72,11 @@
         "./proposal.ts",
         "./apiContract.ts"
       ]
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/rateAdjustmentDecision.ts",
+      "gitBlobSha": "2866222c43e431672087bf003cd27db71ecbd030",
+      "imports": []
     },
     {
       "path": "release-candidates/tdee-adaptive-review/receiptChain.ts",
@@ -148,7 +154,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts",
-      "gitBlobSha": "2709e337786f43d5f8f0ed8cadef8a04adf5091f",
+      "gitBlobSha": "e0133f0c4a6461312d78293b3bb2b3087b39347f",
       "imports": [
         "../../supabase/functions/observed-snapshot-release/functions/observed-program/snapshot.ts",
         "../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts",
@@ -156,7 +162,8 @@
         "./receiptChain.ts",
         "./snapshotAdjustment.ts",
         "./smartMacroAdjustment.ts",
-        "./snapshotProposalProducer.ts"
+        "./snapshotProposalProducer.ts",
+        "./rateAdjustmentDecision.ts"
       ]
     },
     {
@@ -216,7 +223,7 @@
     },
     {
       "path": "supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts",
-      "gitBlobSha": "3e573fd28517c685fbb793adbfd35b6ef290f06b",
+      "gitBlobSha": "1714baa98d9644138b88f7060c63098120dcc2ef",
       "imports": [
         "../_shared/dynamic-tdee.ts"
       ]
@@ -228,12 +235,23 @@
     },
     {
       "path": "supabase/functions/observed-snapshot-release/functions/observed-program/handler.ts",
-      "gitBlobSha": "88dcfb714656ef58c21002f0dd4b583839fff832",
+      "gitBlobSha": "9efa9184d424fb0af00d0d418af0f6e9a4de26a5",
       "imports": [
         "../dynamic-tdee/data.ts",
+        "./rateDiagnostic.ts",
         "../_shared/dynamic-tdee.ts",
         "./snapshot.ts",
         "./dispatcher.ts"
+      ]
+    },
+    {
+      "path": "supabase/functions/observed-snapshot-release/functions/observed-program/rateDiagnostic.ts",
+      "gitBlobSha": "e9281beb504b26528e99161190ecabafc9863949",
+      "imports": [
+        "./snapshot.ts",
+        "../dynamic-tdee/data.ts",
+        "../_shared/dynamic-tdee.ts",
+        "../../../../../release-candidates/tdee-adaptive-review/rateAdjustmentDecision.ts"
       ]
     },
     {
@@ -330,7 +348,9 @@
         "./types.ts",
         "./queries.ts",
         "./weightSource.ts",
+        "./types.ts",
         "./loggingReliability.ts",
+        "./types.ts",
         "./config.ts"
       ]
     },
@@ -365,6 +385,8 @@
       "gitBlobSha": "4ac4d5bbd6a5da4db6a92dd358187d66fead2367",
       "imports": [
         "./config.ts",
+        "./accepted-goal-history.ts",
+        "./accepted-goal-history.ts",
         "./accepted-goal-history.ts"
       ]
     },
@@ -438,6 +460,7 @@
         "./types.ts",
         "./queries.ts",
         "./weightSource.ts",
+        "./types.ts",
         "./loggingReliability.ts",
         "./progressStatus.ts",
         "./config.ts"
