@@ -61,3 +61,5 @@ test('optional managed access deadline is preserved; ordinary payload shape stay
  assert.equal(parseProgramWithClock({...program(),accessValidUntil:now+30000},now).accessValidUntil,now+30000);
  for(const accessValidUntil of [now,now-1,now+30001,null,String(now+1000)]) assert.throws(()=>parseProgramWithClock({...program(),accessValidUntil},now));
 });
+
+test('observed rate preserves server sign and zero; never populates missing states',()=>{for(const rate of [-0.25,0,0.25])assert.equal(api.parseObservationProgram({...program(),estimate:{...estimate(),weightTrendKgPerWeek:rate}}).estimate.weightTrendKgPerWeek,rate); for(const rate of [null,undefined,NaN,Infinity,'0.25'])assert.throws(()=>api.parseObservationProgram({...program(),estimate:{...estimate(),weightTrendKgPerWeek:rate}}));const value=api.parseObservationProgram({...program(),estimate:{...estimate(),status:'collecting',kcalPerDay:null,confidence:null,asOf:null,weightTrendKgPerWeek:5}});assert.equal(value.estimate.weightTrendKgPerWeek,null);});

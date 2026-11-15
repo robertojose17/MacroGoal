@@ -6,6 +6,7 @@ export interface ObservationEstimate {
   version: 'observed-v1'; observationOnly: true; observationVersion: 'observation-v1';
   status: 'estimated' | 'collecting' | 'paused' | 'stale' | 'unavailable';
   reason: string; kcalPerDay: number | null; asOf: string | null;
+  weightTrendKgPerWeek: number | null;
   confidence: 'low' | null; loggingCompleteness: 'unverified';
   coverage: {
     start: string; end: string; days: number; loggedDays: number; weightDays: number;
@@ -83,7 +84,7 @@ export function parseObservationProgram(value: unknown, now = Date.now()): Obser
     const status = e.status;
     if (status !== 'estimated' && status !== 'collecting' && status !== 'paused' && status !== 'stale' && status !== 'unavailable') throw Error('invalid_observation');
     estimate = { version: 'observed-v1', observationOnly: true, observationVersion:'observation-v1', status,
-      reason:e.reason, kcalPerDay:kcal, asOf, confidence:e.confidence, loggingCompleteness:'unverified', coverage };
+      reason:e.reason, kcalPerDay:kcal, asOf, weightTrendKgPerWeek:status === 'estimated' ? e.weightTrendKgPerWeek as number : null, confidence:e.confidence, loggingCompleteness:'unverified', coverage };
   }
   return { version:'dynamic-program-v1', observationOnly:true, observationVersion:'observation-v1', premium:v.premium,
     enabled:v.enabled, reviewDay:v.reviewDay, today, nextReviewDate, reviewDue:false, proposal:null, reviewPeriod:null, reason:v.reason, estimate,

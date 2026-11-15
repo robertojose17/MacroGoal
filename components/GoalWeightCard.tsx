@@ -27,6 +27,8 @@ export default function GoalWeightCard({ userId, isDark }: GoalWeightCardProps) 
     <View><Text style={{ color }}>Daily Burn</Text><Text style={[styles.title, { color }]}>{burn === null ? '--' : `${Math.round(burn)} kcal/${spanish ? 'día' : 'day'}`}</Text>
       <Text accessibilityRole="text" style={{ color }}>{observationStatusText(status,spanish)}</Text>
       {burn !== null && estimate?.coverage && <>
+        {estimate.weightTrendKgPerWeek !== null && Number.isFinite(estimate.weightTrendKgPerWeek) && <Text style={{ color }}>{spanish ? 'Ritmo observado estimado' : 'Estimated observed rate'}: {estimate.weightTrendKgPerWeek.toFixed(2)} kg/{spanish ? 'semana' : 'week'}</Text>}
+        <Text style={{ color }}>{spanish ? 'Datos hasta' : 'Data through'}: {estimate.asOf}</Text>
         <Text style={{ color }}>{spanish ? 'Período' : 'Period'}: {estimate.coverage.start} → {estimate.coverage.end} ({spanish ? 'el último día solo aporta peso' : 'last day contributes weight only'}). {estimate.coverage.loggedDays} {spanish ? 'días con ingesta registrada y' : 'logged intake days and'} {estimate.coverage.weightDays} {spanish ? 'días con peso.' : 'weight days.'}</Text>
         <Text style={{ color }}>{spanish ? 'Sensibilidad del modelo' : 'Model sensitivity'}: {estimate.coverage.sensitivityKcal.low}–{estimate.coverage.sensitivityKcal.high} kcal/{spanish ? 'día' : 'day'}. {spanish ? 'No es un intervalo de confianza ni una medición metabólica.' : 'Not a confidence interval or metabolic measurement.'}</Text>
       </>}
