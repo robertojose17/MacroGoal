@@ -1,7 +1,7 @@
 {
   "format": "macrogoal-static-bundle-review-v1",
   "repository": "robertojose17/MacroGoal",
-  "sourceCommit": "2dac1e5017da577fe399f2a7ae0f86bf050a5fc4",
+  "sourceCommit": "785eed4b07e250a041510d38d772048801b33070",
   "functionSlug": "progress-intelligence",
   "entrypoint": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts",
   "deploymentPerformed": false,
@@ -24,7 +24,7 @@
     "initialCoverage": "Own atomic diagnostic connects 14 completed local days, >=10 explicitly confirmed days, >=8 unique weights, configurable per-half distribution (default1, not robustness/precision); elapsed journey14d required. Coverage is not confidence. No producer change or activation.",
     "paceTolerance": "Own diagnostic compares target gap with BOTH configurable 0.25lb/week and20% target magnitude tolerances. No calendar-triggered adjustment, confidence, conversion or recommendations. Eight new coverage/comparison tests PREPARED NOT RUN.",
     "rateDraft": "Optional engine branch uses bound rate review and nearest reviewed interval edge with explicit approximate7700 model; all prior guards/caps retained, reductions still blocked. No trusted interval loader available; no activation. Five additional tests PREPARED NOT RUN.",
-    "initialAssessment": "Separate initial-rate-assessment-v1 returns hold from own atomic14d diagnostic without invoking legacy21d parser, draft or writes. No reviewed interval invented. Not wired to live Edge.",
+    "initialAssessment": "Server-selected rate-review-14d-v1 in existing OFF orchestration invokes assessment after own context read, before any bootstrap/refresh/issue. Terminates with no proposal/no writes while uncertainty unavailable. Legacy engine selection unchanged. Request cannot choose version or enable. Three orchestration regressions PREPARED NOT RUN. No daily scheduler or live deployment.",
     "rateHttp": "Known rate no-change reasons explicitly mapped; unknown errors/uncertain writes retain reconciliation. Existing test expanded, NOT RUN."
   },
   "release": {
@@ -176,7 +176,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotReviewOrchestration.ts",
-      "gitBlobSha": "396308f2393d65cf0039d3d17b105a5e740ac904",
+      "gitBlobSha": "a34a6620a6a5b82ba890cdb0d1db513712a80381",
       "imports": [
         "./proposal.ts",
         "./snapshotReviewContextParser.ts",
