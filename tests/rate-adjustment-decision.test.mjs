@@ -1,7 +1,7 @@
 /** Prepared contract tests, NOT RUN. Runner remains blocked; no alternative execution. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {decideRateAdjustment as decide,readPersistedTargetRate as readRate,decidePersistedGoalRateAdjustment as decideGoal} from '../release-candidates/tdee-adaptive-review/rateAdjustmentDecision.ts';
+import {decideRateAdjustment as decide,readPersistedTargetRate as readRate,decidePersistedGoalRateAdjustment as decideGoal,selectFourteenDayRateWindow as selectWindow} from '../release-candidates/tdee-adaptive-review/rateAdjustmentDecision.ts';
 const now=Date.parse('2026-11-15T12:00:00Z');
 function fixture(){return {now,targetRateKgPerWeek:-0.5,observedRateKgPerWeek:-0.3,
  interval:{lower:-0.4,upper:-0.2},data:{sufficient:true,stable:true,reliableInterval:true},
@@ -107,4 +107,30 @@ test('goal adapter overrides untrusted target field and preserves input and guar
  f.data.reliableInterval=false;f.policy=undefined;
  assert.equal(decideGoal(goal,f).reason,'insufficient_or_uncertain_data');
  assert.equal(decideGoal(goal,f).reevaluateAt,now+7*86400000);
+});
+
+test('review window uses fourteen completed local dates and excludes today and future',()=>{
+ const rows=[{date:'2026-10-31',weightKg:80},{date:'2026-11-01',weightKg:79},
+ {date:'2026-11-14',weightKg:78},{date:'2026-11-15',weightKg:77},{date:'2026-11-16',weightKg:76}];
+ const before=structuredClone(rows),r=selectWindow('2026-11-15',rows);
+ assert.equal(r.kind,'window');assert.equal(r.startDate,'2026-11-01');assert.equal(r.endDateExclusive,'2026-11-15');
+ assert.deepEqual(r.weights,[rows[1],rows[2]]);assert.equal(r.weightDays,2);assert.equal(r.missingWeightDates.length,12);
+ assert.equal('sufficient' in r,false);assert.equal('reliableInterval' in r,false);assert.deepEqual(rows,before);
+});
+test('empty and flat series do not establish plateau or reliable evidence',()=>{
+ const empty=selectWindow('2026-11-15',[]);assert.equal(empty.weightDays,0);assert.equal(empty.missingWeightDates.length,14);
+ const rows=empty.missingWeightDates.map(date=>({date,weightKg:80}));
+ const flat=selectWindow('2026-11-15',rows);assert.equal(flat.weightDays,14);assert.deepEqual(flat.missingWeightDates,[]);
+ for(const key of ['plateau','sufficient','reliableInterval','deltaKcal'])assert.equal(key in flat,false);
+ assert.equal(flat.actionable,false);
+});
+test('calendar boundaries and missing dates do not use elapsed daylight-saving hours',()=>{
+ const leap=selectWindow('2024-03-01',[]);assert.equal(leap.startDate,'2024-02-16');assert.equal(leap.missingWeightDates.at(-1),'2024-02-29');
+ assert.equal(selectWindow('2026-01-05',[]).startDate,'2025-12-22');
+ for(const date of ['2026-02-30','2026-2-01','2026-11-15T00:00:00Z','0000-01-01',null])assert.equal(selectWindow(date,[]).kind,'blocked');
+});
+test('in-window duplicate invalid or unnormalized weights fail closed',()=>{
+ for(const weightKg of [null,0,-1,NaN,Infinity,'80'])assert.equal(selectWindow('2026-11-15',[{date:'2026-11-14',weightKg}]).kind,'blocked');
+ assert.equal(selectWindow('2026-11-15',[{date:'2026-11-14',weightKg:80},{date:'2026-11-14',weightKg:80}]).reason,'rate_weight_date_conflict');
+ assert.equal(selectWindow('2026-11-15',[{date:'not-a-date',weightKg:80}]).kind,'blocked');
 });
