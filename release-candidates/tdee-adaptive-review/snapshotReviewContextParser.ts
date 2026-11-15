@@ -181,7 +181,8 @@ export function diagnoseSnapshotRateReview(value:unknown,actor:string,now:number
   ? {...assessedCoverage,coverageSufficient:false,reason:journey==null?'journey_start_unverified':'initial_fourteen_days_not_elapsed'}
   : assessedCoverage;
  const paceComparison=compareInitialRateToTarget(diagnostic.observedRateKgPerWeek,diagnostic.targetRateKgPerWeek,initialCoverage.coverageSufficient);
- return {...diagnostic,loggingCoverage,initialCoverage,paceComparison,sourceCapturedAt:observation.capturedAt,sourceFingerprint:observation.sourceFingerprint,
+ const loggedIntake=confirmedDayLoggedCalories(value,observation.sources,today,loggingCoverage.status);
+ return {...diagnostic,loggingCoverage,initialCoverage,paceComparison,loggedIntake,sourceCapturedAt:observation.capturedAt,sourceFingerprint:observation.sourceFingerprint,
   goalId:g.id as string,goalRevision:g.updated_at as string};
 }
 
@@ -238,7 +239,48 @@ export function assessFourteenDaySnapshotReview(value:unknown,actor:string,now:n
   !d.sensitivity.outsideToleranceAcrossEnvelope?'rate_sensitivity_uncertain':'rate_uncertainty_unverified';
  return {version:'initial-rate-assessment-v1' as const,kind:'hold' as const,actionable:false as const,
   recommendation:null,reason,reevaluateAt:d.reevaluateAt,
-  coverage:d.initialCoverage,paceComparison:d.paceComparison,sensitivity:d.sensitivity,
+  coverage:d.initialCoverage,paceComparison:d.paceComparison,sensitivity:d.sensitivity,loggedIntake:d.loggedIntake,
   sourceCapturedAt:d.sourceCapturedAt,sourceFingerprint:d.sourceFingerprint,
   goalId:d.goalId,goalRevision:d.goalRevision};
+}
+
+/**
+ * Average of explicitly confirmed days ONLY, not imputed14-day intake or TDEE.
+ * The caller already validated the same-statement readiness envelope. SQL is
+ * authority for content hashes; never accept independent client confirmations.
+ * Snapshot items currently carry energy only: macro averages remain unknown.
+ */
+function confirmedDayLoggedCalories(value:Obj,sources:import('../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts').DataSources,
+ today:string,readinessStatus:string){
+ const unknown={status:'unverified' as const,averageLoggedCaloriesOnConfirmedDays:null,
+  confirmedDayCount:null,validCalorieDayCount:null,unknownCalorieDayCount:null,
+  proteinG:null,carbsG:null,fatsG:null,fiberG:null,macroStatus:'not_in_snapshot' as const,
+  imputedDays:0,actionable:false as const};
+ if(readinessStatus!=='explicit_self_report'||!rec(value.readiness)||!Array.isArray(value.readiness.days))return unknown;
+ const start=dateForDay(dayNumber(today)!-14);
+ const dates=new Set<string>(value.readiness.days.filter(d=>rec(d)&&d.confirmed===true&&d.confirmable===true&&
+  typeof d.date==='string'&&d.date>=start&&d.date<today).map(d=>d.date as string));
+ const meals=new Map(sources.meals.map(m=>[m.id,m]));
+ const sums=new Map<string,{sum:number;count:number;unknown:boolean}>();
+ for(const date of dates)sums.set(date,{sum:0,count:0,unknown:false});
+ for(const item of sources.items){
+  const meal=meals.get(item.meal_id);
+  if(!meal||!dates.has(meal.date))continue;
+  const day=sums.get(meal.date)!;
+  if(item.is_scheduled===true)continue;
+  // Legacy zero has no provenance distinguishing unknown energy from declared0.
+  if(item.is_scheduled!==false||typeof item.calories!=='number'||!Number.isFinite(item.calories)||item.calories<=0){
+   day.unknown=true;continue;
+  }
+  day.sum+=item.calories;day.count++;
+  if(!Number.isFinite(day.sum))day.unknown=true;
+ }
+ const valid=[...sums.values()].filter(d=>!d.unknown&&d.count>0&&d.sum>0);
+ const unknownCount=dates.size-valid.length;
+ // Do not cherry-pick known confirmed days after one confirmed day becomes unknown.
+ const total=valid.reduce((sum,d)=>sum+d.sum,0);
+ const average=dates.size>0&&unknownCount===0&&Number.isFinite(total)?total/dates.size:null;
+ return {...unknown,status:average===null?'unknown_calories' as const:'explicit_confirmed_days' as const,
+  confirmedDayCount:dates.size,validCalorieDayCount:valid.length,unknownCalorieDayCount:unknownCount,
+  averageLoggedCaloriesOnConfirmedDays:average};
 }
