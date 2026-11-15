@@ -158,7 +158,7 @@ test('revision formatting mismatch, source expiry and post-snapshot choice fail 
  state.choice.recordedAt=new Date(now-500).toISOString();
  assert.equal(macroPreferenceEvidence(preferenceActor,request,state,now).consent,null);
 });
-test('macro port uses only own bearer fixed noarg RPC; no service or authority call',async()=>{
+test('macro port uses own bearer for preference and fixed service-only getter for review',async()=>{
  const f=preferenceFixture(),calls=[];
  const config={url:'https://project.supabase.co',anonKey:'public-key',serviceKey:'private-key',
  createClient(url,key,options){calls.push({url,key,options});return {auth:{async getUser(){throw Error('unexpected');}},async rpc(name,args){calls.push({name,args});return {data:f.state,error:null};}};},
@@ -166,7 +166,10 @@ test('macro port uses only own bearer fixed noarg RPC; no service or authority c
  const ports=createSnapshotOrchestrationSupabasePorts(config,binding());
  const out=await ports.loadReviewedMacroContext(preferenceActor,f.request,'own-token');
  assert.equal(calls[0].key,'public-key');assert.equal(calls[0].options.global.headers.Authorization,'Bearer own-token');
- assert.deepEqual(calls[1],{name:'tdee_read_macro_choice_v1',args:undefined});assert.equal(calls.length,2);
+ assert.deepEqual(calls[1],{name:'tdee_read_macro_choice_v1',args:undefined});assert.equal(calls.length,4);
+ assert.equal(calls[2].key,'private-key');assert.equal(calls[2].options.global,undefined);
+ assert.equal(calls[3].name,'tdee_read_nutrition_review_v1');assert.equal(calls[3].args.p_owner,preferenceActor);
+ assert.equal(calls[3].args.p_expected.goalId,f.request.binding.goalId);
  assert.equal(out.review,null);assert.equal(out.consent.mode,'smart');
  assert.ok(!JSON.stringify(out).includes('own-token'));
 });
