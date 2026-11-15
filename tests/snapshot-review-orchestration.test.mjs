@@ -1,3 +1,4 @@
+/** Smart Macro regression changes prepared, NOT EXECUTED: runner remains blocked. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {beginSnapshotWorkflow,advanceSnapshotWorkflow,createSnapshotReviewOrchestrator} from '../release-candidates/tdee-adaptive-review/snapshotReviewOrchestration.ts';
@@ -59,16 +60,14 @@ test('changed actor anchor goal profile policy or journey after reload stops iss
  assert.equal(s.phase,'done');assert.equal(s.outcome.proposal,null);assert.equal(s.outcome.mayHaveWritten,true);
  }
 });
-test('issuer command uses only validated fresh reload, not writer envelope data',()=>{
+test('fresh reload without authoritative macro review stops before issuer',()=>{
  let s=advance(loaded(),refreshResponse());const v=fixture();
  v.capturedAt=new Date(now-500).toISOString();v.observation.capturedAt=v.capturedAt;v.readiness.capturedAt=v.capturedAt;
- s=advance(s,v);assert.equal(s.phase,'issue');assert.equal(s.record.payload.sourceCapturedAt,v.capturedAt);
- assert.equal(s.record.payload.target.proteinG,150);assert.equal(s.record.payload.deltaKcal,100);
- const p=s.record;
- const envelope={type:'persisted_reviewed_proposal',actionable:true,ownerId:actor,id:actor,digest:hash,
- policyVersion:p.policyVersion,engineVersion:p.payload.engineVersion,expiresAt:p.expiresAt,
- current:p.payload.current,target:p.payload.target,deltaKcal:p.payload.deltaKcal,sourceDate:p.payload.sourceDate};
- const done=advance(s,envelope);assert.equal(done.outcome.reason,'review_available');assert.equal(done.outcome.proposal.id,actor);
+ s=advance(s,v);assert.equal(s.phase,'done');assert.equal(s.outcome.reason,'macro_context_required');
+ assert.equal(s.outcome.proposal,null);assert.equal(s.outcome.mayHaveWritten,true);
+ assert.equal(s.record,undefined);
+ // A refresh may have written eligibility; no claim that nothing changed.
+ assert.deepEqual(advance(s,{type:'persisted_reviewed_proposal'}),s);
 });
 test('new bootstrap reloads same baseline then ends calibration without issuing',()=>{
  const v=fixture();v.anchor=null;v.policy=null;v.eligibility=null;v.receiptChain.anchor=null;
