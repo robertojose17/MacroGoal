@@ -1,3 +1,4 @@
+/** Smart Macro regression changes prepared, NOT EXECUTED: runner remains blocked. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {prepareSnapshotContextRecord,snapshotIssueArguments,createSnapshotServerRuntime,SNAPSHOT_SERVER_RPC} from '../release-candidates/tdee-adaptive-review/snapshotServerRuntime.ts';
@@ -15,16 +16,18 @@ function fixture(){
  anchor,eligibility:{owner_id:actor,policy_version:'p1',eligible:true,complete_days_verified:true,source_fingerprint:hash,digest:hash,expires_at:'2026-12-01T00:00:00Z'},
  receiptChain:{actor,anchor:structuredClone(anchor),currentGoal:structuredClone(goal),totalCount:0,rows:[]},actionable:false,evidenceStatus:'unverified'};
 }
-test('real parser and producer yield exact inert issuer arguments',()=>{
- const v=fixture();const p=prepareSnapshotContextRecord(v,actor,actor,now);
- assert.equal(p.kind,'prepared');assert.equal(p.actionable,false);
- const args=snapshotIssueArguments(p.record);
+test('real parser refuses old context without authoritative Smart Macro review',()=>{
+ const v=fixture(),before=structuredClone(v);
+ assert.deepEqual(prepareSnapshotContextRecord(v,actor,actor,now),{kind:'blocked',reason:'macro_context_required'});
+ assert.deepEqual(v,before);
+});
+test('issuer argument serialization clones a synthetic record without granting review',()=>{
+ const record={id:actor,ownerId:actor,policyVersion:'synthetic',anchorId:actor,expiresAt:'2026-11-14T12:04:59.000Z',
+ payload:{goalSnapshot:{daily_calories:2000},deltaKcal:100,readinessFingerprint:hash}};
+ const args=snapshotIssueArguments(record);
  assert.deepEqual(Object.keys(args).sort(),['p_id','p_owner','p_policy','p_anchor','p_expires_at','p_payload'].sort());
  assert.equal(args.p_owner,actor);assert.equal(args.p_payload.deltaKcal,100);
- assert.equal(args.p_payload.readinessFingerprint,hash);
- assert.equal(args.p_expires_at,'2026-11-14T12:04:59.000Z');
- args.p_payload.goalSnapshot.daily_calories=1;
- assert.equal(p.record.payload.goalSnapshot.daily_calories,2000);
+ args.p_payload.goalSnapshot.daily_calories=1;assert.equal(record.payload.goalSnapshot.daily_calories,2000);
 });
 test('unreviewed records and cross-account raw contexts cannot prepare',()=>{
  for(const mutate of [v=>v.policy=null,v=>v.anchor=null,v=>v.eligibility=null,v=>v.actor='other',v=>v.policy.reviewed='true',v=>v.readiness.days[0].confirmed=false]){
