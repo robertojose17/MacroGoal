@@ -209,3 +209,29 @@ export function assessInitialRateCoverage(
  if(first<rules.minWeightsPerHalf||second<rules.minWeightsPerHalf)return {...fail('weight_distribution_insufficient'),...counts};
  return {...base,...counts,coverageSufficient:true,reason:'coverage_met_uncertainty_requires_evaluation'};
 }
+
+/** User-selected product tolerance; descriptive comparison, not an uncertainty test. */
+export const RATE_TOLERANCE=Object.freeze({absoluteLbPerWeek:0.25,relativeFraction:0.20});
+export function compareInitialRateToTarget(
+ observedKgPerWeek:number|null,targetKgPerWeek:number|null,coverageSufficient:boolean,
+ tolerance:{absoluteLbPerWeek:number;relativeFraction:number}=RATE_TOLERANCE
+){
+ const base={actionable:false as const,recommendation:null,statisticalConfidenceEstablished:false as const};
+ if(!tolerance||!positive(tolerance.absoluteLbPerWeek)||!positive(tolerance.relativeFraction)||tolerance.relativeFraction>1)
+ return {...base,status:'blocked' as const,reason:'tolerance_invalid'};
+ if(coverageSufficient!==true)return {...base,status:'hold' as const,reason:'coverage_insufficient'};
+ if(!finite(observedKgPerWeek)||!finite(targetKgPerWeek))
+ return {...base,status:'hold' as const,reason:'target_or_trend_unavailable'};
+ const gap=targetKgPerWeek-observedKgPerWeek;
+ const absoluteKg=tolerance.absoluteLbPerWeek*0.45359237;
+ const relativeKg=Math.abs(targetKgPerWeek)*tolerance.relativeFraction;
+ if(!finite(gap)||!finite(absoluteKg)||!finite(relativeKg))
+ return {...base,status:'blocked' as const,reason:'rate_numeric_range_invalid'};
+ // Both tolerances must be exceeded, including equality as within tolerance.
+ // For maintenance (target zero) the absolute tolerance remains nonzero.
+ const outside=Math.abs(gap)>absoluteKg&&Math.abs(gap)>relativeKg;
+ return {...base,status:'comparison' as const,targetMinusObservedKgPerWeek:gap,
+ absoluteToleranceKgPerWeek:absoluteKg,relativeToleranceKgPerWeek:relativeKg,
+ outsideProductTolerance:outside,
+ reason:outside?'deviation_requires_uncertainty_evaluation':'within_product_tolerance'};
+}
