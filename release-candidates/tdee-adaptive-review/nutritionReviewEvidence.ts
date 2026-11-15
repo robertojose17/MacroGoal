@@ -21,7 +21,7 @@ export function nutritionReviewEvidence(actor:string,request:SnapshotMacroReques
  if(value.version!=='nutrition-review-record-v1'||value.ownerId!==actor||value.actionable!==false||
   value.decision!=='eligible'||!uuid(value.reviewId)||!Number.isSafeInteger(value.reviewVersion)||(value.reviewVersion as number)<1||
   !object(b)||Object.keys(b).length!==10||!bindingKeys.every(k=>b[k]===expected[k])||!object(b.current)||
-  Object.keys(b.current).length!==5||!goalKeys.every(k=>b.current[k]===expected.current[k])||
+  Object.keys(b.current).length!==5||!goalKeys.every(k=>(b.current as Record<string,unknown>)[k]===expected.current[k])||
   !object(limits)||Object.keys(limits).length!==8||
   !limitKeys.every(k=>typeof limits[k]==='number'&&Number.isFinite(limits[k]))||
   !object(p)||!text(p.approvalRef,2048)||typeof p.approvalSha256!=='string'||!/^[a-f0-9]{64}$/.test(p.approvalSha256)||
