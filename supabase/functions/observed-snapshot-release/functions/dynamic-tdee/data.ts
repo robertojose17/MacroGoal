@@ -67,15 +67,10 @@ export function estimateFromSources(data: DataSources, now: Date): DynamicTdeeRe
 
 /** Same dated sources as the estimator. Never use an old profile weight for lean-body macros. */
 export function weightAtEstimateDate(data: DataSources, date: string | null): number | null {
-  if (!date) return null;
-  const units = new Map(data.trackers.map(t => [t.id, t.unit?.toLowerCase()]));
-  const readings = [
-    ...data.checkIns.filter(w => w.date === date).map(w => ({ kg: sourceNumber(w.weight), at: readingInstant(w.updated_at ?? w.created_at ?? '') })),
-    ...data.trackerWeights.filter(w => w.date === date).map(w => ({ kg: units.get(w.tracker_id) === 'kg' ? sourceNumber(w.value) : ['lb','lbs'].includes(units.get(w.tracker_id) ?? '') ? sourceNumber(w.value) / 2.2046226218 : NaN, at: readingInstant(w.created_at) })),
-  ];
-  if (readings.some(row => row.at === null)) return null;
-  readings.sort((a, b) => a.at === b.at ? 0 : a.at! < b.at! ? 1 : -1);
-  return readings.length && Number.isFinite(readings[0].kg) ? readings[0].kg : null;
+  if (!date || dayNumber(date) === null) return null;
+  // Use the same conflict and timestamp rules as expenditure/pace diagnostics.
+  const rows = normalizedDatedWeights(data, dateForDay(dayNumber(date)! + 1), date);
+  return rows?.find(row => row.date === date)?.kg ?? null;
 }
 
 /** Shared weight normalization only; null means source conflict/unknown unit. */
