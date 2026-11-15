@@ -27,6 +27,7 @@ export function TdeeProposalReview({visible,active,ownerId,proposal,controller,i
   {valid&&shown?<>
    <Text style={{color:muted}}>{label('Daily targets: current → proposed','Metas diarias: actuales → propuestas')}</Text>
    {(['calories','proteinG','carbsG','fatsG','fiberG'] as const).map((key,index)=><View key={key} style={styles.row}><Text style={{color:text}}>{[label('Calories','Calorías'),label('Protein','Proteína'),label('Carbs','Carbohidratos'),label('Fat','Grasa'),label('Fiber','Fibra')][index]}</Text><Text style={{color:text}}>{shown.current[key]} → {shown.target[key]} {index===0?'kcal':'g'}</Text></View>)}
+   <Text style={{color:muted}}>{label('Data through','Datos hasta')}: {shown.sourceDate} · {shown.deltaKcal>0?'+':''}{shown.deltaKcal} kcal/{label('day','día')}</Text>
    <Text style={{color:muted}}>{label('Your targets change only after you accept.','Tus metas cambian solamente cuando aceptas.')}</Text>
   </>:<Text style={{color:muted}}>{label('Request a fresh review before changing your targets.','Solicita una revisión actualizada antes de cambiar tus metas.')}</Text>}
   {(failed||result?.status==='unresolved')&&<Text accessibilityRole="alert" style={{color:muted}}>{label('The result is not confirmed. Check its status before trying another change.','El resultado no está confirmado. Revisa su estado antes de intentar otro cambio.')}</Text>}
