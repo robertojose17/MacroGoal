@@ -223,3 +223,21 @@ function diagnosticReadinessCoverage(value:Obj,actor:string,today:string,timezon
  return {status:'explicit_self_report' as const,windowDays:14,confirmedDays,unconfirmedDays,unavailableDays,
   allDaysExplicitlyConfirmed:confirmedDays===14};
 }
+
+/**
+ * Versioned INITIAL assessment, separate from parseSnapshotReviewContext legacy21d.
+ * Reads no extra state and never calls draft/issue/persist. No reviewed interval
+ * source exists yet; don't turn a coverage count into a confidence assertion.
+ */
+export function assessFourteenDaySnapshotReview(value:unknown,actor:string,now:number){
+ const d=diagnoseSnapshotRateReview(value,actor,now);
+ if(d.kind==='blocked')return d;
+ const reason=!d.initialCoverage.coverageSufficient?d.initialCoverage.reason:
+  d.paceComparison.status==='comparison'&&!d.paceComparison.outsideProductTolerance?'within_product_tolerance':
+  d.paceComparison.status!=='comparison'?d.paceComparison.reason:'rate_uncertainty_unverified';
+ return {version:'initial-rate-assessment-v1' as const,kind:'hold' as const,actionable:false as const,
+  recommendation:null,reason,reevaluateAt:d.reevaluateAt,
+  coverage:d.initialCoverage,paceComparison:d.paceComparison,
+  sourceCapturedAt:d.sourceCapturedAt,sourceFingerprint:d.sourceFingerprint,
+  goalId:d.goalId,goalRevision:d.goalRevision};
+}
