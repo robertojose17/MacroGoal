@@ -14,7 +14,7 @@ Decisions are eligible, restricted, unknown or revoked. Append a higher review_v
 
 Each decision binds the actual owner, goal ID and exact revision, preset, all five current target values, profile revision, profile/journey hashes, policy version/digest and engine version. It does not grant blanket permission to every future goal or to all users. A goal/profile/journey/policy change requires new applicability verification. It does not store the weekly source fingerprint or pretend the person consented again each week.
 
-Eight explicit limits are proteinMinG/proteinMaxG, carbsMinG/carbsMaxG, fatsMinG/fatsMaxG and fatMinFraction/fatMaxFraction. No nutritional defaults are supplied. Eligible rows require all eight. Restricted/unknown/revoked rows may omit them rather than fabricate values. The 10000 technical numeric bound is not a recommended nutritional limit. Timestamps must be finite; expiry must follow review. Age is not stored: the trusted parser derives and validates current age from the actual snapshot.
+Eight explicit limits are proteinMinG/proteinMaxG, carbsMinG/carbsMaxG, fatsMinG/fatsMaxG and fatMinFraction/fatMaxFraction. No nutritional defaults are supplied. Eligible rows require all eight. Restricted/unknown/revoked rows may omit them rather than fabricate values. The 10000 technical numeric bound is not a recommended nutritional limit. Timestamps must be finite; expiry must follow review, and reviewed_at must not follow verified_at. Age is not stored: the trusted parser derives and validates current age from the actual snapshot.
 
 Current target values use the same five fields as SmartTarget, with calories positive and the other fields nonnegative integers. No goal or macro target is changed by storing or reading a decision.
 
@@ -64,4 +64,4 @@ Synthetic test approval is not authorization to create a real reviewed decision.
 
 ## Remaining gates
 
-An actual verified administrative approval act with explicit limits and scope; authorized schema verification/installation; trusted loader integration; acceptance-time review and consent revalidation; approved test execution and real application verification. The rejected SQL change is untouched. No release switch, policy seed, API mount or deployment is part of these files.
+An actual verified administrative approval act with explicit limits and scope; authorized schema verification/installation; verification of the prepared trusted loader integration; acceptance-time review and consent revalidation; approved test execution and real application verification. The rejected SQL change is untouched. No release switch, policy seed, API mount or deployment is part of these files.
