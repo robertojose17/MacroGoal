@@ -142,6 +142,8 @@ BEGIN
  me->>'version' IS DISTINCT FROM 'snapshot-macro-context-v1' OR
  me->>'allocationMode' IS DISTINCT FROM 'smart-preserve-adequate-protein-v1' THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'macro_contract_required'); END IF;
+ -- Match the existing engine suspension; a macro review is not a total-deficit review.
+ IF delta<0 THEN RETURN macrogoal_snapshot_review_private.reject_request(p_request,'individual_deficit_review_required'); END IF;
  mb:=jsonb_build_object('ownerId',actor,'goalId',g.id,'goalRevision',g.updated_at,'preset',g.macro_preset,
   'sourceFingerprint',snapshot->>'sourceFingerprint','policyVersion',policy.version,'policyDigest',policy.digest);
  IF me->'binding' IS DISTINCT FROM mb THEN
