@@ -4,6 +4,7 @@ import {estimateFromSources} from '../../supabase/functions/observed-snapshot-re
 import {dayNumber,dateForDay} from '../../supabase/functions/observed-snapshot-release/functions/_shared/dynamic-tdee.ts';
 import {verifySnapshotReceiptChain} from './receiptChain.ts';
 import {draftSnapshotAdjustment, type SnapshotAdjustmentInput} from './snapshotAdjustment.ts';
+import type {SmartMacroBinding,SmartMacroContext,SmartTarget} from './smartMacroAdjustment.ts';
 import type {SnapshotBinding} from './snapshotProposalProducer.ts';
 type Obj=Record<string,unknown>;
 const rec=(v:unknown):v is Obj=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -14,7 +15,11 @@ const same=(a:unknown,b:unknown):boolean=>a===b||(rec(a)&&rec(b)&&Object.keys(a)
 export type ReviewContextResult={kind:'blocked';reason:string}|{kind:'prepared_context';actionable:false;input:SnapshotAdjustmentInput;binding:SnapshotBinding};
 /** Versioned technical contract only; no clinical assurance or release authority. */
 export const SNAPSHOT_ENGINE_CONTRACT=Object.freeze({engineVersion:'observed-v1/snapshot-adjustment-v1',incrementKcal:25});
-export function parseSnapshotReviewContext(value:unknown,actor:string,proposalId:string,now:number):ReviewContextResult {
+export type SnapshotMacroRequest={binding:SmartMacroBinding;current:SmartTarget;sourceCapturedAt:string;profileUpdatedAt:string;profileBinding:string;journeyBinding:string;today:string;ageYears:number};
+export type SnapshotMacroEvidence={version:'snapshot-macro-evidence-v1';request:SnapshotMacroRequest;review:Omit<SmartMacroContext,'customChoice'>|null;consent:SmartMacroContext['customChoice']|null};
+type MacroRequestResult={kind:'macro_request';request:SnapshotMacroRequest};
+type InternalResult=ReviewContextResult|MacroRequestResult;
+function parseInternal(value:unknown,actor:string,proposalId:string,now:number,serverEvidence:unknown,requestOnly:boolean):InternalResult {
  const engine=SNAPSHOT_ENGINE_CONTRACT;
  const block=(reason:string):ReviewContextResult=>({kind:'blocked',reason});
  if(!uuid(actor)||!uuid(proposalId)||!Number.isFinite(now)||!rec(value)||value.version!=='snapshot-review-context-v1'||
@@ -79,14 +84,52 @@ export function parseSnapshotReviewContext(value:unknown,actor:string,proposalId
  incrementKcal:engine.incrementKcal,minIntakeKcal:Math.max(policy.min_intake_kcal as number,profile.sex==='female'?1200:1500),maxIntakeKcal:policy.max_intake_kcal as number},
  evidence:{eligible:true,modelReviewed:true,logging:'confirmed',capturedAt:captured,fingerprint:observation.sourceFingerprint,
  stability:'stable',goalDirectionValid:direction},now};
- // These booleans result from explicit record/chain/estimator checks above.
- // They do not upgrade the source's raw status or enable recommendations.
- const draft=draftSnapshotAdjustment(input);
- if(draft.kind==='blocked')return block(draft.reason);
  const binding:SnapshotBinding={ownerId:actor,proposalId,anchorId:a.id as string,goalSnapshot:structuredClone(g),
  profileUpdatedAt:profile.updatedAt as string,sourceDate:estimate.asOf,today:observation.context.today,
  policyVersion:policy.version,policyDigest:policy.digest as string,engineVersion:engine.engineVersion,
  policyExpiresAt:policy.expires_at as string,eligibilityDigest:e.digest as string,eligibilityFingerprint:observation.sourceFingerprint,
  eligibilityExpiresAt:e.expires_at as string,offerExpiresAt:new Date(captured+300000).toISOString(),readinessFingerprint:value.readinessFingerprint as string};
+
+ // Preserve earlier safety/no-change outcomes before requesting any extra evidence.
+ const initial=draftSnapshotAdjustment(input);
+ if(initial.kind==='blocked'&&initial.reason!=='macro_context_required')return block(initial.reason);
+ if(initial.kind==='blocked'){
+  if(!requestOnly&&serverEvidence===undefined)return block('macro_context_required');
+  if(typeof g.macro_preset!=='string'||!['balanced','high_protein','low_carb','lean_body','custom'].includes(g.macro_preset))
+   return block('macro_context_required');
+  const dob=profile.dateOfBirth,today=observation.context.today;
+  if(typeof dob!=='string'||dayNumber(dob)===null||dayNumber(today)===null)return block('macro_age_unverified');
+  const ageYears=Number(today.slice(0,4))-Number(dob.slice(0,4))-(today.slice(5)<dob.slice(5)?1:0);
+  if(!Number.isSafeInteger(ageYears)||ageYears<19||ageYears>100)return block('macro_age_unverified');
+  const request:SnapshotMacroRequest={
+   binding:{ownerId:actor,goalId:g.id as string,goalRevision:g.updated_at as string,preset:g.macro_preset,
+    sourceFingerprint:observation.sourceFingerprint,policyVersion:policy.version,policyDigest:policy.digest as string},
+   current:structuredClone(input.current),sourceCapturedAt:observation.capturedAt,profileUpdatedAt:profile.updatedAt as string,
+   profileBinding:r.profileBinding as string,journeyBinding:r.journeyBinding as string,today,ageYears};
+  if(requestOnly)return {kind:'macro_request',request};
+  if(serverEvidence===null)return block('macro_context_required');
+  if(!rec(serverEvidence)||serverEvidence.version!=='snapshot-macro-evidence-v1'||!same(serverEvidence.request,request))
+   return block('macro_evidence_binding_mismatch');
+  if(serverEvidence.review===null)return block('macro_context_required');
+  if(!rec(serverEvidence.review)||Object.hasOwn(serverEvidence.review,'customChoice')||
+   !rec(serverEvidence.review.review)||serverEvidence.review.review.ageYears!==ageYears||
+   !Object.hasOwn(serverEvidence,'consent'))return block('macro_evidence_invalid');
+  if(serverEvidence.consent!==null&&!rec(serverEvidence.consent))return block('macro_evidence_invalid');
+  input.macroBinding=structuredClone(request.binding);
+  input.macroContext={...structuredClone(serverEvidence.review),...(serverEvidence.consent===null?{}:{customChoice:structuredClone(serverEvidence.consent)})} as SmartMacroContext;
+  const checked=draftSnapshotAdjustment(input);
+  if(checked.kind==='blocked')return block(checked.reason);
+ }
+ if(requestOnly)return block('macro_review_not_needed');
  return {kind:'prepared_context',actionable:false,input:structuredClone(input),binding};
+}
+/** The fifth argument is trusted-server port output, never a raw RPC/request field. */
+export function parseSnapshotReviewContext(value:unknown,actor:string,proposalId:string,now:number,serverEvidence?:unknown):ReviewContextResult{
+ const result=parseInternal(value,actor,proposalId,now,serverEvidence,false);
+ return result.kind==='macro_request'?{kind:'blocked',reason:'macro_context_required'}:result;
+}
+/** Private minimal request; all earlier source, history and energy guards must pass first. */
+export function prepareSnapshotMacroContextRequest(value:unknown,actor:string,proposalId:string,now:number):MacroRequestResult|{kind:'blocked';reason:string}{
+ const result=parseInternal(value,actor,proposalId,now,undefined,true);
+ return result.kind==='prepared_context'?{kind:'blocked',reason:'macro_review_not_needed'}:result;
 }
