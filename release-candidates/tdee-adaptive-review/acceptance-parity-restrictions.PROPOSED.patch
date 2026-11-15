@@ -1,21 +1,19 @@
 # PROPOSED ONLY: NOT APPLIED, NOT EXECUTED, NOT A COMPLETE ACCEPTANCE FIX.
 # Base blob 5064d42bb36918d6e1af37691102e94a08d608a9.
-# Separate from rejected cap-nullability/replacement operation: no caps, grants,
-# schema, locks, receipt/CAS semantics or release flags are changed.
-# Hunk1 aligns with the existing Smart context's minimum age19, not a new clinical claim.
-# Hunk2 preserves protein exactly as the current Smart engine requires.
-# These restrictions alone DO NOT revalidate macro preference, revocation or review.
-# Producer currently persists NONE of that review/consent identity: must design
-# authoritative persisted binding and acceptance validation before release.
-# Old18-year-old proposals would reject; changed-protein proposals would reject.
-# Exact historical receipt replay remains unchanged and occurs before new checks.
-# Pending explicit change approval and rollback tests. Do not apply as workaround.
+# No caps, schema, grants, locks, receipt/CAS semantics or release flags are changed.
+# Age alignment remains a proposal for the current Smart-specific context, not a clinical rule.
+# WITHDRAWN: universal protein equality hunk. It would conflict with a future
+# explicitly reviewed manual-percentage allocation or approved protein correction.
+# Current Smart engine independently preserves adequate protein and blocks inadequate
+# protein; that engine behavior is unchanged. No real SQL guard was removed.
+# Future acceptance must validate the exact versioned allocation contract and review,
+# not impose one formula on all modes or trust arbitrary client targets.
+# Producer now snapshots macroEvidence privately; it does not authenticate a review.
+# Revalidation of stored evidence, choice/version, revocation and expiry remains absent.
+# Historical exact receipt replay must still precede new first-application checks.
+# Pending explicit approval and rollback tests. Do not apply as a workaround.
 --- a/release-candidates/tdee-adaptive-review/snapshotRegistryCandidate.sql
 +++ b/release-candidates/tdee-adaptive-review/snapshotRegistryCandidate.sql
 @@ -242,1 +242,1 @@
 -    u.date_of_birth>(today-interval '18 years')::date OR u.date_of_birth<(today-interval '100 years')::date THEN
 +    u.date_of_birth>(today-interval '19 years')::date OR u.date_of_birth<(today-interval '100 years')::date THEN
-@@ -262,1 +262,2 @@
--   (target->>'calories')::integer>policy.max_intake_kcal OR (target->>'fiberG')::integer IS DISTINCT FROM g.fiber_g OR
-+   (target->>'calories')::integer>policy.max_intake_kcal OR (target->>'fiberG')::integer IS DISTINCT FROM g.fiber_g OR
-+   (target->>'proteinG')::integer IS DISTINCT FROM g.protein_g OR
