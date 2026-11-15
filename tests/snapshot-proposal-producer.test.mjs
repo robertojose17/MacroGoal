@@ -4,9 +4,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {prepareSnapshotProposal,createSnapshotProposalProducer,validatePersistedSnapshotProposal} from '../release-candidates/tdee-adaptive-review/snapshotProposalProducer.ts';
 const actor='11111111-1111-4111-8111-111111111111',hash='a'.repeat(64),now=Date.parse('2026-11-14T12:00:00Z');
+function syntheticMacro(input,preset='balanced',owner='11111111-1111-4111-8111-111111111111',revision='2026-11-01T00:00:00Z',policyVersion='reviewed',policyDigest='a'.repeat(64)){
+ // Synthetic arithmetic evidence only, never a production review or policy.
+ const binding={ownerId:owner,goalId:owner,goalRevision:revision,preset,sourceFingerprint:input.evidence.fingerprint,policyVersion,policyDigest};
+ input.macroBinding=binding;
+ input.macroContext={binding:{...binding},current:input.current,
+ review:{status:'reviewed',reviewId:'synthetic-review',reviewedAt:input.now-1000,expiresAt:input.now+600000,ageYears:30,eligibility:'eligible'},
+ limits:{proteinMinG:0,proteinMaxG:10000,carbsMinG:0,carbsMaxG:10000,fatsMinG:0,fatsMaxG:10000,fatMinFraction:0,fatMaxFraction:1}};
+ return input;
+}
+
 function fixture(){
  const input={current:{calories:2000,proteinG:150,carbsG:215,fatsG:60,fiberG:30},anchor:{baselineCapturedAt:now-14*86400000,intake:2000,expenditure:2400,acceptedDelta:0,acceptedCount:0,receiptsVerified:true,lastAcceptedAt:null},observedExpenditure:2500,policy:{reviewed:true,maxStepKcal:200,maxStepFraction:0.1,maxNetDeltaKcal:400,reviewIntervalDays:14,incrementKcal:25,minIntakeKcal:1500,maxIntakeKcal:3000},evidence:{eligible:true,modelReviewed:true,logging:'confirmed',capturedAt:now-1000,fingerprint:hash,stability:'stable',goalDirectionValid:true},now};
  const binding={readinessFingerprint:hash,ownerId:actor,proposalId:actor,anchorId:actor,goalSnapshot:{id:actor,user_id:actor,is_active:true,updated_at:'2026-11-01T00:00:00Z',daily_calories:2000,protein_g:150,carbs_g:215,fats_g:60,fiber_g:30,extra:'preserved'},profileUpdatedAt:'2026-11-01T00:00:00Z',sourceDate:'2026-11-13',today:'2026-11-14',policyVersion:'reviewed',policyDigest:hash,engineVersion:'snapshot1',policyExpiresAt:'2026-11-15T00:00:00Z',eligibilityDigest:hash,eligibilityFingerprint:hash,eligibilityExpiresAt:'2026-11-15T00:00:00Z',offerExpiresAt:'2026-11-14T13:00:00Z'};
+ syntheticMacro(input);binding.goalSnapshot.macro_preset='balanced';
  return {input,binding};
 }
 test('exact payload and independent offer expiry',()=>{const {input,binding}=fixture();const p=prepareSnapshotProposal(input,binding);assert.equal(p.kind,'prepared');assert.equal(p.actionable,false);assert.equal(p.record.payload.snapshotSemantics,'as-of-revalidated-v1');assert.equal(p.record.payload.sourceCapturedAt,new Date(now-1000).toISOString());assert.equal(p.record.payload.goalSnapshot.extra,'preserved');assert.equal(p.record.expiresAt,'2026-11-14T12:04:59.000Z');binding.goalSnapshot.extra='changed';assert.equal(p.record.payload.goalSnapshot.extra,'preserved');});
@@ -35,7 +46,22 @@ test('persisted snapshot payload preserves accepted protein and fiber',()=>{
  for(const observed of [2500]){
  const {input,binding}=fixture();input.observedExpenditure=observed;const p=prepareSnapshotProposal(input,binding);
  assert.equal(p.kind,'prepared');assert.equal(p.record.payload.target.proteinG,150);assert.equal(p.record.payload.target.fiberG,30);
- assert.equal(p.record.payload.target.carbsG,230);
- assert.equal(p.record.payload.target.fatsG,64);
+ assert.equal(p.record.payload.target.carbsG,240);
+ assert.equal(p.record.payload.target.fatsG,60);
  }
+});
+
+test('producer independently binds macro review to real proposal owner and goal',()=>{
+ for(const key of ['ownerId','goalId','goalRevision','preset','sourceFingerprint','policyVersion','policyDigest']){
+ const {input,binding}=fixture();input.macroBinding[key]='different';input.macroContext.binding[key]='different';
+ assert.equal(prepareSnapshotProposal(input,binding).reason,'macro_binding_mismatch');
+ }
+ const {input,binding}=fixture();delete input.macroBinding;delete input.macroContext;
+ assert.equal(prepareSnapshotProposal(input,binding).reason,'macro_context_required');
+});
+
+test('offer cannot outlive reviewed macro context',()=>{
+ const {input,binding}=fixture();input.macroContext.review.expiresAt=now+10000;
+ const p=prepareSnapshotProposal(input,binding);assert.equal(Date.parse(p.record.expiresAt),now+10000);
+ input.macroContext.review.expiresAt=NaN;assert.equal(prepareSnapshotProposal(input,binding).reason,'offer_expired');
 });
