@@ -1,23 +1,24 @@
 {
   "format": "macrogoal-static-bundle-review-v1",
   "repository": "robertojose17/MacroGoal",
-  "sourceCommit": "3c843d8d966193600f0b0a2735a316de91dba8cf",
+  "sourceCommit": "7a61307d1f62c16aa2d74c4b9bc57a9c2e5548a9",
   "functionSlug": "progress-intelligence",
   "entrypoint": "supabase/functions/observed-snapshot-release/functions/progress-intelligence/index.ts",
   "deploymentPerformed": false,
   "deploymentAllowed": false,
   "verification": {
     "relativeImportClosure": "reviewed",
-    "fileCount": 61,
+    "fileCount": 62,
     "missingRelativeImports": 0,
     "repositoryEscapes": 0,
     "sourceBlobs": "read back against sourceCommit",
     "bundleCompilation": "NOT RUN",
     "backendExecution": "BLOCKED; do not bypass runner rejection",
     "productionE2E": "NOT RUN for this source release",
-    "scopedTesterPreflight": "Existing helper reused before context reads; included in static closure; new adapter tests NOT RUN.",
+    "scopedTesterPreflight": "New OFF acceptance route reads receipt then reuses scoped tester refresh immediately before own-bearer acceptance; no TTL extension. Eleven backend tests prepared, NOT RUN.",
     "scopedMacroContext": "Connected load_macro phase reads own-actor preference and fixed service-only nutrition review getter. Empty administrative source installed; no reviewed rows. OFF. Source tests NOT RUN.",
-    "futureWeightExclusion": "Candidate weightPace filters dates at or before as-of date. Two regressions prepared, NOT RUN."
+    "futureWeightExclusion": "Candidate weightPace filters dates at or before as-of date. Two regressions prepared, NOT RUN.",
+    "acceptanceErrors": "Static review: module load failures distinct from uncertain accepting-handler failures; uncertain outcomes require receipt reconciliation. Both immutable acceptance and recommendation switches required."
   },
   "release": {
     "recommendationsEnabled": false,
@@ -48,12 +49,12 @@
   "files": [
     {
       "path": "release-candidates/tdee-adaptive-review/apiContract.ts",
-      "gitBlobSha": "0f95cf462520f0a52fb54b1bac8643ffe37b1939",
+      "gitBlobSha": "a31720fef0034f259330d4f69524598be7fe6718",
       "imports": []
     },
     {
       "path": "release-candidates/tdee-adaptive-review/nutritionReviewEvidence.ts",
-      "gitBlobSha": "21d100e5132aff6a50ff1044ded306641998ee0a",
+      "gitBlobSha": "30c90741f06d1fed8f5f141730aa82dd4b8fd7af",
       "imports": [
         "./snapshotReviewContextParser.ts"
       ]
@@ -78,8 +79,18 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/smartMacroAdjustment.ts",
-      "gitBlobSha": "37d4b990b9b485d92d08b1602b6bf7dc60b3f91d",
+      "gitBlobSha": "11d6f042c80e42d07cfbeec1300bee36f96fd001",
       "imports": []
+    },
+    {
+      "path": "release-candidates/tdee-adaptive-review/snapshotAcceptEndpoint.ts",
+      "gitBlobSha": "83757f5c80a1b14055ae3af0e9cbd36cf57967b0",
+      "imports": [
+        "./proposal.ts",
+        "./apiContract.ts",
+        "../../supabase/functions/observed-snapshot-release/functions/observed-program/scoped-tester-refresh.mjs",
+        "./snapshotSupabaseAdapter.ts"
+      ]
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotAdjustment.ts",
@@ -128,7 +139,7 @@
     },
     {
       "path": "release-candidates/tdee-adaptive-review/snapshotProposalProducer.ts",
-      "gitBlobSha": "9b5bd4dbb3e9673e36cfc72d0b2ed8d61913f4f0",
+      "gitBlobSha": "d5d6ec76739e24460251d1dead73022f60aed9e7",
       "imports": [
         "./snapshotAdjustment.ts",
         "./proposal.ts",
@@ -189,17 +200,18 @@
     },
     {
       "path": "supabase/functions/observed-snapshot-release/functions/adaptive-review/dispatcher.ts",
-      "gitBlobSha": "e23f22cd6478ed1a0c24210b7b26443749de65b1",
+      "gitBlobSha": "6f4dc84fecd4cfc306c492f97454681f0506ae2d",
       "imports": []
     },
     {
       "path": "supabase/functions/observed-snapshot-release/functions/adaptive-review/runtime.ts",
-      "gitBlobSha": "d793c9457ef04f0301cc14c1cdf7505a13f5f182",
+      "gitBlobSha": "a1aa16a54a492365ff8dcecd8eb05a7c81a8fe43",
       "imports": [
         "npm:@supabase/supabase-js@2.83.0",
         "../../../../../release-candidates/tdee-adaptive-review/proposal.ts",
         "../../../../../release-candidates/tdee-adaptive-review/snapshotHttpHandler.ts",
-        "../../../../../release-candidates/tdee-adaptive-review/snapshotOrchestrationSupabaseAdapter.ts"
+        "../../../../../release-candidates/tdee-adaptive-review/snapshotOrchestrationSupabaseAdapter.ts",
+        "../../../../../release-candidates/tdee-adaptive-review/snapshotAcceptEndpoint.ts"
       ]
     },
     {
