@@ -28,9 +28,15 @@ export function prepareSnapshotProposal(input:SnapshotAdjustmentInput,b:Snapshot
   g.daily_calories!==c.calories||g.protein_g!==c.proteinG||g.carbs_g!==c.carbsG||g.fats_g!==c.fatsG||g.fiber_g!==c.fiberG)
   return block('goal_binding_mismatch');
  if(b.eligibilityFingerprint!==input.evidence.fingerprint)return block('eligibility_binding_mismatch');
- const expiry=Math.min(input.evidence.capturedAt+300000,instant(b.policyExpiresAt),instant(b.eligibilityExpiresAt),instant(b.offerExpiresAt));
+ const expiry=Math.min(input.evidence.capturedAt+300000,instant(b.policyExpiresAt),instant(b.eligibilityExpiresAt),instant(b.offerExpiresAt),input.macroContext?input.macroContext.review?.expiresAt??NaN:Infinity);
  if(!Number.isFinite(expiry)||expiry<=input.now)return block('offer_expired');
  if(input.policy?.reviewed!==true||input.evidence.eligible!==true||input.evidence.modelReviewed!==true||input.anchor?.receiptsVerified!==true)return block('review_required');
+ if(input.macroBinding){
+  const m=input.macroBinding;
+  if(m.ownerId!==b.ownerId||m.goalId!==g.id||m.goalRevision!==g.updated_at||m.preset!==g.macro_preset||
+   m.sourceFingerprint!==input.evidence.fingerprint||m.policyVersion!==b.policyVersion||m.policyDigest!==b.policyDigest)
+   return block('macro_binding_mismatch');
+ }
  const draft=draftSnapshotAdjustment(input);
  if(draft.kind!=='draft')return draft;
  // Clone the entire exact database goal; never synthesize missing columns.
