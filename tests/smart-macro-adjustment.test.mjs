@@ -74,3 +74,17 @@ test('deterministic copied result has no acceptance or rejection side effects',(
  assert.deepEqual(a,b);a.target.proteinG=1;assert.deepEqual(x,before);
  x.binding.goalRevision='r2';assert.equal(adjust(x).reason,'macro_binding_mismatch');
 });
+
+/** Explicit preference regressions PREPARED, NOT EXECUTED. */
+test('manual percentages are not silently replaced on any standard preset',()=>{
+ for(const preset of ['balanced','high_protein','low_carb','lean_body']){
+  const x=fixture();x.binding.preset=preset;x.context.binding.preset=preset;
+  x.context.customChoice={mode:'preserve_percent',binding:{...x.binding},consentId:'synthetic-choice',acceptedAt:now-1,choiceVersion:2,splitBps:{protein:3333,carbs:3333,fats:3334}};
+  assert.equal(adjust(x).reason,'custom_percentage_review_required');
+ }
+});
+test('invalid explicit choice on noncustom preset cannot be ignored',()=>{
+ const x=fixture();
+ x.context.customChoice={mode:'smart',binding:{...x.binding,goalRevision:'old'},consentId:'synthetic-choice',acceptedAt:now-1};
+ assert.equal(adjust(x).reason,'custom_macro_consent_required');
+});
