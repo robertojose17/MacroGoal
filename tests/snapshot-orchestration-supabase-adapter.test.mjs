@@ -1,7 +1,7 @@
 /** Execution pending: local runner blocked before test evaluation. Not live or E2E proof. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createSnapshotOrchestrationSupabasePorts,createSnapshotOrchestrationSupabaseRuntime} from '../release-candidates/tdee-adaptive-review/snapshotOrchestrationSupabaseAdapter.ts';
+import {createSnapshotOrchestrationSupabasePorts,createSnapshotOrchestrationSupabaseRuntime,macroPreferenceEvidence} from '../release-candidates/tdee-adaptive-review/snapshotOrchestrationSupabaseAdapter.ts';
 const binding=()=>({version:'reviewed-server-version',digest:'a'.repeat(64),engineVersion:'observed-v1/snapshot-adjustment-v1'});
 function harness(){
  const clients=[],calls=[],fetches=[];let error=null,throws=false;
@@ -114,4 +114,65 @@ test('owner mismatch expired evidence HTTP failure and timeout stop before revie
   await assert.rejects(()=>createSnapshotOrchestrationSupabasePorts(h.config,binding()).loadOwnContext('token'),/^Error: source_error$/);
   assert.equal(h.calls.length,1);assert.equal(h.fetches.length,1);
  }
+});
+
+/** Preference-loading regression cases: prepared only, NOT RUN. Synthetic identities/data. */
+const preferenceActor='11111111-1111-4111-8111-111111111111';
+function preferenceFixture(now=Date.now()){
+ const source=new Date(now-1000).toISOString(),revision=new Date(now-86400000).toISOString();
+ const request={binding:{ownerId:preferenceActor,goalId:'22222222-2222-4222-8222-222222222222',goalRevision:revision,preset:'custom',sourceFingerprint:'c'.repeat(64),policyVersion:'v',policyDigest:'d'.repeat(64)},
+ current:{calories:2000,proteinG:150,carbsG:200,fatsG:67,fiberG:28},sourceCapturedAt:source,profileUpdatedAt:revision,profileBinding:'e'.repeat(64),journeyBinding:'f'.repeat(64),today:'2026-11-15',ageYears:30};
+ const choice={requestId:'33333333-3333-4333-8333-333333333333',choiceVersion:2,mode:'smart',splitBps:null,recordedAt:revision,goalUpdatedAt:revision,
+ profileBinding:request.profileBinding,journeyBinding:request.journeyBinding,copyVersion:'macro-choice-v1',current:true};
+ const state={version:'macro-choice-state-v1',ownerId:preferenceActor,capturedAt:new Date(now).toISOString(),copyVersion:'macro-choice-v1',
+ goalId:request.binding.goalId,goalUpdatedAt:revision,bindingStatus:'available',profileBinding:request.profileBinding,journeyBinding:request.journeyBinding,choiceVersion:2,choice,actionable:false};
+ return {request,state,now};
+}
+test('own preference becomes separate consent but never nutritional review; original date preserved',()=>{
+ const {request,state,now}=preferenceFixture(),before=structuredClone({request,state});
+ const out=macroPreferenceEvidence(preferenceActor,request,state,now);
+ assert.equal(out.review,null);assert.equal(out.consent.mode,'smart');assert.equal(out.consent.consentId,state.choice.requestId);
+ assert.equal(out.consent.acceptedAt,Date.parse(state.choice.recordedAt));assert.deepEqual(out.consent.binding,request.binding);
+ out.request.binding.ownerId='changed';out.consent.binding.goalId='changed';
+ assert.deepEqual({request,state},before);
+});
+test('absent stale revoked wrong owner or mismatched preference fails closed without review',()=>{
+ const f=preferenceFixture();
+ const changes=[s=>s.choice=null,s=>s.ownerId='other',s=>s.goalId='other',s=>s.goalUpdatedAt='invalid',
+ s=>s.profileBinding='0'.repeat(64),s=>s.journeyBinding='0'.repeat(64),s=>s.bindingStatus='unavailable',
+ s=>s.copyVersion='other',s=>s.choice.current='true',s=>s.choice.current=false,s=>s.choice.mode='revoked',
+ s=>s.choice.mode='preserve_percent',s=>s.choice.splitBps={},s=>s.choiceVersion=3,s=>s.choiceVersion='2',
+ s=>s.choice.profileBinding='0'.repeat(64),s=>s.choice.journeyBinding='0'.repeat(64),s=>s.choice.copyVersion='other',
+ s=>s.choice.goalUpdatedAt='invalid',s=>s.choice.requestId='invalid',
+ s=>s.choice.recordedAt=new Date(f.now+1).toISOString(),s=>s.capturedAt=new Date(f.now+1).toISOString(),
+ s=>s.capturedAt=new Date(f.now-31000).toISOString()];
+ for(const change of changes){const s=structuredClone(f.state);change(s);const out=macroPreferenceEvidence(preferenceActor,f.request,s,f.now);assert.equal(out.consent,null);assert.equal(out.review,null);}
+ assert.equal(macroPreferenceEvidence(preferenceActor,f.request,null,f.now).consent,null);
+});
+test('revision formatting mismatch, source expiry and post-snapshot choice fail closed',()=>{
+ const {request,state,now}=preferenceFixture();
+ state.goalUpdatedAt=state.goalUpdatedAt.replace('Z','+00:00');state.choice.goalUpdatedAt=state.choice.goalUpdatedAt.replace('Z','+00:00');
+ assert.equal(macroPreferenceEvidence(preferenceActor,request,state,now).consent,null);
+ state.goalUpdatedAt=request.binding.goalRevision;state.choice.goalUpdatedAt=request.binding.goalRevision;
+ assert.equal(macroPreferenceEvidence(preferenceActor,request,state,now+31000).consent,null);
+ state.choice.recordedAt=new Date(now-500).toISOString();
+ assert.equal(macroPreferenceEvidence(preferenceActor,request,state,now).consent,null);
+});
+test('macro port uses only own bearer fixed noarg RPC; no service or authority call',async()=>{
+ const f=preferenceFixture(),calls=[];
+ const config={url:'https://project.supabase.co',anonKey:'public-key',serviceKey:'private-key',
+ createClient(url,key,options){calls.push({url,key,options});return {auth:{async getUser(){throw Error('unexpected');}},async rpc(name,args){calls.push({name,args});return {data:f.state,error:null};}};},
+ fetch:async()=>{throw Error('unexpected');}};
+ const ports=createSnapshotOrchestrationSupabasePorts(config,binding());
+ const out=await ports.loadReviewedMacroContext(preferenceActor,f.request,'own-token');
+ assert.equal(calls[0].key,'public-key');assert.equal(calls[0].options.global.headers.Authorization,'Bearer own-token');
+ assert.deepEqual(calls[1],{name:'tdee_read_macro_choice_v1',args:undefined});assert.equal(calls.length,2);
+ assert.equal(out.review,null);assert.equal(out.consent.mode,'smart');
+ assert.ok(!JSON.stringify(out).includes('own-token'));
+});
+test('macro port rejects wrong actor before network and sanitizes read errors without retry',async()=>{
+ const f=preferenceFixture(),h=harness(),ports=createSnapshotOrchestrationSupabasePorts(h.config,binding());
+ await assert.rejects(()=>ports.loadReviewedMacroContext('other',f.request,'token'),/^Error: source_error$/);assert.equal(h.clients.length,0);
+ h.setError({message:'sensitive'});await assert.rejects(()=>ports.loadReviewedMacroContext(preferenceActor,f.request,'token'),/^Error: source_error$/);
+ assert.equal(h.calls.length,1);
 });
