@@ -88,3 +88,43 @@ export function decidePersistedGoalRateAdjustment(
  if(target.kind==='blocked')return target;
  return decideRateAdjustment({...input,targetRateKgPerWeek:target.targetRateKgPerWeek});
 }
+
+/** Exact calendar window only. It never establishes sufficiency or an interval. */
+export type RateReviewWindow=
+ {kind:'window';actionable:false;startDate:string;endDateExclusive:string;
+  weights:{date:string;weightKg:number}[];weightDays:number;missingWeightDates:string[]}|
+ {kind:'blocked';actionable:false;reason:string};
+const calendarDay=(value:unknown):number|null=>{
+ if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return null;
+ const stamp=Date.parse(value+'T00:00:00Z');
+ return Number.isFinite(stamp)&&new Date(stamp).toISOString().slice(0,10)===value?stamp/86400000:null;
+};
+/**
+ * today is the verified user's LOCAL date, not UTC date derived from now.
+ * Rows must already be own-actor, unit-normalized and journey-scoped by the
+ * source loader. Duplicate dates fail closed rather than selecting a reading.
+ * Missing days remain missing; zero weight and missing values are not imputed.
+ */
+export function selectFourteenDayRateWindow(today:unknown,rows:unknown):RateReviewWindow{
+ const end=calendarDay(today);
+ if(end===null||!Array.isArray(rows))return blocked('rate_window_invalid');
+ const start=end-14;
+ const dateFor=(day:number)=>new Date(day*86400000).toISOString().slice(0,10);
+ if(calendarDay(dateFor(start))!==start)return blocked('rate_window_invalid');
+ const weights:{date:string;weightKg:number}[]=[];
+ const seen=new Set<string>();
+ for(const row of rows){
+  if(!row||typeof row!=='object'||Array.isArray(row))return blocked('rate_weight_invalid');
+  const day=calendarDay(row.date);
+  if(day===null)return blocked('rate_weight_date_invalid');
+  if(day<start||day>=end)continue;
+  if(!positive(row.weightKg))return blocked('rate_weight_invalid');
+  if(seen.has(row.date))return blocked('rate_weight_date_conflict');
+  seen.add(row.date);weights.push({date:row.date,weightKg:row.weightKg});
+ }
+ weights.sort((a,b)=>a.date.localeCompare(b.date));
+ const missingWeightDates:string[]=[];
+ for(let day=start;day<end;day++){const date=dateFor(day);if(!seen.has(date))missingWeightDates.push(date);}
+ return {kind:'window',actionable:false,startDate:dateFor(start),endDateExclusive:today as string,
+ weights,weightDays:weights.length,missingWeightDates};
+}
