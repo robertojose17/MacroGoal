@@ -1,4 +1,5 @@
 /** Server-only candidate ports. No entrypoint mount, release switch or policy defaults. */
+import {nutritionReviewExpected,nutritionReviewEvidence} from './nutritionReviewEvidence.ts';
 import {createSnapshotReviewOrchestrator,type SnapshotOrchestrationPorts,type ServerPolicyBinding} from './snapshotReviewOrchestration.ts';
 import {snapshotIssueArguments} from './snapshotServerRuntime.ts';
 import {createTesterRefresh} from '../../supabase/functions/observed-snapshot-release/functions/observed-program/scoped-tester-refresh.mjs';
@@ -10,7 +11,7 @@ const RPC=Object.freeze({
  context:'observed_get_dynamic_tdee_context_v1',
  read:'tdee_read_review_context_v1',policy:'tdee_read_snapshot_policy_v1',
  bootstrap:'tdee_bootstrap_snapshot_review_v1',refresh:'tdee_refresh_snapshot_eligibility_v1',
- issue:'tdee_issue_snapshot_proposal_v1',choice:'tdee_read_macro_choice_v1'
+ issue:'tdee_issue_snapshot_proposal_v1',choice:'tdee_read_macro_choice_v1',nutrition:'tdee_read_nutrition_review_v1'
 });
 
 /** Only validates a read from the authenticated own-actor RPC, never request body data.
@@ -119,14 +120,19 @@ export function createSnapshotOrchestrationSupabasePorts(config:SnapshotOrchestr
     throw new Error('source_error');
    return serviceRpc(RPC.policy,{p_version:fixed.version,p_digest:fixed.digest,p_engine_version:fixed.engineVersion});
   },
-  // Own-actor preference read only. No clinical review source exists: review stays null.
+  // Own-actor preference first, then fixed service-only administrative review lookup.
+  // Empty/uninstalled/unverified review source fails closed; no write or default review.
   async loadReviewedMacroContext(actor,request,token){
    try{
     const copied=structuredClone(request);
     if(copied.binding.ownerId!==actor)throw new Error('source_error');
     const result=await own(token).rpc(RPC.choice);
     if(result.error)throw new Error('source_error');
-    return macroPreferenceEvidence(actor,copied,structuredClone(result.data),Date.now());
+    const evidence=macroPreferenceEvidence(actor,copied,structuredClone(result.data),Date.now());
+    if(evidence.preferenceStatus!=='current')return evidence;
+    const value=await serviceRpc(RPC.nutrition,{p_owner:actor,p_expected:nutritionReviewExpected(copied,fixed.engineVersion)});
+    evidence.review=nutritionReviewEvidence(actor,copied,fixed.engineVersion,value,Date.now());
+    return evidence;
    }catch{throw new Error('source_error');}
   },
   async bootstrapAsService(record){return serviceRpc(RPC.bootstrap,{p_record:record});},
