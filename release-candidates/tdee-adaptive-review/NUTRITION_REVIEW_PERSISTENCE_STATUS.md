@@ -1,6 +1,6 @@
 # Nutrition review persistence candidate
 
-Status: source only, OFF. SQL is not installed. A limited compilation/ACL validation ran in a transaction ending ROLLBACK; see verified scope below. Remaining test cases below are a plan, not passed tests. No production rows or nutritional policies have been created.
+Status: empty administrative storage installed after authorized rollback validation; recommendations OFF.  A limited compilation/ACL validation ran in a transaction ending ROLLBACK; see verified scope below. Remaining test cases below are a plan, not passed tests. No production rows or nutritional policies have been created.
 
 ## Administrative source, not an automatic approver
 
@@ -79,3 +79,11 @@ A second authorized Supabase transaction compiled the same pinned candidate and 
 The complete own-profile and all-own-goals JSON digests matched before and after the test body. No target/profile writes were performed. Independent post-transaction metadata again showed both candidate objects absent. No synthetic clinical declaration or approval persisted.
 
 This positive-path harness used service-role JWT claims inside the SQL transaction, not a signed HTTP session. Actual SQL-role ACL denials were tested separately above. No tests of every malformed timestamp/NaN variant or concurrent acceptance are claimed. Source TypeScript tests remain unexecuted. Storage is still not installed and recommendations remain OFF.
+
+## Authorized empty installation — 2026-11-15
+
+Installed only the new nutrition_review_versions table and tdee_read_nutrition_review_v1 getter from validated SQL blob b2980b762141324143c70552641e2339d9e00fc5, with final ROLLBACK changed to COMMIT. No other functional SQL changes, seeds, write API, policy or acceptance replacement.
+
+Independent readback: zero review rows; RLS enabled; authenticated and service_role lack table SELECT/INSERT/UPDATE/DELETE; anon/authenticated cannot execute getter; service_role can. Getter body equals the validated source exactly, SECURITY DEFINER true, search_path fixed to pg_catalog, pg_temp.
+
+This installs an empty source, not an approval. It cannot issue a real reviewed decision without an actual administrative approval act. Candidate TypeScript integration is source-only, not newly deployed to Edge; application E2E and authoritative acceptance revalidation remain open. Earlier sections describing non-installation refer to their rollback checkpoints.
