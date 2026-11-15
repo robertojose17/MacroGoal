@@ -37,7 +37,7 @@ CREATE TABLE macrogoal_snapshot_review_private.nutrition_review_versions(
  verified_at timestamptz NOT NULL CHECK(isfinite(verified_at)),
  recorded_at timestamptz NOT NULL DEFAULT clock_timestamp() CHECK(isfinite(recorded_at)),
  UNIQUE(owner_id,goal_id,review_version),
- CHECK(goal_revision<=recorded_at AND profile_updated_at<=recorded_at AND reviewed_at<=recorded_at AND verified_at<=recorded_at),
+ CHECK(goal_revision<=recorded_at AND profile_updated_at<=recorded_at AND reviewed_at<=recorded_at AND verified_at<=recorded_at AND reviewed_at<=verified_at),
  CHECK(protein_min_g<=protein_max_g AND carbs_min_g<=carbs_max_g AND fats_min_g<=fats_max_g AND fat_min_fraction<=fat_max_fraction),
  CHECK(decision<>'eligible' OR (
   protein_min_g IS NOT NULL AND protein_max_g IS NOT NULL AND carbs_min_g IS NOT NULL AND carbs_max_g IS NOT NULL AND
