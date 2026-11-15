@@ -1,3 +1,4 @@
+import {compareInitialRateToTarget} from './rateAdjustmentDecision.ts';
 import {adjustSmartMacros, type SmartMacroBinding, type SmartMacroContext} from './smartMacroAdjustment.ts';
 /**
  * Snapshot-as-of bidirectional engine. Pure, not an active application binding.
@@ -6,6 +7,12 @@ import {adjustSmartMacros, type SmartMacroBinding, type SmartMacroContext} from 
 export type SnapshotTarget={calories:number;proteinG:number;carbsG:number;fatsG:number;fiberG:number};
 export type SnapshotAdjustmentInput={
  current:SnapshotTarget;
+ /** Trusted loader only; coverage is not a substitute for uncertainty evidence. */
+ rateReview?:{version:'rate-review-14d-v1';sourceFingerprint:string;capturedAt:number;
+  coverageSufficient:boolean;targetKgPerWeek:number;observedKgPerWeek:number;
+  uncertainty:{status:'unverified'}|{status:'reviewed';lowerKgPerWeek:number;upperKgPerWeek:number};
+  conversion:{model:'approximate-energy-equivalent-v1';kcalPerKg:7700};
+  tolerance:{absoluteLbPerWeek:number;relativeFraction:number}};
  macroBinding?:SmartMacroBinding;macroContext?:SmartMacroContext;
  anchor:{baselineCapturedAt:number;intake:number;expenditure:number;acceptedDelta:number;acceptedCount:number;receiptsVerified:boolean;lastAcceptedAt:number|null};
  observedExpenditure:number;
@@ -15,7 +22,7 @@ export type SnapshotAdjustmentInput={
   capturedAt:number;fingerprint:string;stability:'stable'|'uncertain';goalDirectionValid:boolean};
  now:number;
 };
-export type SnapshotAdjustmentResult={kind:'blocked'|'no_change';reason:string}|
+export type SnapshotAdjustmentResult={kind:'blocked'|'no_change';reason:string;reevaluateAt?:number}|
  {kind:'draft';actionable:false;target:SnapshotTarget;deltaKcal:number;netDeltaKcal:number;sourceFingerprint:string;sourceCapturedAt:number;contract:'as-of-revalidated-v1'};
 const finite=(n:unknown):n is number=>typeof n==='number'&&Number.isFinite(n);
 const positive=(n:unknown):n is number=>finite(n)&&n>0;
@@ -40,10 +47,38 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
  if((a.acceptedCount>0&&a.lastAcceptedAt===null)||(a.acceptedCount===0&&(a.acceptedDelta!==0||a.lastAcceptedAt!==null)))return blocked('acceptance_history_invalid');
  if(!finite(a.baselineCapturedAt)||a.baselineCapturedAt>now)return blocked('baseline_invalid');
  if(now-(a.lastAcceptedAt??a.baselineCapturedAt)<p.reviewIntervalDays*86400000)return blocked('review_cooldown');
- // Preserve the original accepted energy gap; never subtract another deficit.
- const desired=a.intake+(input.observedExpenditure-a.expenditure);
- const difference=desired-g.calories;
- if(difference===0)return {kind:'no_change',reason:'same_anchored_target'};
+ // Rate mode uses an explicitly bound 14-day review, never an additional
+ // deficit on top of the accepted target. Legacy callers retain their contract.
+ let difference:number;
+ if(input.rateReview!==undefined){
+  const r=input.rateReview;
+  const hold=(reason:string):SnapshotAdjustmentResult=>({kind:'no_change',reason,reevaluateAt:now+7*86400000});
+  if(!r||r.version!=='rate-review-14d-v1'||r.sourceFingerprint!==e.fingerprint||r.capturedAt!==e.capturedAt)
+   return blocked('rate_review_binding_mismatch');
+  const comparison=compareInitialRateToTarget(r.observedKgPerWeek,r.targetKgPerWeek,r.coverageSufficient,r.tolerance);
+  if(comparison.status==='blocked')return blocked(comparison.reason);
+  if(comparison.status==='hold')return hold(comparison.reason);
+  if(!comparison.outsideProductTolerance)return hold('within_product_tolerance');
+  if(!r.uncertainty||r.uncertainty.status!=='reviewed')return hold('rate_uncertainty_unverified');
+  const lo=r.uncertainty.lowerKgPerWeek,hi=r.uncertainty.upperKgPerWeek;
+  if(!finite(lo)||!finite(hi)||lo>hi||r.observedKgPerWeek<lo||r.observedKgPerWeek>hi)
+   return blocked('rate_interval_invalid');
+  // The closest supported edge must ALSO exceed both product tolerances.
+  const nearest=r.targetKgPerWeek<lo?lo:r.targetKgPerWeek>hi?hi:r.targetKgPerWeek;
+  const conservative=compareInitialRateToTarget(nearest,r.targetKgPerWeek,true,r.tolerance);
+  if(conservative.status!=='comparison'||!conservative.outsideProductTolerance)
+   return hold('rate_difference_uncertain');
+  if(!r.conversion||r.conversion.model!=='approximate-energy-equivalent-v1'||r.conversion.kcalPerKg!==7700)
+   return blocked('rate_conversion_contract_invalid');
+  // Product approximation, not a dynamic physiological model or precision claim.
+  difference=(r.targetKgPerWeek-nearest)*r.conversion.kcalPerKg/7;
+  if(!finite(difference))return blocked('rate_numeric_range_invalid');
+ }else{
+  // Preserve the original accepted energy gap; never subtract another deficit.
+  const desired=a.intake+(input.observedExpenditure-a.expenditure);
+  difference=desired-g.calories;
+ }
+ if(difference===0)return {kind:'no_change',reason:'same_target'};
  // No server-verified individual total-deficit review contract exists yet.
  // Temporarily suspend every reduction; extra input flags cannot override this.
  if(difference<0)return blocked('individual_deficit_review_required');
