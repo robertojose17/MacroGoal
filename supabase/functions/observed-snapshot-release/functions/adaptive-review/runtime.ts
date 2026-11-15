@@ -22,7 +22,7 @@ export const handleAdaptiveReview=createSnapshotHttpHandler(async request=>{
 import {createSnapshotAcceptHttpHandler,createSnapshotAcceptSupabaseRuntime} from '../../../../../release-candidates/tdee-adaptive-review/snapshotAcceptEndpoint.ts';
 let acceptRuntime:ReturnType<typeof createSnapshotAcceptSupabaseRuntime>|undefined;
 export const handleAdaptiveAccept=createSnapshotAcceptHttpHandler(async request=>{
- if(!ADAPTIVE_RELEASE_STATE.recommendationsEnabled)return {reason:'safety_review_required',receipt:null,mayHaveWritten:false};
+ if(!ADAPTIVE_RELEASE_STATE.recommendationsEnabled||!ADAPTIVE_RELEASE_STATE.acceptanceEnabled)return {reason:'safety_review_required',receipt:null,mayHaveWritten:false};
  try{
   acceptRuntime??=createSnapshotAcceptSupabaseRuntime({
    url:Deno.env.get('SUPABASE_URL')??'',anonKey:Deno.env.get('SUPABASE_ANON_KEY')??'',createClient
