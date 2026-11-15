@@ -1,4 +1,5 @@
 import { estimateFromSources, todayInZone } from '../dynamic-tdee/data.ts';
+import { observedRateDiagnostic } from './rateDiagnostic.ts';
 import { emptyTdee, type DynamicTdeeResult } from '../_shared/dynamic-tdee.ts';
 import { parseObservedSnapshot, parseObservationContext } from './snapshot.ts';
 import { observationHeaders as previewHeaders } from './dispatcher.ts';
@@ -23,9 +24,10 @@ export interface ObservationDependencies {
 const knownErrors = new Set(['authentication_required','observation_unavailable','premium_required','invalid_request','profile_unavailable']);
 const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: previewHeaders });
 const markedEstimate = (estimate: DynamicTdeeResult) => ({ ...estimate, observationOnly: true, observationVersion: 'observation-v1' });
-function view(context: ObservationContext, estimate: DynamicTdeeResult | null) {
+function view(context: ObservationContext, estimate: DynamicTdeeResult | null, rateDiagnostic?: ReturnType<typeof observedRateDiagnostic>) {
   return {
     ...(context.accessValidUntil === undefined ? {} : {accessValidUntil:context.accessValidUntil}),
+    ...(rateDiagnostic === undefined ? {} : {rateDiagnostic}),
     version: 'dynamic-program-v1', observationOnly: true, observationVersion: 'observation-v1', premium: context.premium, enabled: context.enabled,
     reviewDay: context.reviewDay, today: context.today, nextReviewDate: context.nextReviewDate,
     reviewDue: false, currentGoal: context.currentGoal, estimate: estimate ? markedEstimate(estimate) : null,
@@ -76,6 +78,7 @@ export function createObservationHandler(deps: ObservationDependencies) {
       const snapshot = parseObservedSnapshot(await deps.snapshot(authorization), owner);
       let context = snapshot.context;
       let estimate: DynamicTdeeResult | null = null;
+      let rateDiagnostic: ReturnType<typeof observedRateDiagnostic> | undefined;
       if (context.premium && context.enabled) {
         const now = new Date(snapshot.capturedAt);
         const fingerprint = context.fingerprint;
@@ -85,8 +88,9 @@ export function createObservationHandler(deps: ObservationDependencies) {
         context = parseObservationContext(await deps.context(authorization), owner);
         if (context.fingerprint !== fingerprint || !context.premium || !context.enabled)
           return reply(409, { error: 'context_changed' });
+        if (requestedView === 'program') rateDiagnostic = observedRateDiagnostic(snapshot, owner, Date.now());
       }
-      return reply(200, requestedView === 'estimate' ? {...markedEstimate(estimate ?? emptyTdee()),...(context.accessValidUntil === undefined ? {} : {accessValidUntil:context.accessValidUntil})} : view(context, estimate));
+      return reply(200, requestedView === 'estimate' ? {...markedEstimate(estimate ?? emptyTdee()),...(context.accessValidUntil === undefined ? {} : {accessValidUntil:context.accessValidUntil})} : view(context, estimate, rateDiagnostic));
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       const safe = knownErrors.has(message) ? message : 'source_error';
