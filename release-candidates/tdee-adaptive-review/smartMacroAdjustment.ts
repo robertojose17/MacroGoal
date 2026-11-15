@@ -3,7 +3,7 @@ export type SmartTarget={calories:number;proteinG:number;carbsG:number;fatsG:num
 export type SmartMacroBinding={ownerId:string;goalId:string;goalRevision:string;preset:string;sourceFingerprint:string;policyVersion:string;policyDigest:string};
 export type SmartMacroContext={
  binding:SmartMacroBinding;current:SmartTarget;
- review:{status:'reviewed';reviewId:string;reviewedAt:number;expiresAt:number;ageYears:number;eligibility:'eligible'|'restricted'|'unknown'};
+ review:{status:'reviewed';reviewId:string;reviewVersion?:number;approvalDigest?:string;approvalVersion?:string;reviewedAt:number;expiresAt:number;ageYears:number;eligibility:'eligible'|'restricted'|'unknown'};
  limits:{proteinMinG:number;proteinMaxG:number;carbsMinG:number;carbsMaxG:number;fatsMinG:number;fatsMaxG:number;fatMinFraction:number;fatMaxFraction:number};
  customChoice?:{mode:'smart'|'preserve_percent';binding:SmartMacroBinding;consentId:string;acceptedAt:number;choiceVersion?:number;splitBps?:{protein:number;carbs:number;fats:number}|null};
 };
