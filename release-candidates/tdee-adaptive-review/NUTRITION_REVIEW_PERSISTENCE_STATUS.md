@@ -71,3 +71,11 @@ An actual verified administrative approval act with explicit limits and scope; a
 Pinned SQL9537adf67163a9578e9849b8ce4ac131a098f318 compiled through the Supabase migration connector within BEGIN/ROLLBACK. Assertions passed: table RLS enabled; anon/authenticated/service_role have no table SELECT/INSERT/UPDATE/DELETE; getter EXECUTE restricted to service_role; actual authenticated-role call denied; service_role with incorrect JWT role denied; service_role null input returns null. No review rows were inserted. This was not HTTP authentication or an application E2E test.
 
 Independent post-transaction metadata read confirmed both table and getter absent, as before. No persistent installation, review, policy, goal or release change occurred. Positive eligible-record mapping, latest-version suppression, bindings, concurrent changes and full acceptance still need verification. TypeScript regressions remain prepared and unexecuted because the earlier runner blocker was not retried.
+
+## Verified own-account positive-path rollback — 2026-11-15
+
+A second authorized Supabase transaction compiled the same pinned candidate and inserted synthetic review fixtures solely for the existing Rivera owner/active goal, then ended ROLLBACK. Tests passed: exact eligible-record output; wrong engine, profile binding and owner return null; newer restricted, revoked, expired and mismatched versions each suppress the earlier eligible version; an eligible row missing a required limit violates its constraint.
+
+The complete own-profile and all-own-goals JSON digests matched before and after the test body. No target/profile writes were performed. Independent post-transaction metadata again showed both candidate objects absent. No synthetic clinical declaration or approval persisted.
+
+This positive-path harness used service-role JWT claims inside the SQL transaction, not a signed HTTP session. Actual SQL-role ACL denials were tested separately above. No tests of every malformed timestamp/NaN variant or concurrent acceptance are claimed. Source TypeScript tests remain unexecuted. Storage is still not installed and recommendations remain OFF.
