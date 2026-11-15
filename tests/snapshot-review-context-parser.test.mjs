@@ -1,4 +1,4 @@
-/** Caps contract regression changed; execution pending because local runner is blocked. */
+/** Smart Macro fail-closed expectations prepared, NOT EXECUTED: runner remains blocked. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseSnapshotReviewContext} from '../release-candidates/tdee-adaptive-review/snapshotReviewContextParser.ts';
@@ -16,11 +16,15 @@ function fixture(){
  anchor,eligibility:{owner_id:actor,policy_version:'p1',eligible:true,complete_days_verified:true,source_fingerprint:hash,digest:hash,expires_at:'2026-12-01T00:00:00Z'},
  receiptChain:{actor,anchor:structuredClone(anchor),currentGoal:structuredClone(goal),totalCount:0,rows:[]},actionable:false,evidenceStatus:'unverified'};
 }
-test('real estimator plus full attestations produces inert bound context',()=>{const v=fixture();const r=parseSnapshotReviewContext(v,actor,actor,now);assert.equal(r.kind,'prepared_context');assert.equal(r.actionable,false);assert.equal(r.input.observedExpenditure,2500);assert.equal(r.input.anchor.receiptsVerified,true);assert.equal(r.binding.sourceDate,'2026-11-13');assert.equal(r.binding.readinessFingerprint,hash);v.currentGoal.daily_calories=1;assert.equal(r.binding.goalSnapshot.daily_calories,2000);});
+test('real estimator and old attestations do not manufacture Smart Macro review',()=>{
+ const v=fixture(),before=structuredClone(v);
+ assert.deepEqual(parseSnapshotReviewContext(v,actor,actor,now),{kind:'blocked',reason:'macro_context_required'});
+ assert.deepEqual(v,before);
+});
 test('missing records cannot manufacture review',()=>{for(const key of ['policy','anchor','eligibility']){const v=fixture();v[key]=null;assert.equal(parseSnapshotReviewContext(v,actor,actor,now).kind,'blocked');}});
 test('owner and goal/policy mismatches fail closed',()=>{for(const mutate of [v=>v.profile.id='other',v=>v.currentGoal.user_id='other',v=>v.anchor.owner_id='other',v=>v.eligibility.owner_id='other',v=>v.policy.digest='bad',v=>v.anchor.policy_version='other',v=>v.currentGoal.updated_at=null,v=>v.policy.engine_version='unknown']){const v=fixture();mutate(v);assert.equal(parseSnapshotReviewContext(v,actor,actor,now).kind,'blocked');}});
 test('policy review requires strict boolean',()=>{for(const key of ['enabled','reviewed','snapshot_contract_reviewed'])for(const value of [false,'true',null]){const v=fixture();v.policy[key]=value;assert.equal(parseSnapshotReviewContext(v,actor,actor,now).kind,'blocked');}});
-test('all interval days confirmed, last weight day excluded',()=>{const v=fixture();v.readiness.days[0].confirmed=false;assert.equal(parseSnapshotReviewContext(v,actor,actor,now).reason,'complete_days_required');const x=fixture();x.readiness.days.at(-1).confirmed=false;assert.equal(parseSnapshotReviewContext(x,actor,actor,now).kind,'prepared_context');});
+test('all interval days confirmed, last weight day excluded',()=>{const v=fixture();v.readiness.days[0].confirmed=false;assert.equal(parseSnapshotReviewContext(v,actor,actor,now).reason,'complete_days_required');const x=fixture();x.readiness.days.at(-1).confirmed=false;assert.equal(parseSnapshotReviewContext(x,actor,actor,now).reason,'macro_context_required');});
 test('revoked selfreport, duplicate days and receipt mismatch block',()=>{for(const mutate of [v=>v.readiness.eligibility.current=false,v=>v.readiness.eligibility.response='unsure',v=>v.readiness.days.push(v.readiness.days[0]),v=>v.receiptChain.totalCount=1,v=>v.receiptChain.anchor.accepted_delta_kcal=100]){const v=fixture();mutate(v);assert.equal(parseSnapshotReviewContext(v,actor,actor,now).kind,'blocked');}});
 test('baseline provenance and direction required',()=>{for(const mutate of [v=>v.anchor.baseline_captured_at=null,v=>v.anchor.baseline_captured_at='2026-11-13T00:00:00Z',v=>v.anchor.baseline_expenditure_kcal=1900]){const v=fixture();mutate(v);v.receiptChain.anchor=structuredClone(v.anchor);assert.equal(parseSnapshotReviewContext(v,actor,actor,now).kind,'blocked');}});
 test('estimator gates never bypassed by confirmations',()=>{const v=fixture();v.observation.sources.items[0].calories=0;assert.equal(parseSnapshotReviewContext(v,actor,actor,now).reason,'estimate_unknown_calorie_provenance');});
@@ -42,4 +46,11 @@ test('real estimator lower expenditure blocks reduction despite synthetic review
  const r=parseSnapshotReviewContext(v,actor,actor,now);
  assert.equal(r.kind,'blocked');assert.equal(r.reason,'individual_deficit_review_required');
  assert.deepEqual(v,before);
+});
+
+// Untrusted additions must not become reviewed macro inputs in the current loader.
+test('raw macro flags cannot bypass the missing authoritative context',()=>{
+ const v=fixture();v.macroContext={status:'reviewed',eligible:true,proteinAdequate:true};
+ v.macroBinding={ownerId:actor,sourceFingerprint:hash};
+ assert.deepEqual(parseSnapshotReviewContext(v,actor,actor,now),{kind:'blocked',reason:'macro_context_required'});
 });
