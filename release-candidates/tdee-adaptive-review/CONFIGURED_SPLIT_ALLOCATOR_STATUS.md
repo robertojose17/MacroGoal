@@ -1,5 +1,9 @@
 # Configured split allocation candidate
 
+## Later product direction (2026-11-15)
+
+This percentage allocator is no longer the default Smart TDEE strategy. The user replaced that direction with preserving appropriate protein, protecting reviewed fat limits and adjusting carbohydrates preferentially. This isolated allocator remains only a potential explicit manual “keep percentages” option; it is not wired into the new Smart Macro engine, and it cannot establish nutritional suitability or bypass consent, context verification or existing guards. Custom percentage persistence and clinical/contextual limits remain unresolved. Do not enable or reuse it as the automatic default.
+
 Status: isolated, inert source. No runtime imports, SQL changes, deployment, policy activation, or acceptance. The 10 tests in `tests/configured-split-allocator.test.mjs` are prepared and NOT EXECUTED because the runner blocker remains. Synthetic fixtures are arithmetic examples, not clinical policy.
 
 ## Verified current source
