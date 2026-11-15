@@ -52,7 +52,9 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
  let difference:number;
  if(input.rateReview!==undefined){
   const r=input.rateReview;
-  const hold=(reason:string):SnapshotAdjustmentResult=>({kind:'no_change',reason,reevaluateAt:now+7*86400000});
+  const reevaluateAt=now+7*86400000;
+  if(!Number.isSafeInteger(now)||Math.abs(now)>8640000000000000||!Number.isSafeInteger(reevaluateAt)||Math.abs(reevaluateAt)>8640000000000000)return blocked('invalid_time');
+  const hold=(reason:string):SnapshotAdjustmentResult=>({kind:'no_change',reason,reevaluateAt});
   if(!r||r.version!=='rate-review-14d-v1'||r.sourceFingerprint!==e.fingerprint||r.capturedAt!==e.capturedAt)
    return blocked('rate_review_binding_mismatch');
   const comparison=compareInitialRateToTarget(r.observedKgPerWeek,r.targetKgPerWeek,r.coverageSufficient,r.tolerance);
@@ -78,7 +80,7 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
   const desired=a.intake+(input.observedExpenditure-a.expenditure);
   difference=desired-g.calories;
  }
- if(difference===0)return {kind:'no_change',reason:'same_target'};
+ if(difference===0)return {kind:'no_change',reason:input.rateReview?'same_rate_target':'same_anchored_target'};
  // No server-verified individual total-deficit review contract exists yet.
  // Temporarily suspend every reduction; extra input flags cannot override this.
  if(difference<0)return blocked('individual_deficit_review_required');
