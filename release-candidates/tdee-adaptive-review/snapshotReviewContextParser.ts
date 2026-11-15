@@ -1,3 +1,4 @@
+import {explicitlyDeclaredNutrient} from '../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/nutrient-evidence.ts';
 /** Private pure adapter for read_review_context. No RPC, seeds, or release activation. */
 import {parseObservedSnapshot} from '../../supabase/functions/observed-snapshot-release/functions/observed-program/snapshot.ts';
 import {estimateFromSources,normalizedDatedWeights} from '../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts';
@@ -259,6 +260,9 @@ function confirmedDayLoggedCalories(value:Obj,sources:import('../../supabase/fun
   imputedDays:0,actionable:false as const};
  if(readinessStatus!=='explicit_self_report'||!rec(value.readiness)||!Array.isArray(value.readiness.days))return unknown;
  const start=dateForDay(dayNumber(today)!-14);
+ const knownZero=(item:typeof sources.items[number],field:'calories'|'protein'|'carbs'|'fats'|'fiber')=>
+  sources.nutritionEvidenceVersion==='user-entered-v1'&&typeof value.actor==='string'&&
+  explicitlyDeclaredNutrient(item,value.actor,field);
  const dates=new Set<string>(value.readiness.days.filter(d=>rec(d)&&d.confirmed===true&&d.confirmable===true&&
   typeof d.date==='string'&&d.date>=start&&d.date<today).map(d=>d.date as string));
  const meals=new Map(sources.meals.map(m=>[m.id,m]));
@@ -269,8 +273,8 @@ function confirmedDayLoggedCalories(value:Obj,sources:import('../../supabase/fun
   if(!meal||!dates.has(meal.date))continue;
   const day=sums.get(meal.date)!;
   if(item.is_scheduled===true)continue;
-  // Legacy zero has no provenance distinguishing unknown energy from declared0.
-  if(item.is_scheduled!==false||typeof item.calories!=='number'||!Number.isFinite(item.calories)||item.calories<=0){
+  // Legacy zero stays unknown; only exact current explicit evidence can admit it.
+  if(item.is_scheduled!==false||typeof item.calories!=='number'||!Number.isFinite(item.calories)||(item.calories<0||(item.calories===0&&!knownZero(item,'calories')))){
    day.unknown=true;continue;
   }
   day.sum+=item.calories;day.count++;
@@ -292,8 +296,8 @@ function confirmedDayLoggedCalories(value:Obj,sources:import('../../supabase/fun
     if(!meal||!dates.has(meal.date)||item.is_scheduled===true)continue;
     const amount=item[stored];
     // Snapshot version certifies field presence, not zero-value provenance.
-    // Legacy default0/unknown0 is not silently interpreted as a known nutrient.
-    if(item.is_scheduled!==false||typeof amount!=='number'||!Number.isFinite(amount)||amount<=0){known=false;continue;}
+    // Legacy default0/unknown0 stays unknown unless explicitly declared for this revision.
+    if(item.is_scheduled!==false||typeof amount!=='number'||!Number.isFinite(amount)||(amount<0||(amount===0&&!knownZero(item,stored)))){known=false;continue;}
     total+=amount;seen.add(meal.date);
    }
    if(known&&seen.size===dates.size&&Number.isFinite(total))macros[output]=total/dates.size;
