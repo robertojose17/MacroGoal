@@ -6,7 +6,7 @@ import {verifySnapshotReceiptChain} from './receiptChain.ts';
 import {draftSnapshotAdjustment, type SnapshotAdjustmentInput} from './snapshotAdjustment.ts';
 import type {SmartMacroBinding,SmartMacroContext,SmartTarget} from './smartMacroAdjustment.ts';
 import type {SnapshotBinding} from './snapshotProposalProducer.ts';
-import {diagnoseFourteenDayRate,assessInitialRateCoverage} from './rateAdjustmentDecision.ts';
+import {diagnoseFourteenDayRate,assessInitialRateCoverage,compareInitialRateToTarget} from './rateAdjustmentDecision.ts';
 type Obj=Record<string,unknown>;
 const rec=(v:unknown):v is Obj=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const hash=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
@@ -177,7 +177,8 @@ export function diagnoseSnapshotRateReview(value:unknown,actor:string,now:number
  // Initial 14-day coverage is separate from the legacy 21-day expenditure model.
  // It is not model confidence and does not authorize producer/acceptance writes.
  const initialCoverage=assessInitialRateCoverage(diagnostic.window,loggingCoverage);
- return {...diagnostic,loggingCoverage,initialCoverage,sourceCapturedAt:observation.capturedAt,sourceFingerprint:observation.sourceFingerprint,
+ const paceComparison=compareInitialRateToTarget(diagnostic.observedRateKgPerWeek,diagnostic.targetRateKgPerWeek,initialCoverage.coverageSufficient);
+ return {...diagnostic,loggingCoverage,initialCoverage,paceComparison,sourceCapturedAt:observation.capturedAt,sourceFingerprint:observation.sourceFingerprint,
   goalId:g.id as string,goalRevision:g.updated_at as string};
 }
 
