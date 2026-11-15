@@ -23,7 +23,9 @@ consumed-status fields, `logged_at`, `meal_id`, and the meal's local date.
  expectedEvidenceVersion, expected, declaredFields:['calories', ...]}
 ```
 
-Each declared field must be an existing nonnegative numeric value. Numeric zero
+All five stored nutrient values must be nonnegative finite numbers, including
+undeclared fields. NULL, missing, invalid or negative values reject registration;
+they are never filled with zero. Each declared field must be in that five-field set. Numeric zero
 is allowed only as an explicit declaration; unknown/null is not inferred as zero.
 Undeclared fields remain unknown to provenance consumers even when a stored value
 is present. Do not preselect declarations based on legacy defaults, saved foods,
@@ -55,9 +57,10 @@ The five values are the actual stored values, not estimates. The private latest
 event must still match owner, item revision, all values and portion/date binding.
 The future same-statement SQL source projection must apply these checks itself;
 a separately fetched public read response does not upgrade snapshot authority.
-Existing consumer validation may reject any NULL nutrient conservatively, even
-if another declared nutrient is usable. Do not replace unknown values to satisfy
-that consumer. Snapshot marker integration is not implemented by this candidate.
+Registration matches consumer validation even when only one field is declared:
+an unknown undeclared nutrient still blocks the record, rather than producing
+evidence that the consumer cannot use. Snapshot marker integration is not
+implemented by this candidate.
 
 ## Access and concurrency
 
@@ -75,6 +78,17 @@ Existing writers' meal/item lock order and trigger behavior must be reviewed
 before rollout; deadlocks/timeouts remain possible and are not a successful save.
 Each item serializes event versions. Unique owner/request ID also resolves
 cross-item concurrent request reuse. There are no external effects in the RPC.
+
+A read and its authentication helper are STABLE. PostgreSQL documents that
+STABLE functions use the invoking query's snapshot; VOLATILE functions obtain a
+fresh snapshot for each query they execute. The getter has no writes, locks or
+wall-clock output, and the auth helper only reads request claims. Thus a future
+same-query source projection can call it through the narrow authenticated RPC
+without granting SELECT on the private table. This has NOT been compiled or
+validated in PostgreSQL. In particular, registration is VOLATILE and its nested
+getter readback after INSERT must be tested explicitly; do not assume visibility
+of writes made in the same calling command or change isolation to hide a failure.
+Reference: https://www.postgresql.org/docs/17/xfunc-volatility.html
 
 A read is a statement snapshot, not perpetual validity or commit-time
 serialization with all future writes. Item revisions plus exact meal ownership
