@@ -173,6 +173,45 @@ export function diagnoseSnapshotRateReview(value:unknown,actor:string,now:number
  if(weights===null)return block('rate_weight_source_conflict');
  const diagnostic=diagnoseFourteenDayRate(today,weights.map(w=>({date:w.date,weightKg:w.kg})),g,now);
  if(diagnostic.kind==='blocked')return diagnostic;
- return {...diagnostic,sourceCapturedAt:observation.capturedAt,sourceFingerprint:observation.sourceFingerprint,
+ return {...diagnostic,loggingCoverage:diagnosticReadinessCoverage(value,actor,today,profile.timezone as string,now),sourceCapturedAt:observation.capturedAt,sourceFingerprint:observation.sourceFingerprint,
   goalId:g.id as string,goalRevision:g.updated_at as string};
+}
+
+/**
+ * Only for read_review_context's same-statement server envelope. The SQL reader
+ * recomputes content/journey/timezone hashes before returning confirmed=true.
+ * No separate HTTP/client payload may substitute for that authoritative envelope.
+ * Explicit logging confirmation is NOT nutritional eligibility or model confidence.
+ */
+function diagnosticReadinessCoverage(value:Obj,actor:string,today:string,timezone:string,now:number){
+ const unverified=()=>({status:'unverified' as const,windowDays:14,confirmedDays:null,
+  unconfirmedDays:null,unavailableDays:null,allDaysExplicitlyConfirmed:false as boolean});
+ const r=value.readiness;
+ if(!rec(r)||r.version!=='tdee-readiness-v1'||r.ownerId!==actor||r.statementVersion!=='complete-day-v1'||
+ r.questionnaireVersion!=='general-adult-v1'||r.today!==today||r.timezone!==timezone||
+ !hash(r.profileBinding)||!hash(r.journeyBinding)||!hash(value.readinessFingerprint)||
+ !Number.isFinite(time(r.capturedAt))||time(r.capturedAt)>now||now-time(r.capturedAt)>30000||
+ !Array.isArray(r.days)||r.days.length>29)return unverified();
+ const profile=value.profile;
+ if(!rec(profile)||profile.id!==actor||profile.timezone!==timezone||
+ (profile.journeyStartDate!==null&&dayNumber(profile.journeyStartDate as string)===null))return unverified();
+ const earliest=dateForDay(dayNumber(today)!-29);
+ const start=typeof profile.journeyStartDate==='string'&&profile.journeyStartDate>earliest?profile.journeyStartDate:earliest;
+ const byDate=new Map<string,Obj>();
+ for(const d of r.days){
+  if(!rec(d)||typeof d.date!=='string'||dayNumber(d.date)===null||d.date<start||d.date>=today||
+   !hash(d.contentHash)||typeof d.confirmable!=='boolean'||typeof d.confirmed!=='boolean'||
+   (d.confirmed&&!d.confirmable)||byDate.has(d.date))return unverified();
+  byDate.set(d.date,d);
+ }
+ let confirmedDays=0,unconfirmedDays=0,unavailableDays=0;
+ const end=dayNumber(today)!;
+ for(let day=end-14;day<end;day++){
+  const d=byDate.get(dateForDay(day));
+  if(!d||!d.confirmable)unavailableDays++;
+  else if(d.confirmed)confirmedDays++;
+  else unconfirmedDays++;
+ }
+ return {status:'explicit_self_report' as const,windowDays:14,confirmedDays,unconfirmedDays,unavailableDays,
+  allDaysExplicitlyConfirmed:confirmedDays===14};
 }
