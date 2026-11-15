@@ -24,6 +24,15 @@ function sourceNumber(value: unknown): number {
   const number = Number(value);
   return Number.isFinite(number) ? number : NaN;
 }
+/** Compare instants, not ISO spelling: offsets can differ for the same instant.
+ * Missing optional check-in timestamps retain lowest precedence, not current time.
+ * A malformed nonempty timestamp cannot select a trustworthy latest reading. */
+function readingInstant(value: unknown): number | null {
+  if (value === '' || value === null || value === undefined) return Number.NEGATIVE_INFINITY;
+  if (typeof value !== 'string') return null;
+  const instant = Date.parse(value);
+  return Number.isFinite(instant) ? instant : null;
+}
 export function estimateFromSources(data: DataSources, now: Date): DynamicTdeeResult {
   let today: string;
   try { today = todayInZone(now, data.timezone); } catch { return emptyTdee('invalid_data'); }
@@ -61,21 +70,24 @@ export function weightAtEstimateDate(data: DataSources, date: string | null): nu
   if (!date) return null;
   const units = new Map(data.trackers.map(t => [t.id, t.unit?.toLowerCase()]));
   const readings = [
-    ...data.checkIns.filter(w => w.date === date).map(w => ({ kg: sourceNumber(w.weight), at: w.updated_at ?? w.created_at ?? '' })),
-    ...data.trackerWeights.filter(w => w.date === date).map(w => ({ kg: units.get(w.tracker_id) === 'kg' ? sourceNumber(w.value) : ['lb','lbs'].includes(units.get(w.tracker_id) ?? '') ? sourceNumber(w.value) / 2.2046226218 : NaN, at: w.created_at })),
-  ].sort((a, b) => b.at.localeCompare(a.at));
+    ...data.checkIns.filter(w => w.date === date).map(w => ({ kg: sourceNumber(w.weight), at: readingInstant(w.updated_at ?? w.created_at ?? '') })),
+    ...data.trackerWeights.filter(w => w.date === date).map(w => ({ kg: units.get(w.tracker_id) === 'kg' ? sourceNumber(w.value) : ['lb','lbs'].includes(units.get(w.tracker_id) ?? '') ? sourceNumber(w.value) / 2.2046226218 : NaN, at: readingInstant(w.created_at) })),
+  ];
+  if (readings.some(row => row.at === null)) return null;
+  readings.sort((a, b) => a.at === b.at ? 0 : a.at! < b.at! ? 1 : -1);
   return readings.length && Number.isFinite(readings[0].kg) ? readings[0].kg : null;
 }
 
 /** Shared weight normalization only; null means source conflict/unknown unit. */
 export function normalizedDatedWeights(data: DataSources, today: string, minDate: string): TdeeWeight[] | null {
   if (dayNumber(today) === null || dayNumber(minDate) === null) return null;
-  const checkIns = new Map<string, { kg: number; at: string }>();
-  const trackerWeights = new Map<string, { kg: number; at: string }>();
+  const checkIns = new Map<string, { kg: number; at: number }>();
+  const trackerWeights = new Map<string, { kg: number; at: number }>();
   const validDate = (date: string) => date >= minDate && date < today;
   for (const row of data.checkIns) {
     if (!validDate(row.date)) continue;
-    const at = row.updated_at ?? row.created_at ?? '';
+    const at = readingInstant(row.updated_at ?? row.created_at ?? '');
+    if (at === null) return null;
     const kg = sourceNumber(row.weight);
     if (checkIns.has(row.date) && at === checkIns.get(row.date)!.at && kg !== checkIns.get(row.date)!.kg) return null;
     if (!checkIns.has(row.date) || at > checkIns.get(row.date)!.at) checkIns.set(row.date, { kg, at });
@@ -83,12 +95,14 @@ export function normalizedDatedWeights(data: DataSources, today: string, minDate
   const units = new Map(data.trackers.map(t => [t.id, t.unit]));
   for (const row of data.trackerWeights) {
     if (!validDate(row.date)) continue;
+    const at = readingInstant(row.created_at);
+    if (at === null || at === Number.NEGATIVE_INFINITY) return null;
     const unit = units.get(row.tracker_id)?.toLowerCase();
     // Storage contract: app weight tracker is lb; honor explicitly tagged kg, never guess.
     if (!unit || !['kg', 'lb', 'lbs'].includes(unit)) return null;
     const kg = sourceNumber(row.value) / (unit === 'kg' ? 1 : 2.2046226218);
-    if (trackerWeights.has(row.date) && row.created_at === trackerWeights.get(row.date)!.at && kg !== trackerWeights.get(row.date)!.kg) return null;
-    if (!trackerWeights.has(row.date) || row.created_at > trackerWeights.get(row.date)!.at) trackerWeights.set(row.date, { kg, at: row.created_at });
+    if (trackerWeights.has(row.date) && at === trackerWeights.get(row.date)!.at && kg !== trackerWeights.get(row.date)!.kg) return null;
+    if (!trackerWeights.has(row.date) || at > trackerWeights.get(row.date)!.at) trackerWeights.set(row.date, { kg, at });
   }
   if ([...checkIns.values(), ...trackerWeights.values()].some(value => !Number.isFinite(value.kg))) return null;
   const merged = new Map(checkIns);
