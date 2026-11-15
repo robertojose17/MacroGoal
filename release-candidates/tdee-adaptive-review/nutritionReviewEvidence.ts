@@ -37,6 +37,6 @@ export function nutritionReviewEvidence(actor:string,request:SnapshotMacroReques
   (limits.fatsMinG as number)>(limits.fatsMaxG as number)||(limits.fatMinFraction as number)<0||
   (limits.fatMaxFraction as number)>1||(limits.fatMinFraction as number)>(limits.fatMaxFraction as number))return null;
  return {binding:structuredClone(request.binding),current:structuredClone(request.current),
- review:{status:'reviewed',reviewId:value.reviewId as string,reviewedAt:reviewed,expiresAt:expires,ageYears:request.ageYears,eligibility:'eligible'},
+ review:{status:'reviewed',reviewId:value.reviewId as string,reviewVersion:value.reviewVersion as number,approvalDigest:p.approvalSha256 as string,approvalVersion:p.approvalVersion as string,reviewedAt:reviewed,expiresAt:expires,ageYears:request.ageYears,eligibility:'eligible'},
  limits:structuredClone(limits) as NonNullable<SnapshotMacroEvidence['review']>['limits']};
 }
