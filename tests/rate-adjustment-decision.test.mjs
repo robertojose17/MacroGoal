@@ -64,3 +64,21 @@ test('inputs unchanged and subunit changes hold instead of rounding up',()=>{
  const f=fixture(),before=structuredClone(f);decide(f);assert.deepEqual(f,before);
  f.targetRateKgPerWeek=-0.4001;assert.equal(decide(f).kind,'hold');
 });
+
+test('insufficient data holds seven days without inventing policy or interval',()=>{
+ for(const key of ['sufficient','stable','reliableInterval']){
+  const f=fixture();f.data[key]=false;f.policy=undefined;f.interval=undefined;const before=structuredClone(f);
+  assert.deepEqual(decide(f),{kind:'hold',actionable:false,reason:'insufficient_or_uncertain_data',reevaluateAt:now+7*86400000});
+  assert.equal('deltaKcal' in decide(f),false);assert.deepEqual(f,before);
+ }
+ for(const [field,value] of [['now',NaN],['currentIntakeKcal',0],['acceptedNetDeltaKcal',Infinity]]){
+  const f=fixture();f.data.sufficient=false;f.policy=undefined;f[field]=value;assert.equal(decide(f).kind,'blocked');
+ }
+});
+test('sufficient evidence still requires policy conversion and interval',()=>{
+ for(const field of ['policy','interval']){const f=fixture();f[field]=undefined;assert.equal(decide(f).kind,'blocked');}
+ const f=fixture();f.policy.conversionReviewed=false;assert.equal(decide(f).reason,'conversion_review_required');
+});
+test('misconfigured above200 step is rejected consistently with snapshot engine',()=>{
+ for(const maximum of [201,500,1000]){const f=fixture();f.policy.maxStepKcal=maximum;assert.equal(decide(f).reason,'policy_invalid');}
+});
