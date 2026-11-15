@@ -1,12 +1,14 @@
+import type {UserEnteredNutritionEvidence} from './nutrient-evidence.ts';
 import { dayNumber, dateForDay, emptyTdee, estimateDynamicTdee, hasSupportedAdultAge, type DynamicTdeeResult, type TdeeWeight } from '../_shared/dynamic-tdee.ts';
 export interface DataSources {
   timezone: string; dateOfBirth: string | null; journeyStartDate?: string | null;
   nutritionFieldsVersion?: 'logged-macros-v1';
+  nutritionEvidenceVersion?: 'user-entered-v1';
   trackers: Array<{ id: string; unit: string | null }>;
   trackerWeights: Array<{ tracker_id: string; date: string; value: number; created_at: string }>;
   checkIns: Array<{ date: string; weight: number; updated_at: string | null; created_at: string | null }>;
   meals: Array<{ id: string; date: string; meal_type: string }>;
-  items: Array<{ meal_id: string; calories: number; is_scheduled: boolean;
+  items: Array<{ id?: string; nutrition_revision?: string | null; nutrition_evidence?: UserEnteredNutritionEvidence | null; meal_id: string; calories: number; is_scheduled: boolean;
     protein?: number | null; carbs?: number | null; fats?: number | null; fiber?: number | null }>;
 }
 export function todayInZone(now: Date, timezone: string): string {
