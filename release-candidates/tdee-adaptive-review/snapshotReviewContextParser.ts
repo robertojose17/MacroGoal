@@ -16,7 +16,7 @@ export type ReviewContextResult={kind:'blocked';reason:string}|{kind:'prepared_c
 /** Versioned technical contract only; no clinical assurance or release authority. */
 export const SNAPSHOT_ENGINE_CONTRACT=Object.freeze({engineVersion:'observed-v1/snapshot-adjustment-v1',incrementKcal:25});
 export type SnapshotMacroRequest={binding:SmartMacroBinding;current:SmartTarget;sourceCapturedAt:string;profileUpdatedAt:string;profileBinding:string;journeyBinding:string;today:string;ageYears:number};
-export type SnapshotMacroEvidence={version:'snapshot-macro-evidence-v1';request:SnapshotMacroRequest;review:Omit<SmartMacroContext,'customChoice'>|null;consent:SmartMacroContext['customChoice']|null};
+export type SnapshotMacroEvidence={version:'snapshot-macro-evidence-v1';request:SnapshotMacroRequest;review:Omit<SmartMacroContext,'customChoice'>|null;consent:SmartMacroContext['customChoice']|null;preferenceStatus?:'current'|'absent'|'revoked'|'stale'|'invalid'};
 type MacroRequestResult={kind:'macro_request';request:SnapshotMacroRequest};
 type InternalResult=ReviewContextResult|MacroRequestResult;
 function parseInternal(value:unknown,actor:string,proposalId:string,now:number,serverEvidence:unknown,requestOnly:boolean):InternalResult {
@@ -110,6 +110,13 @@ function parseInternal(value:unknown,actor:string,proposalId:string,now:number,s
   if(serverEvidence===null)return block('macro_context_required');
   if(!rec(serverEvidence)||serverEvidence.version!=='snapshot-macro-evidence-v1'||!same(serverEvidence.request,request))
    return block('macro_evidence_binding_mismatch');
+  // New own-actor loaders declare preference state explicitly. A known missing,
+  // revoked, stale or malformed choice must never become implicit Smart consent.
+  if(Object.hasOwn(serverEvidence,'preferenceStatus')){
+   if(serverEvidence.preferenceStatus!=='current')return block('macro_choice_'+(
+    ['absent','revoked','stale','invalid'].includes(serverEvidence.preferenceStatus as string)?serverEvidence.preferenceStatus:'invalid'));
+   if(!rec(serverEvidence.consent))return block('macro_evidence_invalid');
+  }
   if(serverEvidence.review===null)return block('macro_context_required');
   if(!rec(serverEvidence.review)||Object.hasOwn(serverEvidence.review,'customChoice')||
    !rec(serverEvidence.review.review)||serverEvidence.review.review.ageYears!==ageYears||
