@@ -17,3 +17,16 @@ export const handleAdaptiveReview=createSnapshotHttpHandler(async request=>{
  },{version,digest,engineVersion});
  return runtime(request);
 },['https://macro-goal.expo.app']);
+
+/** Separate explicit acceptance route. Never exposes or constructs a service-key client. */
+import {createSnapshotAcceptHttpHandler,createSnapshotAcceptSupabaseRuntime} from '../../../../../release-candidates/tdee-adaptive-review/snapshotAcceptEndpoint.ts';
+let acceptRuntime:ReturnType<typeof createSnapshotAcceptSupabaseRuntime>|undefined;
+export const handleAdaptiveAccept=createSnapshotAcceptHttpHandler(async request=>{
+ if(!ADAPTIVE_RELEASE_STATE.recommendationsEnabled)return {reason:'safety_review_required',receipt:null,mayHaveWritten:false};
+ try{
+  acceptRuntime??=createSnapshotAcceptSupabaseRuntime({
+   url:Deno.env.get('SUPABASE_URL')??'',anonKey:Deno.env.get('SUPABASE_ANON_KEY')??'',createClient
+  });
+ }catch{return {reason:'source_error',receipt:null,mayHaveWritten:false};}
+ return acceptRuntime(request);
+},['https://macro-goal.expo.app']);
