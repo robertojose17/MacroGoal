@@ -3,7 +3,7 @@
  * Enabled async execution is unverified; pure command tests are not live E2E proof.
  */
 import {ADAPTIVE_RELEASE_STATE} from './proposal.ts';
-import {SNAPSHOT_ENGINE_CONTRACT,parseSnapshotReviewContext,prepareSnapshotMacroContextRequest,type SnapshotMacroRequest} from './snapshotReviewContextParser.ts';
+import {SNAPSHOT_ENGINE_CONTRACT,assessFourteenDaySnapshotReview,parseSnapshotReviewContext,prepareSnapshotMacroContextRequest,type SnapshotMacroRequest} from './snapshotReviewContextParser.ts';
 import {planSnapshotBootstrap} from './snapshotBootstrapPlanner.ts';
 import {planSnapshotEligibilityRefresh} from './snapshotEligibilityRefreshPlanner.ts';
 import {prepareSnapshotProposal,validatePersistedSnapshotProposal} from './snapshotProposalProducer.ts';
@@ -13,6 +13,8 @@ const obj=(v:unknown):v is Obj=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(v);
 const hash=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
 const same=(a:unknown,b:unknown):boolean=>a===b||(obj(a)&&obj(b)&&Object.keys(a).length===Object.keys(b).length&&Object.keys(a).every(k=>Object.hasOwn(b,k)&&same(a[k],b[k])));
+/** Server-selected version only; never read from request payload. */
+export const INITIAL_RATE_ENGINE_VERSION='rate-review-14d-v1';
 export type ServerPolicyBinding={version:string;digest:string;engineVersion:string};
 type Outcome={reason:string;proposal:unknown;mayHaveWritten:boolean};
 type Phase='read_policy'|'load_context'|'write_bootstrap'|'write_refresh'|'reload_context'|'load_macro'|'issue'|'done';
@@ -26,7 +28,7 @@ export function beginSnapshotWorkflow(actor:string,proposalId:string,binding:Ser
  const s:SnapshotWorkflow={phase:'read_policy',actor,proposalId,binding:structuredClone(binding)};
  if(!uuid(actor)||!uuid(proposalId))return done(s,'authentication_required');
  if(!binding||typeof binding.version!=='string'||!binding.version||!hash(binding.digest)||
- binding.engineVersion!==SNAPSHOT_ENGINE_CONTRACT.engineVersion)return done(s,'server_policy_required');
+ ![SNAPSHOT_ENGINE_CONTRACT.engineVersion,INITIAL_RATE_ENGINE_VERSION].includes(binding.engineVersion))return done(s,'server_policy_required');
  return s;
 }
 /** Each successful writer must cross reload_context; its return is never source evidence. */
@@ -45,6 +47,12 @@ export function advanceSnapshotWorkflow(state:SnapshotWorkflow,result:{ok:boolea
  }
  if(s.phase==='load_context'){
   if(!obj(v)||v.actor!==s.actor)return done(s,'account_changed');
+  if(s.binding.engineVersion===INITIAL_RATE_ENGINE_VERSION){
+   // Separate initial14d contract: no legacy expenditure substitution, no fallback
+   // to21d, bootstrap, refresh or issue while uncertainty remains unverified.
+   const assessment=assessFourteenDaySnapshotReview(v,s.actor,now);
+   return done(s,assessment.reason,false);
+  }
   let plan;
   if(v.anchor===null){
    plan=planSnapshotBootstrap(v,s.actor,s.policy,now);
