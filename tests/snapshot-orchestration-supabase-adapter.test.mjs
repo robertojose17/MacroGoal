@@ -197,3 +197,18 @@ test('manual choice invalid percentages cannot become a valid consent context',(
   assert.equal(macroPreferenceEvidence(preferenceActor,request,state,now).consent,null);
  }
 });
+
+/** Preference-state cases PREPARED, NOT RUN. */
+test('authenticated absent revoked stale invalid and current states remain distinguishable',()=>{
+ for(const expected of ['absent','revoked','stale','invalid','current']){
+  const {request,state,now}=preferenceFixture();
+  if(expected==='absent'){state.choice=null;state.choiceVersion=0;}
+  if(expected==='revoked'){state.choice.mode='revoked';state.choice.current=false;}
+  if(expected==='stale')state.choice.current=false;
+  if(expected==='invalid')state.choice={};
+  const out=macroPreferenceEvidence(preferenceActor,request,state,now);
+  assert.equal(out.preferenceStatus,expected);
+  assert.equal(out.review,null);
+  if(expected!=='current')assert.equal(out.consent,null);
+ }
+});
