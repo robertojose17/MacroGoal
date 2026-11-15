@@ -23,17 +23,20 @@ const positive=(n:unknown):n is number=>finite(n)&&n>0;
 const blocked=(reason:string):RateAdjustmentDecision=>({kind:'blocked',actionable:false,reason});
 /** Does not write a goal, change macros, bypass cadence, or authorize reductions. */
 export function decideRateAdjustment(input:RateAdjustmentInput):RateAdjustmentDecision{
- if(!input||!input.policy||!input.data||!input.interval||!finite(input.now))return blocked('invalid_input');
+ if(!input||!input.data||!finite(input.now))return blocked('invalid_input');
  const {policy:p,data:d,interval:i,currentIntakeKcal:current,acceptedNetDeltaKcal:net}=input;
  const reevaluateAt=input.now+7*86400000;
  if(!Number.isSafeInteger(input.now)||Math.abs(input.now)>8640000000000000||!Number.isSafeInteger(reevaluateAt)||Math.abs(reevaluateAt)>8640000000000000)return blocked('invalid_time');
- if(p.conversionReviewed!==true)return blocked('conversion_review_required');
- if(![p.kcalPerKg,p.maxStepKcal,p.maxStepFraction,p.minIntakeKcal,p.maxIntakeKcal,p.maxNetDeltaKcal].every(positive)||
- p.maxStepFraction>1||p.maxIntakeKcal<p.minIntakeKcal)return blocked('policy_invalid');
  const hold=(reason:string):RateAdjustmentDecision=>({kind:'hold',actionable:false,reason,reevaluateAt});
  if(!positive(current)||!finite(net))return blocked('current_target_invalid');
- if(current<p.minIntakeKcal||current>p.maxIntakeKcal||Math.abs(net)>p.maxNetDeltaKcal)return hold('current_target_outside_policy');
+ // A no-change review reminder needs no assumed conversion or clinical defaults.
+ // Holding is NOT approval of the current intake or the missing policy.
  if(d.sufficient!==true||d.stable!==true||d.reliableInterval!==true)return hold('insufficient_or_uncertain_data');
+ if(!p||!i)return blocked('invalid_input');
+ if(p.conversionReviewed!==true)return blocked('conversion_review_required');
+ if(![p.kcalPerKg,p.maxStepKcal,p.maxStepFraction,p.minIntakeKcal,p.maxIntakeKcal,p.maxNetDeltaKcal].every(positive)||
+ p.maxStepKcal>200||p.maxStepFraction>1||p.maxIntakeKcal<p.minIntakeKcal)return blocked('policy_invalid');
+ if(current<p.minIntakeKcal||current>p.maxIntakeKcal||Math.abs(net)>p.maxNetDeltaKcal)return hold('current_target_outside_policy');
  if(!finite(input.targetRateKgPerWeek)||!finite(input.observedRateKgPerWeek)||
  !finite(i.lower)||!finite(i.upper)||i.lower>i.upper||
  input.observedRateKgPerWeek<i.lower||input.observedRateKgPerWeek>i.upper)return blocked('rate_evidence_invalid');
