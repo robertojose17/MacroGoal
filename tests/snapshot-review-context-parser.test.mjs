@@ -152,3 +152,30 @@ test('normalizer preserves latest dated reading and existing conflict ordering',
  assert.equal(normalizedDatedWeights(s,'2026-11-14','2026-10-16'),null);
  assert.equal(estimateFromSources(s,new Date(now)).reason,'invalid_data');
 });
+
+test('diagnostic counts explicit server-bound day confirmations without granting confidence',()=>{
+ const v=fixture(),r=diagnoseSnapshotRateReview(v,actor,now);
+ assert.deepEqual(r.loggingCoverage,{status:'explicit_self_report',windowDays:14,confirmedDays:14,unconfirmedDays:0,unavailableDays:0,allDaysExplicitlyConfirmed:true});
+ assert.equal(r.reliableInterval,false);assert.equal(r.recommendation,null);
+});
+test('edited revoked empty and missing days cannot silently count as complete',()=>{
+ const v=fixture();
+ // These states are emitted by the SQL read_state after content hash/journey checks.
+ v.readiness.days.at(-1).confirmed=false;
+ v.readiness.days.at(-2).confirmed=false;v.readiness.days.at(-2).confirmable=false;
+ v.readiness.days.splice(-3,1);
+ const r=diagnoseSnapshotRateReview(v,actor,now);
+ assert.equal(r.loggingCoverage.confirmedDays,11);assert.equal(r.loggingCoverage.unconfirmedDays,1);
+ assert.equal(r.loggingCoverage.unavailableDays,2);assert.equal(r.loggingCoverage.allDaysExplicitlyConfirmed,false);
+ assert.equal(r.recommendation,null);
+});
+test('foreign stale malformed and mixed-day readiness stays unverified',()=>{
+ for(const mutate of [v=>v.readiness.ownerId='other',v=>v.readiness.timezone='America/New_York',
+ v=>v.readiness.today='2026-11-13',v=>v.readiness.capturedAt='2026-11-13T12:00:00Z',
+ v=>v.readiness.journeyBinding='invalid',v=>v.readiness.days.push(v.readiness.days[0]),
+ v=>v.readiness.days.at(-1).confirmable=false,v=>v.readiness=null]){
+ const v=fixture();mutate(v);const r=diagnoseSnapshotRateReview(v,actor,now);
+ assert.equal(r.loggingCoverage.status,'unverified');assert.equal(r.loggingCoverage.confirmedDays,null);
+ assert.equal(r.recommendation,null);assert.equal(r.reliableInterval,false);
+ }
+});
