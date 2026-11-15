@@ -29,7 +29,8 @@ function sourceNumber(value: unknown): number {
  * A malformed nonempty timestamp cannot select a trustworthy latest reading. */
 function readingInstant(value: unknown): number | null {
   if (value === '' || value === null || value === undefined) return Number.NEGATIVE_INFINITY;
-  if (typeof value !== 'string') return null;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) ||
+      dayNumber(value.slice(0, 10)) === null) return null;
   const instant = Date.parse(value);
   return Number.isFinite(instant) ? instant : null;
 }
