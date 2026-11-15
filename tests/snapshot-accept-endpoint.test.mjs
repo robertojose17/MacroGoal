@@ -103,3 +103,12 @@ test('dispatcher distinguishes module load failure from possible accepting-handl
  const uncertain=createAdaptiveReviewDispatcher(async()=>new Response('legacy'),async()=>({handleAdaptiveReview:async()=>new Response('review'),handleAdaptiveAccept:async()=>{throw Error('secret');}}));
  const response=await uncertain(request());assert.equal(response.status,409);assert.deepEqual(await response.json(),{reason:'reconciliation_required',receipt:null,mayHaveWritten:true});
 });
+
+test('both independent release gates protect acceptance source and selected wrapper',async()=>{
+ // Static regression only: do not enable either release flag to execute a positive path.
+ const {readFile}=await import('node:fs/promises');
+ for(const path of ['release-candidates/tdee-adaptive-review/snapshotAcceptEndpoint.ts','supabase/functions/observed-snapshot-release/functions/adaptive-review/runtime.ts']){
+  const source=await readFile(path,'utf8');
+  assert.ok(source.includes('if(!ADAPTIVE_RELEASE_STATE.recommendationsEnabled||!ADAPTIVE_RELEASE_STATE.acceptanceEnabled)'));
+ }
+});
