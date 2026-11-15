@@ -3,7 +3,8 @@
 -- test.fixture_request UUID from an approved setup. No DDL/GRANT here.
 -- Manifest: {ownerId,itemId,mealId,revision,expected,requestIds:[uuidA,uuidB]}.
 -- Requires separately authorized temporary committed fixture; see plan.
--- Only own synthetic fixture is held for 1s; app limits are unchanged.
+-- Winner retains RPC locks on the synthetic item and its own parent meal for 1s.
+-- An edit of that parent can wait until COMMIT; app limits are unchanged.
 BEGIN;
 SET LOCAL lock_timeout='1500ms';
 SET LOCAL statement_timeout='2s';
