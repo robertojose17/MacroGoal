@@ -73,6 +73,33 @@ BEGIN
  OR has_function_privilege('service_role','public.tdee_register_logged_nutrition_evidence_v1(jsonb)','EXECUTE')
  THEN RAISE EXCEPTION 'private_acl_assertion'; END IF;
 END $tests$;
+
+-- Separate authorized fixture: an UNDECLARED stored nutrient is NULL/invalid.
+-- Do not fabricate a NULL by weakening a live table constraint. If current
+-- constraints make this fixture impossible, record that limitation and validate
+-- the schema protection separately rather than claiming this case passed.
+DO $undeclared_tests$
+DECLARE iid uuid:=nullif(current_setting('test.nutrition_invalid_item_id',true),'')::uuid;
+ s jsonb; q jsonb; seen boolean:=false; k text; invalid boolean:=false;
+BEGIN
+ IF iid IS NULL THEN RAISE EXCEPTION 'invalid_undeclared_fixture_required'; END IF;
+ s:=public.tdee_read_logged_nutrition_evidence_v1(iid,NULL);
+ IF s->>'revision' IS NULL OR jsonb_typeof(s#>'{expected,values,calories}') IS DISTINCT FROM 'number'
+ THEN RAISE EXCEPTION 'invalid_fixture_calories_or_revision'; END IF;
+ FOREACH k IN ARRAY ARRAY['protein','carbs','fats','fiber'] LOOP
+  IF jsonb_typeof(s#>ARRAY['expected','values',k]) IS DISTINCT FROM 'number' THEN invalid:=true;
+  ELSIF (s#>>ARRAY['expected','values',k])::numeric<0 THEN invalid:=true; END IF;
+ END LOOP;
+ IF NOT invalid THEN RAISE EXCEPTION 'fixture_has_no_invalid_undeclared_nutrient'; END IF;
+ q:=jsonb_build_object('version','user-entered-v1','kind','register','requestId',gen_random_uuid(),
+  'itemId',iid,'revision',s->'revision','expectedEvidenceVersion',s->'evidenceVersion',
+  'expected',s->'expected','declaredFields',jsonb_build_array('calories'));
+ BEGIN PERFORM public.tdee_register_logged_nutrition_evidence_v1(q);
+ EXCEPTION WHEN SQLSTATE '22023' THEN seen:=SQLERRM IN ('stored_nutrient_unknown','stored_nutrient_invalid'); END;
+ IF NOT seen THEN RAISE EXCEPTION 'invalid_undeclared_storage_accepted'; END IF;
+ IF public.tdee_read_logged_nutrition_evidence_v1(iid,(q->>'requestId')::uuid)->'receipt' IS DISTINCT FROM 'null'::jsonb
+ THEN RAISE EXCEPTION 'invalid_storage_created_receipt'; END IF;
+END $undeclared_tests$;
 ROLLBACK;
 -- Still required separately: known foreign-owned item, missing/anonymous claims,
 -- actual revision rotation and legacy NULL, meal date/owner move, source snapshot
