@@ -73,7 +73,7 @@ test('private payload preserves exact reviewed macro inputs independently of lat
  const p=prepareSnapshotProposal(input,binding);
  assert.equal(p.kind,'prepared');
  const evidence=p.record.payload.macroEvidence;
- assert.deepEqual(evidence,{version:'snapshot-macro-context-v1',binding:input.macroBinding,review:original.review,limits:original.limits,choice:null});
+ assert.deepEqual(evidence,{version:'snapshot-macro-context-v1',allocationMode:'smart-preserve-adequate-protein-v1',binding:input.macroBinding,review:original.review,limits:original.limits,choice:null});
  input.macroContext.review.reviewId='changed';
  input.macroContext.limits.proteinMinG=999;
  input.macroBinding.policyDigest='b'.repeat(64);
