@@ -176,7 +176,10 @@ export function diagnoseSnapshotRateReview(value:unknown,actor:string,now:number
  const loggingCoverage=diagnosticReadinessCoverage(value,actor,today,profile.timezone as string,now);
  // Initial 14-day coverage is separate from the legacy 21-day expenditure model.
  // It is not model confidence and does not authorize producer/acceptance writes.
- const initialCoverage=assessInitialRateCoverage(diagnostic.window,loggingCoverage);
+ const assessedCoverage=assessInitialRateCoverage(diagnostic.window,loggingCoverage);
+ const initialCoverage=journey==null||journey>cutoff
+  ? {...assessedCoverage,coverageSufficient:false,reason:journey==null?'journey_start_unverified':'initial_fourteen_days_not_elapsed'}
+  : assessedCoverage;
  const paceComparison=compareInitialRateToTarget(diagnostic.observedRateKgPerWeek,diagnostic.targetRateKgPerWeek,initialCoverage.coverageSufficient);
  return {...diagnostic,loggingCoverage,initialCoverage,paceComparison,sourceCapturedAt:observation.capturedAt,sourceFingerprint:observation.sourceFingerprint,
   goalId:g.id as string,goalRevision:g.updated_at as string};
