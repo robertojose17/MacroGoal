@@ -1,7 +1,7 @@
 /** PREPARED, NOT RUN: backend runner remains blocked. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assessInitialRateCoverage as assess,selectFourteenDayRateWindow as select,INITIAL_RATE_COVERAGE as rules} from '../release-candidates/tdee-adaptive-review/rateAdjustmentDecision.ts';
+import {assessInitialRateCoverage as assess,selectFourteenDayRateWindow as select,INITIAL_RATE_COVERAGE as rules,compareInitialRateToTarget as compare} from '../release-candidates/tdee-adaptive-review/rateAdjustmentDecision.ts';
 const today='2026-11-15';
 const rows=Array.from({length:14},(_,i)=>({date:'2026-11-'+String(i+1).padStart(2,'0'),weightKg:80}));
 const coverage={status:'explicit_self_report',confirmedDays:10,windowDays:14};
@@ -32,4 +32,19 @@ test('future/today weights do not count and duplicate readings cannot create cov
 test('coverage has no cooldown or automatic adjustment semantics',()=>{
  const r=assess(select(today,rows),coverage);
  for(const key of ['deltaKcal','nextAdjustmentAt','acceptanceDue','target'])assert.equal(key in r,false);
+});
+
+test('tolerance requires BOTH absolute and relative deviations, never recommends',()=>{
+ const kg=0.45359237;
+ assert.equal(compare(-0.8*kg,-1*kg,true).outsideProductTolerance,false);
+ assert.equal(compare(-0.5*kg,-1*kg,true).outsideProductTolerance,true);
+ assert.equal(compare(-1.7*kg,-2*kg,true).outsideProductTolerance,false);
+ assert.equal(compare(-0.25*kg,0,true).outsideProductTolerance,false);
+ assert.equal(compare(0.3*kg,0,true).outsideProductTolerance,true);
+ const r=compare(0,-1*kg,true);assert.equal(r.recommendation,null);assert.equal(r.actionable,false);
+});
+test('missing coverage or pace abstains without a periodic adjustment',()=>{
+ assert.equal(compare(0,-1,false).status,'hold');
+ assert.equal(compare(null,-1,true).status,'hold');
+ assert.equal(compare(0,null,true).status,'hold');
 });
