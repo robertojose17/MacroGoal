@@ -5,7 +5,7 @@ export type SmartMacroContext={
  binding:SmartMacroBinding;current:SmartTarget;
  review:{status:'reviewed';reviewId:string;reviewedAt:number;expiresAt:number;ageYears:number;eligibility:'eligible'|'restricted'|'unknown'};
  limits:{proteinMinG:number;proteinMaxG:number;carbsMinG:number;carbsMaxG:number;fatsMinG:number;fatsMaxG:number;fatMinFraction:number;fatMaxFraction:number};
- customChoice?:{mode:'smart'|'preserve_percent';binding:SmartMacroBinding;consentId:string;acceptedAt:number};
+ customChoice?:{mode:'smart'|'preserve_percent';binding:SmartMacroBinding;consentId:string;acceptedAt:number;choiceVersion?:number;splitBps?:{protein:number;carbs:number;fats:number}|null};
 };
 const keys=['ownerId','goalId','goalRevision','preset','sourceFingerprint','policyVersion','policyDigest'] as const;
 const targetKeys=['calories','proteinG','carbsG','fatsG','fiberG'] as const;
@@ -35,7 +35,8 @@ export function adjustSmartMacros(input:{current:SmartTarget;newCalories:number;
   !finite(l.fatMinFraction)||!finite(l.fatMaxFraction)||l.fatMinFraction<0||l.fatMaxFraction>1||l.fatMinFraction>l.fatMaxFraction)
   return blocked('macro_limits_invalid');
  if(g.proteinG<l.proteinMinG||g.proteinG>l.proteinMaxG)return blocked('protein_review_required');
- if(b.preset==='custom'){
+ // A manual choice must not be silently ignored merely because the goal preset is not custom.
+ if(b.preset==='custom'||c.customChoice!==undefined){
   const choice=c.customChoice;
   if(!choice||!sameBinding(b,choice.binding)||!text(choice.consentId)||!stamp(choice.acceptedAt)||choice.acceptedAt>now)
    return blocked('custom_macro_consent_required');
