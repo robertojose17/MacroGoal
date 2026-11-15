@@ -27,34 +27,9 @@ export function estimateFromSources(data: DataSources, now: Date): DynamicTdeeRe
   const cutoff = dateForDay(dayNumber(today)! - 29);
   if (data.journeyStartDate != null && dayNumber(data.journeyStartDate) === null) return emptyTdee('invalid_data');
   const minDate = data.journeyStartDate && data.journeyStartDate > cutoff ? data.journeyStartDate : cutoff;
-  const checkIns = new Map<string, { kg: number; at: string }>();
-  const trackerWeights = new Map<string, { kg: number; at: string }>();
   const validDate = (date: string) => date >= minDate && date < today;
-  for (const row of data.checkIns) {
-    if (!validDate(row.date)) continue;
-    const at = row.updated_at ?? row.created_at ?? '';
-    const kg = sourceNumber(row.weight);
-    if (checkIns.has(row.date) && at === checkIns.get(row.date)!.at && kg !== checkIns.get(row.date)!.kg) return emptyTdee('invalid_data');
-    if (!checkIns.has(row.date) || at > checkIns.get(row.date)!.at) checkIns.set(row.date, { kg, at });
-  }
-  const units = new Map(data.trackers.map(t => [t.id, t.unit]));
-  for (const row of data.trackerWeights) {
-    if (!validDate(row.date)) continue;
-    const unit = units.get(row.tracker_id)?.toLowerCase();
-    // Storage contract: app weight tracker is lb; honor explicitly tagged kg, never guess.
-    if (!unit || !['kg', 'lb', 'lbs'].includes(unit)) return emptyTdee('invalid_data');
-    const kg = sourceNumber(row.value) / (unit === 'kg' ? 1 : 2.2046226218);
-    if (trackerWeights.has(row.date) && row.created_at === trackerWeights.get(row.date)!.at && kg !== trackerWeights.get(row.date)!.kg) return emptyTdee('invalid_data');
-    if (!trackerWeights.has(row.date) || row.created_at > trackerWeights.get(row.date)!.at) trackerWeights.set(row.date, { kg, at: row.created_at });
-  }
-  if ([...checkIns.values(), ...trackerWeights.values()].some(value => !Number.isFinite(value.kg))) return emptyTdee('invalid_data');
-  const merged = new Map(checkIns);
-  for (const [date, value] of trackerWeights) {
-    const check = checkIns.get(date);
-    if (check && Math.abs(check.kg - value.kg) > 0.5) return emptyTdee('invalid_data');
-    merged.set(date, check && check.at > value.at ? check : value);
-  }
-  const weights: TdeeWeight[] = [...merged].map(([date, value]) => ({ date, kg: value.kg }));
+  const weights = normalizedDatedWeights(data, today, minDate);
+  if (weights === null) return emptyTdee('invalid_data');
   const meals = new Map(data.meals.map(m => [m.id, m]));
   const daily = new Map<string, { calories: number; types: Set<string> }>();
   for (const item of data.items) {
@@ -86,4 +61,37 @@ export function weightAtEstimateDate(data: DataSources, date: string | null): nu
     ...data.trackerWeights.filter(w => w.date === date).map(w => ({ kg: units.get(w.tracker_id) === 'kg' ? sourceNumber(w.value) : ['lb','lbs'].includes(units.get(w.tracker_id) ?? '') ? sourceNumber(w.value) / 2.2046226218 : NaN, at: w.created_at })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   return readings.length && Number.isFinite(readings[0].kg) ? readings[0].kg : null;
+}
+
+/** Shared weight normalization only; null means source conflict/unknown unit. */
+export function normalizedDatedWeights(data: DataSources, today: string, minDate: string): TdeeWeight[] | null {
+  if (dayNumber(today) === null || dayNumber(minDate) === null) return null;
+  const checkIns = new Map<string, { kg: number; at: string }>();
+  const trackerWeights = new Map<string, { kg: number; at: string }>();
+  const validDate = (date: string) => date >= minDate && date < today;
+  for (const row of data.checkIns) {
+    if (!validDate(row.date)) continue;
+    const at = row.updated_at ?? row.created_at ?? '';
+    const kg = sourceNumber(row.weight);
+    if (checkIns.has(row.date) && at === checkIns.get(row.date)!.at && kg !== checkIns.get(row.date)!.kg) return null;
+    if (!checkIns.has(row.date) || at > checkIns.get(row.date)!.at) checkIns.set(row.date, { kg, at });
+  }
+  const units = new Map(data.trackers.map(t => [t.id, t.unit]));
+  for (const row of data.trackerWeights) {
+    if (!validDate(row.date)) continue;
+    const unit = units.get(row.tracker_id)?.toLowerCase();
+    // Storage contract: app weight tracker is lb; honor explicitly tagged kg, never guess.
+    if (!unit || !['kg', 'lb', 'lbs'].includes(unit)) return null;
+    const kg = sourceNumber(row.value) / (unit === 'kg' ? 1 : 2.2046226218);
+    if (trackerWeights.has(row.date) && row.created_at === trackerWeights.get(row.date)!.at && kg !== trackerWeights.get(row.date)!.kg) return null;
+    if (!trackerWeights.has(row.date) || row.created_at > trackerWeights.get(row.date)!.at) trackerWeights.set(row.date, { kg, at: row.created_at });
+  }
+  if ([...checkIns.values(), ...trackerWeights.values()].some(value => !Number.isFinite(value.kg))) return null;
+  const merged = new Map(checkIns);
+  for (const [date, value] of trackerWeights) {
+    const check = checkIns.get(date);
+    if (check && Math.abs(check.kg - value.kg) > 0.5) return null;
+    merged.set(date, check && check.at > value.at ? check : value);
+  }
+  return [...merged].map(([date, value]) => ({ date, kg: value.kg }));
 }
