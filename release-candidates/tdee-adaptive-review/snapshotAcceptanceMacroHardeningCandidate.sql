@@ -1,8 +1,15 @@
--- NEW HARDENING CANDIDATE, NOT INSTALLED. No caps/grants changed.
+-- SMART + MANUAL HARDENING CANDIDATE, NOT INSTALLED. No caps/grants changed.
+-- Kept ROLLBACK-only; compilation/execution of this SQL still pending.
 -- Distinct from the rejected cap-nullability operation. Source stays OFF.
 -- Only the new review table gets a scoped own-user serialization trigger.
 -- Review records remain administrative; no approved records or policy seeds.
 BEGIN;
+SET LOCAL lock_timeout='500ms';
+SET LOCAL statement_timeout='3s';
+DO $fence$ BEGIN
+ IF md5(pg_get_functiondef('macrogoal_snapshot_review_private.accept_proposal(jsonb)'::regprocedure))<>'e7dc77b7470a63bc1f079a3b1de0d3a2' THEN
+  RAISE EXCEPTION 'acceptance_requires_fresh_review'; END IF;
+END $fence$;
 
 CREATE FUNCTION macrogoal_snapshot_review_private.serialize_nutrition_review_write()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $guard$
@@ -141,7 +148,8 @@ BEGIN
  me:=p.payload->'macroEvidence';
  IF jsonb_typeof(me) IS DISTINCT FROM 'object' OR
  me->>'version' IS DISTINCT FROM 'snapshot-macro-context-v1' OR
- me->>'allocationMode' IS DISTINCT FROM 'smart-preserve-adequate-protein-v1' THEN
+ me->>'allocationMode' NOT IN ('smart-preserve-adequate-protein-v1','manual-percent-nearest-gram-v1') OR
+ me->>'allocationMode' IS NULL THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'macro_contract_required'); END IF;
  -- Match the existing engine suspension; a macro review is not a total-deficit review.
  IF delta<0 THEN RETURN macrogoal_snapshot_review_private.reject_request(p_request,'individual_deficit_review_required'); END IF;
@@ -176,19 +184,40 @@ BEGIN
  -- Preference save/revoke already takes this same user's lock before the goal.
  SELECT * INTO mc FROM macrogoal_snapshot_review_private.macro_choices
  WHERE owner_id=actor AND goal_id=g.id ORDER BY choice_version DESC LIMIT 1 FOR SHARE;
- IF NOT FOUND OR mc.mode<>'smart' OR mc.split_bps IS NOT NULL OR mc.copy_version<>'macro-choice-v1' OR
+ IF NOT FOUND OR mc.mode IS NULL OR mc.mode NOT IN ('smart','preserve_percent') OR mc.copy_version IS DISTINCT FROM 'macro-choice-v1' OR
  mc.goal_updated_at IS DISTINCT FROM g.updated_at OR mc.profile_binding IS DISTINCT FROM readiness->>'profileBinding' OR
  mc.journey_binding IS DISTINCT FROM readiness->>'journeyBinding' OR mc.recorded_at>clock_timestamp() OR
  mc.recorded_at>(p.payload->>'sourceCapturedAt')::timestamptz THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'macro_choice_changed'); END IF;
- expected_choice:=jsonb_build_object('mode','smart','binding',mb,'consentId',mc.request_id,
-  'acceptedAt',floor(extract(epoch FROM mc.recorded_at)*1000),'choiceVersion',mc.choice_version,'splitBps',NULL);
+ expected_choice:=jsonb_build_object('mode',mc.mode,'binding',mb,'consentId',mc.request_id,
+  'acceptedAt',floor(extract(epoch FROM mc.recorded_at)*1000),'choiceVersion',mc.choice_version,'splitBps',mc.split_bps);
  IF me->'choice' IS DISTINCT FROM expected_choice THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'macro_choice_changed'); END IF;
- -- Exact protein preservation belongs ONLY to this explicit Smart contract.
- -- No manual-percent or protein-correction contract is silently treated as Smart.
- IF (target->>'proteinG')::integer IS DISTINCT FROM g.protein_g OR
- (target->>'proteinG')::numeric NOT BETWEEN nr.protein_min_g AND nr.protein_max_g OR
+ -- Recompute manual targets from the locked persisted choice, not proposal inputs.
+ IF mc.mode='smart' THEN
+  IF mc.split_bps IS NOT NULL OR me->>'allocationMode'<>'smart-preserve-adequate-protein-v1' OR
+     (target->>'proteinG')::integer IS DISTINCT FROM g.protein_g THEN
+   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'macro_allocation_changed'); END IF;
+ ELSE
+  IF me->>'allocationMode' IS DISTINCT FROM 'manual-percent-nearest-gram-v1' OR jsonb_typeof(mc.split_bps) IS DISTINCT FROM 'object' THEN
+   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'macro_allocation_changed'); END IF;
+  -- Separate shape guard: never invoke jsonb_object_keys on a scalar/array.
+  IF NOT mc.split_bps ?& ARRAY['protein','carbs','fats'] OR (SELECT count(*) FROM jsonb_object_keys(mc.split_bps))<>3 THEN
+   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'macro_allocation_changed'); END IF;
+  FOREACH k IN ARRAY ARRAY['protein','carbs','fats'] LOOP
+   IF jsonb_typeof(mc.split_bps->k) IS DISTINCT FROM 'number' THEN
+    RETURN macrogoal_snapshot_review_private.reject_request(p_request,'macro_allocation_changed'); END IF;
+   n:=(mc.split_bps->>k)::numeric;
+   IF n<>trunc(n) OR n<0 OR n>10000 THEN
+    RETURN macrogoal_snapshot_review_private.reject_request(p_request,'macro_allocation_changed'); END IF;
+  END LOOP;
+  IF (mc.split_bps->>'protein')::numeric+(mc.split_bps->>'carbs')::numeric+(mc.split_bps->>'fats')::numeric<>10000 OR
+     (target->>'proteinG')::numeric IS DISTINCT FROM floor(((target->>'calories')::numeric*(mc.split_bps->>'protein')::numeric+20000)/40000) OR
+     (target->>'carbsG')::numeric IS DISTINCT FROM floor(((target->>'calories')::numeric*(mc.split_bps->>'carbs')::numeric+20000)/40000) OR
+     (target->>'fatsG')::numeric IS DISTINCT FROM floor(((target->>'calories')::numeric*(mc.split_bps->>'fats')::numeric+45000)/90000) THEN
+   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'macro_allocation_changed'); END IF;
+ END IF;
+ IF (target->>'proteinG')::numeric NOT BETWEEN nr.protein_min_g AND nr.protein_max_g OR
  (target->>'carbsG')::numeric NOT BETWEEN nr.carbs_min_g AND nr.carbs_max_g OR
  (target->>'fatsG')::numeric NOT BETWEEN nr.fats_min_g AND nr.fats_max_g OR
  (9*(target->>'fatsG')::numeric/(target->>'calories')::numeric) NOT BETWEEN nr.fat_min_fraction AND nr.fat_max_fraction THEN
@@ -228,8 +257,9 @@ BEGIN
  VALUES(actor,(p_request->>'requestId')::uuid,p_request,'committed',anchor.id,result.id,to_jsonb(result),
  jsonb_build_object('contract','as-of-revalidated-v1','fingerprint',snapshot->>'sourceFingerprint','capturedAt',snapshot->>'capturedAt',
  'macroReviewId',nr.review_id,'macroReviewVersion',nr.review_version,'macroChoiceId',mc.request_id,'macroChoiceVersion',mc.choice_version,
- 'macroAllocationMode','smart-preserve-adequate-protein-v1'));
+ 'macroAllocationMode',me->>'allocationMode'));
  RETURN jsonb_build_object('version','adaptive-receipt-v1','status','committed','request',p_request,
    'acceptedGoal',jsonb_build_object('id',result.id,'updatedAt',result.updated_at),'goalState','current');
 END $fn$;
 ROLLBACK;
+
