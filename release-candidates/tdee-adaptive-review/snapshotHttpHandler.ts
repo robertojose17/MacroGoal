@@ -1,6 +1,17 @@
 /** Explicit review request. POST may prepare baseline/eligibility/proposal; never GET. */
 export const SNAPSHOT_REVIEW_MODE='adaptive-review-v1';
 type Runtime=(request:unknown)=>Promise<{reason:string;proposal:unknown;mayHaveWritten?:boolean}>;
+/** Incoming Deno HTTP POSTs expose an empty stream even with Content-Length: 0.
+ * Accept only proven EOF, never JSON/client parameters; bound time and reads. */
+async function hasNoPayload(request:Request):Promise<boolean>{
+ const length=request.headers.get('Content-Length');
+ if(length!==null&&!/^0+$/.test(length))return false;
+ if(request.body===null)return true;
+ const reader=request.body.getReader();let timer:ReturnType<typeof setTimeout>|undefined;
+ const read=async()=>{for(let i=0;i<2;i++){const chunk=await reader.read();if(chunk.done)return true;if(chunk.value.byteLength!==0)return false;}return false;};
+ try{return await Promise.race([read().catch(()=>false),new Promise<boolean>(resolve=>{timer=setTimeout(()=>resolve(false),1000);})]);}
+ finally{if(timer!==undefined)clearTimeout(timer);void reader.cancel().catch(()=>{});}
+}
 export function createSnapshotHttpHandler(runtime:Runtime,allowedOrigins:readonly string[]){
  const origins=new Set(allowedOrigins);
  return async(request:Request):Promise<Response>=>{
@@ -19,7 +30,7 @@ export function createSnapshotHttpHandler(runtime:Runtime,allowedOrigins:readonl
    return new Response(null,{status:204,headers});
   }
   if(request.method!=='POST'){headers.set('Allow','POST, OPTIONS');return reply(405,'method_not_allowed');}
-  if(request.body!==null)return reply(400,'invalid_request');
+  if(!await hasNoPayload(request))return reply(400,'invalid_request');
   const authorization=request.headers.get('Authorization');
   if(!authorization||authorization.length>16384||!/^Bearer [^\s]+$/.test(authorization))return reply(401,'authentication_required');
   try{

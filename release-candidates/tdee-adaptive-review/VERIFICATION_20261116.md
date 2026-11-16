@@ -169,3 +169,16 @@ Remaining operational gates:
 - The account-specific legacy provenance gap is not silently treated as consent. A real acknowledgment/goal-save path must establish its own legitimate baseline, without backdating history.
 - Native visual/accessibility and SecureStore interruption/restore QA, deployment verification, deliberate rollout activation and daily scheduling remain separate. Unknown outcomes without adequate durable proof remain blocked rather than being called completed.
 - No TestFlight, production policy seeding, fictitious operational review, automatic goal change or new credential was performed.
+
+
+## Installed private OFF foundation and approved endpoint update
+
+The later approved rehearsal completed successfully and restored the original database state. Migration `20261116185843_install_private_rate_acceptance_and_issuance_infrastructure_off` then installed the five private schemas and six empty tables. The two existing scheduler/selector RPCs remain OFF; the original production acceptor is unchanged. All three client roles lack USAGE on the private schemas, and the service-only wrappers return disabled before source or effect processing. The prepared rollback checks all 57 installed function hashes, locks the six tables, refuses nonempty storage and restores the prior RPC definitions. It has not been executed after installation. Cron remains at 33.
+
+Real PostgREST checks returned 200 with explicit OFF responses for source/issuance, and 403 for a service principal attempting the authenticated-own-user chain RPC. No owner JWT was impersonated.
+
+After explicit approval to replace the two public functions while preserving authentication and compatibility, progress-intelligence v19 and ai-coach-daily v15 deployed with verify_jwt=true. All nonempty served files match the intended bundles; type-only dependencies were erased/omitted by bundling. Existing progress runtime files were preserved from v18 except the new dispatcher entry. Live coach compatibility returns its original 200 response, its internal worker route returns 503 disabled, and missing authorization returns 401.
+
+The first real progress review probe exposed a transport defect missed by constructed Request tests: Deno incoming empty POSTs have a non-null empty body stream. The handler had rejected that valid transport with 400. This source fix requires actual EOF, rejects every payload byte, and limits inspection to two reads and one second with cancellation. It does not accept client policy/actor/target parameters or change authentication. Four new regression tests, the combined 461-test suite, Deno checking, the real app dependency graph and a real local Deno HTTP POST all pass. Deployment/readback of this transport correction is a subsequent step, not claimed by these source tests.
+
+The genuine account source still reports unavailable: no authentic goal-save receipt, no selected registered policy, and no operational rate-review evidence. No clinical approval, historical intake or accepted target was fabricated to manufacture a positive end-to-end result. Recommendations, acceptance, user-interface rollout and daily scheduling remain OFF. No TestFlight or app build was submitted.
