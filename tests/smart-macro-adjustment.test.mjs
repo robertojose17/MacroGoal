@@ -44,7 +44,7 @@ test('custom consent must be explicit bound and smart',()=>{
  const x=fixture();x.binding.preset='custom';x.context.binding.preset='custom';
  assert.equal(adjust(x).reason,'custom_macro_consent_required');
  x.context.customChoice={mode:'preserve_percent',binding:{...x.binding},consentId:'synthetic-consent',acceptedAt:now-1};
- assert.equal(adjust(x).reason,'custom_percentage_review_required');
+ assert.equal(adjust(x).reason,'manual_percentage_choice_invalid');
  x.context.customChoice.mode='smart';assert.equal(adjust(x).kind,'candidate');
  x.context.customChoice.binding.goalRevision='old';assert.equal(adjust(x).reason,'custom_macro_consent_required');
 });
@@ -80,7 +80,7 @@ test('manual percentages are not silently replaced on any standard preset',()=>{
  for(const preset of ['balanced','high_protein','low_carb','lean_body']){
   const x=fixture();x.binding.preset=preset;x.context.binding.preset=preset;
   x.context.customChoice={mode:'preserve_percent',binding:{...x.binding},consentId:'synthetic-choice',acceptedAt:now-1,choiceVersion:2,splitBps:{protein:3333,carbs:3333,fats:3334}};
-  assert.equal(adjust(x).reason,'custom_percentage_review_required');
+  assert.equal(adjust(x).kind,'candidate');assert.equal(adjust(x).allocationMode,'manual-percent-nearest-gram-v1');
  }
 });
 test('invalid explicit choice on noncustom preset cannot be ignored',()=>{
@@ -88,3 +88,4 @@ test('invalid explicit choice on noncustom preset cannot be ignored',()=>{
  x.context.customChoice={mode:'smart',binding:{...x.binding,goalRevision:'old'},consentId:'synthetic-choice',acceptedAt:now-1};
  assert.equal(adjust(x).reason,'custom_macro_consent_required');
 });
+
