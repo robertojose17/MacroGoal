@@ -102,7 +102,8 @@ test('review cannot smuggle custom consent; preserve-percent cannot silently bec
  assert.equal(parseSnapshotReviewContext(v,actor,actor,now,e).reason,'custom_macro_consent_required');
  e.consent=consent;assert.equal(parseSnapshotReviewContext(v,actor,actor,now,e).kind,'prepared_context');
  e.consent.mode='preserve_percent';
- assert.equal(parseSnapshotReviewContext(v,actor,actor,now,e).reason,'custom_percentage_review_required');
+ // Missing persisted split/version is invalid; never interpret it as Smart.
+ assert.equal(parseSnapshotReviewContext(v,actor,actor,now,e).reason,'manual_percentage_choice_invalid');
 });
 
 test('snapshot diagnostic reads bound sources but grants no confidence or proposal',()=>{
@@ -257,3 +258,4 @@ test('evidence marker absent keeps zero unknown and stale evidence fails closed'
  const x=explicitZeroNutrition();x.observation.sources.items.at(-1).nutrition_revision='30000000-0000-4000-8000-000000000002';
  assert.equal(diagnoseSnapshotRateReview(x,actor,now).reason,'observation_invalid');
 });
+
