@@ -116,11 +116,15 @@ BEGIN
  SELECT * INTO g FROM public.goals WHERE id=anchor.active_goal_id AND user_id=actor AND is_active=true;
  IF NOT FOUND OR to_jsonb(g) IS DISTINCT FROM p.payload->'goalSnapshot' THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'goal_changed'); END IF;
+ -- The new 14-day evidence contract has no acceptance-time validator yet.
+ -- Fail closed even if a future issuer or policy accidentally enables it.
+ IF policy.engine_version='rate-review-14d-v1' OR p.payload ? 'rateEvidence' THEN
+  RETURN macrogoal_snapshot_review_private.reject_request(p_request,'rate_acceptance_contract_unavailable'); END IF;
  IF p.payload->>'policyDigest' IS DISTINCT FROM policy.digest OR p.payload->>'engineVersion' IS DISTINCT FROM policy.engine_version THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'policy_changed'); END IF;
  today:=(clock_timestamp() AT TIME ZONE u.timezone)::date;
  IF p.payload->>'today' IS DISTINCT FROM today::text OR u.date_of_birth IS NULL OR u.sex NOT IN ('female','male') OR u.sex IS NULL OR
-    u.date_of_birth>(today-interval '18 years')::date OR u.date_of_birth<(today-interval '100 years')::date THEN
+    u.date_of_birth>(today-interval '19 years')::date OR u.date_of_birth<(today-interval '100 years')::date THEN
   RETURN macrogoal_snapshot_review_private.reject_request(p_request,'profile_review_required'); END IF;
  target:=p.payload->'target';
  IF target IS NULL OR jsonb_typeof(target)<>'object' OR NOT target ?& ARRAY['calories','proteinG','carbsG','fatsG','fiberG'] OR
