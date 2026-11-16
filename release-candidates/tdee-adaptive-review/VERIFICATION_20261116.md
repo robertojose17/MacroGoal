@@ -70,5 +70,23 @@ The authoritative loader is now wired in source to the fixed service review gett
 - No validated uncertainty method/current reviewed evidence or initial 14-day calibration anchor is available. No confidence interval can be inferred merely from coverage or pairwise extrema.
 - Persisted policies lack `increment_kcal`; the loader deliberately rejects the missing field instead of inventing an operational value. Actual policy limits and individual nutrition eligibility still need explicit, applicable records.
 - The new binding inspector is only one acceptance validation layer. Full rate arithmetic/coverage parity and positive acceptance remain unfinished; the explicit 14-day issuance/acceptance block is retained.
-- The persistent scheduler lacks a legitimate deployed worker context/access-refresh binding. Existing own-context APIs require a genuine user bearer and the tester proof expires after 30 seconds. No synthetic JWT, extended proof TTL or new worker credential was used. Session-bound app execution is a possible next route but would not guarantee evaluation while the app is closed.
+- At this checkpoint the persistent scheduler lacked a deployed internal worker binding; the subsequent section records the implemented alternative. No synthetic JWT, extended proof TTL or new worker credential was used.
 - No recommendations or acceptance were activated; no TestFlight submission occurred.
+
+## Internal daily-worker path, kept OFF
+Migration `20261116131704_inactive_internal_tdee_worker_context_and_persistence` installed explicit-owner private context readers, a bounded trusted selector and cursor, and an atomic scheduler RPC. Four public wrappers are executable only by the existing service role and return disabled/blocked before any owner/data/cursor work. Private readers and cursor remain inaccessible to anonymous, authenticated and service roles directly. No existing user's session is impersonated.
+
+The source composition uses the existing server-injected service key and RevenueCat V2 API key, actual provider evidence refresh, and exact cache-version plus tester-registry revalidation before/after context reads and evaluation. It preserves the 30-second purchase proof, revocation and stable context binding. It invokes the real 14-day diagnostic, persists diagnostic-only completion/uncertainty through atomic RPC, and does not issue a proposal. All immutable release switches remain OFF. No keys were read, created, published or copied into source. Canonical existing provider modules are imported rather than duplicated.
+
+### Verification at this checkpoint
+- 312 tests passed, zero failed/skipped; complete candidate graph and observation entrypoint passed Deno using existing cached tooling.
+- Eight synthetic runtime integration tests include the actual 14-day evaluator, hold persistence, deduplication, cache/registry change, cancellation, stale/foreign context and unknown completion. These are not authenticated live worker end-to-end proof.
+- Full SQL compiled in rollback and all four service-role OFF responses were tested; the same responses were verified after installation. Earlier own-account read-only service-role context probe succeeded in rollback, with no user JWT spoofing; its temporary probe wrapper was removed.
+- Selector cursor is untouched (revision 0, no owner), ledger/receipt/rate-review tables remain empty, existing cron job count is still 33, and production acceptor definition remains unchanged. Anonymous/authenticated EXECUTE is absent on every new function; only the four fixed public wrappers grant service-role EXECUTE.
+- Atomic claim rechecks current enrollment/context/timezone and rejects unfinished claims from any old context. The selector bounds scans and returned owners, uses a persistent fair cursor, and does not anchor daily scope to rolling log fingerprints.
+- Empty-state/OFF rollback is prepared but not executed. No Edge function, scheduled invocation, cron modification, recommendation activation or TestFlight submission occurred.
+
+### Actual remaining work
+The internal authentication/context alternative is implemented; user JWT lifetime is no longer the architectural blocker. Remaining work is packaging/deploying the OFF Edge entrypoint, verifying it without exposing existing credentials, and subsequently running a bounded real diagnostic-only worker path after its gates are reviewed. A background cron has not been installed or enabled. This is not a claim of daily operation while the app is closed.
+
+Actionable recommendations and explicit acceptance still require genuine uncertainty/calibration and applicable policy/nutrition evidence, full acceptance-time arithmetic/coverage parity and positive downstream verification. Source composition and SQL OFF checks do not satisfy those release gates. No fabricated approval or operational review records were seeded.

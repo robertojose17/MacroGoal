@@ -1,4 +1,4 @@
-import {diagnosticFromSnapshot,type SchedulerDiagnostic} from './schedulerDiagnostic.ts';
+import {diagnosticFromAssessment,type AssessedSnapshot,type SchedulerDiagnostic} from './schedulerDiagnostic.ts';
 import type {AssessmentInput,DailySchedulerPorts} from './dailyAssessmentScheduler.ts';
 /** Internal direct-Postgres candidate. Never accept a client JWT as worker authority. */
 import {DAILY_SCHEDULER_RELEASE_STATE,claimDailyAssessment,finishDailyAssessment,reconcileDailyAssessment,scheduleUncertainReassessment,type DailyPlan,type DailyRecord,type ScheduleScope,type UncertainHold} from './dailyAssessmentScheduler.ts';
@@ -90,7 +90,7 @@ export function createTrustedSchedulerStorage(db:TrustedDatabase){
  * ports. No worker auth/context is synthesized; these are trusted server loaders. */
 export function createDurableSchedulerPorts(db:TrustedDatabase,bindings:{
  loadInput():Promise<AssessmentInput>;
- evaluateSnapshot(plan:DailyPlan,claimId:string):Promise<unknown>;
+ evaluateSnapshot(plan:DailyPlan,claimId:string):Promise<AssessedSnapshot>;
  now():number;newClaimId():string;
 }):DailySchedulerPorts{
  const store=createTrustedSchedulerStorage(db);
@@ -99,7 +99,7 @@ export function createDurableSchedulerPorts(db:TrustedDatabase,bindings:{
   async loadOwnContext(){gate();const input=await bindings.loadInput();const row=await store.load(input);
    return {input:{...input,hold:row?.hold??null},record:row?.record??null};},
   async claim(plan,expectedRevision){gate();return store.claim(plan,expectedRevision,bindings.newClaimId());},
-  async evaluateReadOnly(plan,claimId){gate();return diagnosticFromSnapshot(await bindings.evaluateSnapshot(plan,claimId),plan.plannedAt);},
+  async evaluateReadOnly(plan,claimId){gate();const assessment=await bindings.evaluateSnapshot(plan,claimId);return diagnosticFromAssessment(assessment,plan.plannedAt,bindings.now());},
   async complete(plan,claimId,outcome,diagnostic){gate();
    if(outcome==='uncertain'){await store.uncertain(plan,claimId,bindings.now());return;}
    if(!diagnostic)throw Error('verified_diagnostic_required');
