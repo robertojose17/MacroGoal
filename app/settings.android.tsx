@@ -1,3 +1,6 @@
+import { TdeeRules14ReviewEntry } from '@/components/TdeeRules14ReviewEntry';
+import { TdeeRulesScreeningEntry } from '@/components/TdeeRulesScreeningEntry';
+import { TdeeDiagnosticFollowupEntry } from '@/components/TdeeDiagnosticFollowupEntry';
 import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
 import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
 import { premiumEntry } from '@/utils/premiumCheckpoints';
@@ -1159,6 +1162,9 @@ export default function SettingsScreen() {
                     {editor.canRetrySave && <TouchableOpacity disabled={editor.busy || saving} onPress={() => { void editor.run('save').catch(() => {}); }}><Text>Retry the same goal save</Text></TouchableOpacity>}
                     {editor.canRetryRestart && <TouchableOpacity disabled={editor.busy || saving} onPress={() => { void editor.run('restart').catch(() => {}); }}><Text>Retry the same journey restart</Text></TouchableOpacity>}
                     <TouchableOpacity disabled={editor.busy || saving} onPress={() => { closeEditModal(); setShowDatePicker(false); restartCurrent.current = () => false; void editor.review().catch(() => {}); }}><Text>Review current profile and targets</Text></TouchableOpacity>
+                    <TdeeRules14ReviewEntry ownerId={editor.snapshot?.profile.id} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} refreshVerifiedGoal={editor.refresh} />
+                    <TdeeRulesScreeningEntry ownerId={editor.snapshot?.profile.id} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} />
+                    <TdeeDiagnosticFollowupEntry snapshot={editor.snapshot} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} />
                     <LegacyGoalConfirmationEntry ownerId={editor.snapshot?.profile.id} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} />
                     <TdeeRateReviewEntry ownerId={editor.snapshot?.profile.id} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} refreshVerifiedGoal={editor.refresh} />
                     {/* ── Adaptive TDEE Divider ── */}
@@ -2533,4 +2539,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 });
+
 

@@ -1,6 +1,7 @@
 /** Explicit review request. POST may prepare baseline/eligibility/proposal; never GET. */
+export const RULES14_SAFE_HOLD_REASONS=Object.freeze(["review_cooldown", "within_product_tolerance", "coverage_insufficient", "target_or_trend_unavailable", "rate_sensitivity_uncertain", "intake_sensitivity_uncertain", "intake_target_adherence_gap", "total_deficit_limit", "clinical_eligibility_required", "logged_intake_mean_unavailable", "current_target_outside_policy", "policy_limit_or_subincrement", "unsupported_age", "protein_reference_unavailable", "underweight_review_required", "individual_reference_weight_required", "explicit_macro_choice_required", "macro_preference_unavailable", "protein_review_required", "macro_distribution_unavailable", "manual_percentage_distribution_unavailable"] as const);
 export const SNAPSHOT_REVIEW_MODE='adaptive-review-v1';
-type Runtime=(request:unknown)=>Promise<{reason:string;proposal:unknown;mayHaveWritten?:boolean}>;
+type Runtime=(request:unknown)=>Promise<{reason:string;proposal:unknown;mayHaveWritten?:boolean;engineVersion?:string}>;
 /** Incoming Deno HTTP POSTs expose an empty stream even with Content-Length: 0.
  * Accept only proven EOF, never JSON/client parameters; bound time and reads. */
 async function hasNoPayload(request:Request):Promise<boolean>{
@@ -36,10 +37,11 @@ export function createSnapshotHttpHandler(runtime:Runtime,allowedOrigins:readonl
   try{
    const result=await runtime({authorization});
    if(result.reason==='review_available'&&result.proposal!==null){
-    const rate=typeof result.proposal==='object'&&(result.proposal as {version?:unknown}).version==='rate-proposal-record-v1';
+    const rate=typeof result.proposal==='object'&&['rate-proposal-record-v1','rules14-proposal-record-v1'].includes(String((result.proposal as {version?:unknown}).version));
     if(rate&&result.mayHaveWritten!==true)return reply(503,'source_error');
     return reply(200,'review_available',result.proposal,rate&&result.mayHaveWritten===true);
    }
+   if(result.engineVersion==='rules14-v1'&&result.proposal===null&&result.mayHaveWritten!==true&&RULES14_SAFE_HOLD_REASONS.includes(result.reason as typeof RULES14_SAFE_HOLD_REASONS[number]))return new Response(JSON.stringify({reason:'rules14_hold',proposal:null,actionable:false,holdReason:result.reason,engineVersion:'rules14-v1'}),{status:200,headers});
    // Preserve successful calibration and uncertain writes before auth/error mapping.
     if(result.reason==='calibration_required'&&result.proposal===null&&result.mayHaveWritten===true)return reply(202,'calibration_required',null,true);
     if(['same_anchored_target','policy_limit','same_rate_target','within_product_tolerance','coverage_insufficient','target_or_trend_unavailable','rate_uncertainty_unverified','rate_difference_uncertain'].includes(result.reason)&&result.proposal===null)return reply(200,'no_change',null,result.mayHaveWritten===true);
@@ -56,3 +58,4 @@ export async function dispatchSnapshotReview(request:Request,handler:(request:Re
  if(!modes.includes(SNAPSHOT_REVIEW_MODE))return null;
  return handler(request);
 }
+

@@ -1,3 +1,5 @@
+import { parseWeightInput, weightToKg, weightFromKg } from '@/utils/weightUnits';
+import { useWeightDisplayUnit } from '@/hooks/useWeightDisplayUnit';
 /**
  * CheckInTilesCard
  *
@@ -217,6 +219,7 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
   const { t } = useTranslation();
   const router = useRouter();
   const stepsHook = useSteps();
+  const displayUnit = useWeightDisplayUnit(userId);
 
   const [trackers, setTrackers] = useState<any[]>([]);
   const [todayEntries, setTodayEntries] = useState<Record<string, TodayEntry | null>>({});
@@ -227,6 +230,7 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
   const [inlineWeightVisible, setInlineWeightVisible] = useState(false);
   const [inlineWeightInput, setInlineWeightInput] = useState('');
   const [inlineWeightSaving, setInlineWeightSaving] = useState(false);
+  useEffect(() => { setInlineWeightInput(''); setInlineWeightVisible(false); }, [displayUnit, userId]);
 
   // Gym quick-log
   const [gymQuickLogging, setGymQuickLogging] = useState(false);
@@ -304,15 +308,16 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
 
   // ── Shared weight logging logic ────────────────────────────────────────────
   const logWeightValue = useCallback(async (parsed: number) => {
-    if (!weightTracker) return;
+    if (!weightTracker || !displayUnit) return;
     console.log('[CheckInTilesCard] logWeightValue — tracker:', weightTracker.id, 'value:', parsed);
     const today = toLocalDateString(new Date());
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    const entry = await logEntry(weightTracker.id, today, parsed);
+    const weightInKg = weightToKg(parsed, displayUnit);
+    const storedValue = weightFromKg(weightInKg, weightTracker.unit);
+    const entry = await logEntry(weightTracker.id, today, storedValue);
     setTodayEntries((prev) => ({ ...prev, [weightTracker.id]: { id: entry.id, value: Number(entry.value) } }));
     onXpRefresh();
 
-    const weightInKg = parsed / 2.20462;
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (authUser) {
       const { data: existingCheckIn } = await supabase
@@ -347,11 +352,11 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
 
     setTimeout(() => {
       console.log('[CheckInTilesCard] prompting for progress photo after weight log');
-      promptForProgressPhoto(parsed, today).catch((e) =>
+      promptForProgressPhoto(weightFromKg(weightInKg, 'lb'), today).catch((e) =>
         console.warn('[CheckInTilesCard] Progress photo prompt failed:', e)
       );
     }, 600);
-  }, [weightTracker, onXpRefresh]);
+  }, [weightTracker, displayUnit, onXpRefresh]);
 
   // ── Shared gym logging logic ───────────────────────────────────────────────
   const logGymWorkout = useCallback(async () => {
@@ -412,7 +417,7 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
   // ── Inline weight confirm ──────────────────────────────────────────────────
   const handleInlineWeightConfirm = async () => {
     console.log('[CheckInTilesCard] inline weight confirm pressed — input:', inlineWeightInput);
-    const parsed = parseFloat(inlineWeightInput);
+    const parsed = parseWeightInput(inlineWeightInput);
     if (isNaN(parsed) || parsed <= 0 || parsed >= 1000) {
       Alert.alert(t('checkIns.invalidWeight'), t('checkIns.enterValidWeight'));
       return;
@@ -489,7 +494,8 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
         console.log('[CheckInTilesCard] weight quick-log button pressed');
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setInlineWeightVisible((v) => !v);
-        setInlineWeightInput(weightEntry ? String(Number(weightEntry.value).toFixed(1)) : '');
+        if (!displayUnit || !weightTracker) return;
+        setInlineWeightInput(weightEntry ? String(Number(weightFromKg(weightToKg(Number(weightEntry.value), weightTracker.unit), displayUnit).toFixed(2))) : '');
       }}
     />
   );
@@ -603,11 +609,11 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
               setInlineWeightInput(text);
             }}
             keyboardType="decimal-pad"
-            placeholder={t('checkIns.lbsPlaceholder')}
+            placeholder={displayUnit === 'kg' ? 'kg' : 'lbs'}
             placeholderTextColor={subColor}
             returnKeyType="done"
             onSubmitEditing={handleInlineWeightConfirm}
-            editable={!inlineWeightSaving}
+            editable={!inlineWeightSaving && displayUnit !== null}
             autoFocus
           />
           <TouchableOpacity
@@ -1005,3 +1011,4 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
 });
+

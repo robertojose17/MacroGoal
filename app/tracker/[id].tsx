@@ -1,3 +1,5 @@
+import { parseWeightInput, weightToKg, weightFromKg, type WeightUnit } from '@/utils/weightUnits';
+import { useWeightDisplayUnit } from '@/hooks/useWeightDisplayUnit';
 import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
@@ -610,11 +612,15 @@ function GymEntryActions({
 function WeightEntryActions({
   entry,
   trackerId,
+  storageUnit,
+  displayUnit,
   isDark,
   onReload,
 }: {
   entry: TrackerEntry;
   trackerId: string;
+  storageUnit: string | null;
+  displayUnit: WeightUnit | null;
   isDark: boolean;
   onReload: () => Promise<void>;
 }) {
@@ -629,6 +635,7 @@ function WeightEntryActions({
   const [showEditModal, setShowEditModal] = useState(false);
   const [editValue, setEditValue] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  useEffect(() => { setEditValue(''); setShowEditModal(false); }, [displayUnit, trackerId]);
 
   // ── Edit date modal state ─────────────────────────────────────────────────
   const [showDateModal, setShowDateModal] = useState(false);
@@ -711,7 +718,7 @@ function WeightEntryActions({
     }
 
     // Insert a new check_in with the weight value converted back to kg
-    const weightKg = Number(entry.value) / 2.20462;
+    const weightKg = weightToKg(Number(entry.value), storageUnit);
     console.log('[TrackerDetail] Inserting new check_in — weight kg:', weightKg);
     const { data: inserted, error } = await supabase
       .from('check_ins')
@@ -799,15 +806,17 @@ function WeightEntryActions({
 
   // ── Pencil (edit value) handler ───────────────────────────────────────────
   const handlePencilPress = () => {
-    const currentLbs = Number(entry.value);
-    const display = currentLbs % 1 === 0 ? String(currentLbs) : currentLbs.toFixed(1);
+    if (!displayUnit) return;
+    const currentLbs = weightFromKg(weightToKg(Number(entry.value), storageUnit), displayUnit);
+    const display = currentLbs % 1 === 0 ? String(currentLbs) : currentLbs.toFixed(2);
     console.log('[TrackerDetail] Pencil tapped — entry:', entry.id, 'current value:', display);
     setEditValue(display);
     setShowEditModal(true);
   };
 
   const handleSaveEdit = async () => {
-    const parsed = parseFloat(editValue);
+    if (!displayUnit) return;
+    const parsed = parseWeightInput(editValue);
     console.log('[TrackerDetail] Save edit value — raw:', editValue, 'parsed:', parsed);
     if (isNaN(parsed) || parsed <= 0) {
       Alert.alert(t('tracker.invalidValue'), t('tracker.invalidValueMsg'));
@@ -816,11 +825,11 @@ function WeightEntryActions({
     setSavingEdit(true);
     try {
       // Update tracker_entries
-      await updateEntry(trackerId, entry.id, { value: parsed });
+      const weightKg = weightToKg(parsed, displayUnit);
+      await updateEntry(trackerId, entry.id, { value: weightFromKg(weightKg, storageUnit) });
       console.log('[TrackerDetail] tracker_entries updated — new lbs:', parsed);
 
       // Sync check_ins: convert lbs → kg
-      const weightKg = parsed / 2.20462;
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: existing } = await supabase
@@ -922,7 +931,7 @@ function WeightEntryActions({
           // Row has other data — null the weight on old row, upsert new row at new date
           console.log('[TrackerDetail] check_in has other data — nulling weight on old row, upserting new');
           await supabase.from('check_ins').update({ weight: null }).eq('id', oldCheckIn.id);
-          const weightKg = Number(entry.value) / 2.20462;
+          const weightKg = weightToKg(Number(entry.value), storageUnit);
           await supabase.from('check_ins').upsert(
             { user_id: user.id, date: newDateStr, weight: weightKg },
             { onConflict: 'user_id,date' }
@@ -989,6 +998,7 @@ function WeightEntryActions({
         onRequestClose={() => setShowEditModal(false)}
       >
         <WeightEditModal
+          displayUnit={displayUnit}
           isDark={isDark}
           editValue={editValue}
           setEditValue={setEditValue}
@@ -1027,6 +1037,7 @@ function WeightEntryActions({
 
 // ─── WeightEditModal ──────────────────────────────────────────────────────────
 function WeightEditModal({
+  displayUnit,
   isDark,
   editValue,
   setEditValue,
@@ -1034,6 +1045,7 @@ function WeightEditModal({
   onCancel,
   onSave,
 }: {
+  displayUnit: WeightUnit | null;
   isDark: boolean;
   editValue: string;
   setEditValue: (v: string) => void;
@@ -1056,7 +1068,7 @@ function WeightEditModal({
           value={editValue}
           onChangeText={setEditValue}
           keyboardType="decimal-pad"
-          placeholder={t('tracker.weightInLbs')}
+          placeholder={displayUnit === 'kg' ? 'kg' : 'lbs'}
           placeholderTextColor={subColor}
           autoFocus
           selectTextOnFocus
@@ -1157,6 +1169,7 @@ export default function TrackerDetailScreen() {
   const isDark = colorScheme === 'dark';
 
   const [tracker, setTracker] = useState<Tracker | null>(null);
+  const displayUnit = useWeightDisplayUnit(tracker?.user_id);
   const [entries, setEntries] = useState<TrackerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1421,7 +1434,7 @@ export default function TrackerDetailScreen() {
               <View style={[styles.entriesList, { backgroundColor: cardBg, borderColor: cardBorder }]}>
                 {entries.map((entry, index) => {
                   const valueDisplay = tracker
-                    ? formatValue(Number(entry.value), tracker.tracker_type, tracker.unit, t)
+                    ? (isWeightTracker && displayUnit ? `${Number(weightFromKg(weightToKg(Number(entry.value), tracker.unit), displayUnit).toFixed(2))} ${displayUnit === 'kg' ? 'kg' : 'lbs'}` : formatValue(Number(entry.value), tracker.tracker_type, tracker.unit, t))
                     : String(entry.value);
                   const dateDisplay = formatDate(entry.date, t);
                   const isLast = index === entries.length - 1;
@@ -1440,6 +1453,8 @@ export default function TrackerDetailScreen() {
                           <WeightEntryActions
                             entry={entry}
                             trackerId={tracker.id}
+                            storageUnit={tracker.unit}
+                            displayUnit={displayUnit}
                             isDark={isDark}
                             onReload={reloadEntries}
                           />
@@ -1731,3 +1746,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

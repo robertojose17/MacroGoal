@@ -1,3 +1,4 @@
+import {createInternalRules14Runtime} from './rules14Runtime.ts';
 import {createInternalRateIssuance} from './rateIssuanceRuntime.ts';
 /** Final composition candidate; no runtime activation or credentials provisioned. */
 import {createInternalDailyWorker,INTERNAL_DAILY_WORKER_RELEASE,isInternalWorkerAuthorized,type WorkerSelection} from './internalDailyWorker.ts';
@@ -16,6 +17,8 @@ export interface ExistingServiceClient{rpc(name:string,args:Record<string,unknow
 export type WorkerRuntimeBootstrap={
  /** Already injected existing key, never HTTP input. Never logged or returned. */
  serviceRoleKey?:string;
+ recommendationEngine?:'rules14-v1'|'rate-review-14d-v1';
+ rulesPolicy?:{version:string;revision:number;digest:string;engineVersion:string}|null;
  /** Exact trusted deployment binding; no fallback/latest policy selection. */
  ratePolicy?:{version:string;digest:string;engineVersion:string}|null;
  createExistingServiceClient():ExistingServiceClient;
@@ -88,9 +91,9 @@ export async function runWorkerAssessmentForReview(ports:WorkerAssessmentReviewP
    const issued=await ports.issueRateProposal(selection.ownerId,claimId);
    if(issued.mayHaveWritten&&issued.reason!=='review_available')throw Error('issuance_outcome_unknown');
    if(issued.reason==='review_available'){
-    const proposal=issued.proposal as {id?:unknown;ownerId?:unknown}|null;
+    const proposal=issued.proposal as {id?:unknown;ownerId?:unknown;version?:unknown}|null;
     if(!proposal||proposal.id!==claimId||proposal.ownerId!==selection.ownerId)throw Error('issuance_receipt_mismatch');
-    diagnostic={kind:'resolved',reason:'reviewed_proposal_stored'};
+    diagnostic={kind:'resolved',reason:proposal.version==='rules14-proposal-record-v1'?'rules14_proposal_stored':'reviewed_proposal_stored'};
    }
    await ports.revalidate(selection,proof,deadline,signal);clock(ports,deadline,signal);
   }
@@ -125,7 +128,7 @@ export function createInternalWorkerRuntime(bootstrap:WorkerRuntimeBootstrap){
       const data=await serviceRpc('tdee_internal_rate_issue_outcome_v1',{p_owner:scope.ownerId,p_scope:scope.contextRevision,p_claim:record.claimId,p_revision:record.revision},signal);
       const parsed=parseSchedulerRpc(data,scope),e=(data as Obj).evidence;
       return !!parsed.record&&parsed.record.status==='completed'&&parsed.record.claimId===record.claimId&&obj(e)&&e.version==='rate-issuance-outcome-v1'&&e.status==='historically_prepared'&&e.actionable===false&&e.ownerId===scope.ownerId&&e.contextRevision===scope.contextRevision&&e.claimId===record.claimId;
-     },issueRateProposal:(ownerId,proposalId)=>createInternalRateIssuance({rpc:(name,args)=>serviceRpc(name,args,signal),now,newProposalId:()=>proposalId,expectedPolicy:bootstrap.ratePolicy!})(ownerId),newClaimId:()=>crypto.randomUUID(),revalidate,
+     },issueRateProposal:(ownerId,proposalId)=>bootstrap.recommendationEngine==='rules14-v1'?createInternalRules14Runtime({rpc:(name,args)=>serviceRpc(name,args,signal),now,newProposalId:()=>proposalId,expectedPolicy:bootstrap.rulesPolicy??null})(ownerId):createInternalRateIssuance({rpc:(name,args)=>serviceRpc(name,args,signal),now,newProposalId:()=>proposalId,expectedPolicy:bootstrap.ratePolicy!})(ownerId),newClaimId:()=>crypto.randomUUID(),revalidate,
       loadContext:(ownerId,signal)=>serviceRpc('tdee_internal_context_v1',{p_owner:ownerId},signal)},selection,proof as ProviderProof,deadline,signal);
     },
    });

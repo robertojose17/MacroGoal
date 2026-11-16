@@ -1,3 +1,4 @@
+import { metricLossRateLabel } from '@/utils/weightUnits';
 import { PremiumCheckpointInline } from '@/components/PremiumCheckpointInline';
 import type { PremiumFlow } from '@/utils/premiumCheckpointContract';
 import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
@@ -909,10 +910,10 @@ const GOAL_CARDS = [
 function getSpeedOptions(units: 'metric' | 'imperial') {
   if (units === 'metric') {
     return [
-      { value: 0.5, label: '0.25 kg/week', sub: 'Slow & steady' },
-      { value: 1.0, label: '0.5 kg/week',  sub: 'Moderate' },
-      { value: 1.5, label: '0.75 kg/week', sub: 'Fast' },
-      { value: 2.0, label: '1.0 kg/week',  sub: 'Aggressive' },
+      { value: 0.5, label: `${metricLossRateLabel(0.5)} kg/week`, sub: 'Slow & steady' },
+      { value: 1.0, label: `${metricLossRateLabel(1.0)} kg/week`,  sub: 'Moderate' },
+      { value: 1.5, label: `${metricLossRateLabel(1.5)} kg/week`, sub: 'Fast' },
+      { value: 2.0, label: `${metricLossRateLabel(2.0)} kg/week`,  sub: 'Aggressive' },
     ];
   }
   return [
@@ -946,10 +947,10 @@ function Step5({
   ];
   const speedOptions = units === 'metric'
     ? [
-        { value: 0.5, label: Number(0.25).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.kgWeek'), sub: t('onboarding.speedSlow') },
-        { value: 1.0, label: Number(0.5).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.kgWeek'), sub: t('onboarding.speedModerate') },
-        { value: 1.5, label: Number(0.75).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.kgWeek'), sub: t('onboarding.speedFast') },
-        { value: 2.0, label: Number(1.0).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.kgWeek'), sub: t('onboarding.speedAggressive') },
+        { value: 0.5, label: metricLossRateLabel(0.5).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.kgWeek'), sub: t('onboarding.speedSlow') },
+        { value: 1.0, label: metricLossRateLabel(1.0).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.kgWeek'), sub: t('onboarding.speedModerate') },
+        { value: 1.5, label: metricLossRateLabel(1.5).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.kgWeek'), sub: t('onboarding.speedFast') },
+        { value: 2.0, label: metricLossRateLabel(2.0).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.kgWeek'), sub: t('onboarding.speedAggressive') },
       ]
     : [
         { value: 0.5, label: Number(0.5).toLocaleString(getAppLocale()) + ' ' + t('localization.screens.lbsWeek'), sub: t('onboarding.speedSlow') },
@@ -2230,3 +2231,4 @@ const styles = StyleSheet.create({
 
 
 });
+

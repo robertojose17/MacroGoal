@@ -18,7 +18,7 @@ const validBinding=(b:SmartMacroBinding)=>!!b&&keys.every(k=>text(b[k]))&&['bala
 const sameBinding=(a:SmartMacroBinding,b:SmartMacroBinding)=>validBinding(a)&&validBinding(b)&&keys.every(k=>a[k]===b[k]);
 const blocked=(reason:string)=>({kind:'blocked' as const,reason});
 /** Caller must source review/consent from trusted storage; equality is not authentication. */
-export function adjustSmartMacros(input:{current:SmartTarget;newCalories:number;now:number;sourceFingerprint:string;binding?:SmartMacroBinding;context?:SmartMacroContext}):
+function calculateMacros(input:{current:SmartTarget;newCalories:number;now:number;sourceFingerprint:string;binding?:SmartMacroBinding;context?:SmartMacroContext|Rules14MacroContext},evidenceMode:'review'|'rules14'='review'):
  {kind:'blocked';reason:string}|{kind:'candidate';actionable:false;requiresAcceptance:true;allocationMode:MacroAllocationMode;target:SmartTarget}{
  if(!input||!input.context||!input.binding)return blocked('macro_context_required');
  const {current:g,newCalories:calories,now,context:c,binding:b}=input;
@@ -27,10 +27,17 @@ export function adjustSmartMacros(input:{current:SmartTarget;newCalories:number;
  if(Math.abs(g.calories-4*g.proteinG-4*g.carbsG-9*g.fatsG)>10)return blocked('macro_input_invalid');
  if(!sameBinding(b,c.binding)||b.sourceFingerprint!==input.sourceFingerprint||!targetKeys.every(k=>g[k]===c.current[k]))
   return blocked('macro_binding_mismatch');
- const r=c.review,l=c.limits;
- if(!r||r.status!=='reviewed'||!text(r.reviewId)||r.eligibility!=='eligible'||!finite(r.ageYears)||r.ageYears<19||r.ageYears>100||
-  !stamp(r.reviewedAt)||!stamp(r.expiresAt)||r.reviewedAt>now||r.expiresAt<=now||r.expiresAt<=r.reviewedAt)
-  return blocked('macro_review_required');
+ const l=c.limits;
+ if(evidenceMode==='review'){
+  const r=(c as SmartMacroContext).review;
+  if(!r||r.status!=='reviewed'||!text(r.reviewId)||r.eligibility!=='eligible'||!finite(r.ageYears)||r.ageYears<19||r.ageYears>100||
+   !stamp(r.reviewedAt)||!stamp(r.expiresAt)||r.reviewedAt>now||r.expiresAt<=now||r.expiresAt<=r.reviewedAt)return blocked('macro_review_required');
+ }else{
+  const e=(c as Rules14MacroContext).policyEvidence;
+  if(!e||e.version!=='nutrition-policy-application-v1'||e.eligibility!=='eligible'||e.policyVersion!==b.policyVersion||e.policyDigest!==b.policyDigest||
+   e.sourceFingerprint!==b.sourceFingerprint||!text(e.profileBinding)||!text(e.journeyBinding)||!stamp(e.computedAt)||e.computedAt>now||now-e.computedAt>30000||
+   !stamp(e.expiresAt)||e.expiresAt<=now||!Number.isSafeInteger(e.ageYears)||e.ageYears<19||e.ageYears>100)return blocked('nutrition_policy_evidence_required');
+ }
  if(!l||!['proteinMinG','proteinMaxG','carbsMinG','carbsMaxG','fatsMinG','fatsMaxG'].every(k=>finite(l[k as keyof typeof l])&&l[k as keyof typeof l]>=0&&l[k as keyof typeof l]<=10000)||
   l.proteinMinG>l.proteinMaxG||l.carbsMinG>l.carbsMaxG||l.fatsMinG>l.fatsMaxG||
   !finite(l.fatMinFraction)||!finite(l.fatMaxFraction)||l.fatMinFraction<0||l.fatMaxFraction>1||l.fatMinFraction>l.fatMaxFraction)
@@ -81,3 +88,10 @@ export function adjustSmartMacros(input:{current:SmartTarget;newCalories:number;
  if(!best)return blocked('macro_distribution_unavailable');
  return {kind:'candidate',actionable:false,requiresAcceptance:true,allocationMode:'smart-preserve-adequate-protein-v1',target:{calories,proteinG:g.proteinG,carbsG:best.carbs,fatsG:best.fats,fiberG:g.fiberG}};
 }
+
+
+/** Separate rules path: trusted deterministic policy evidence, never a fabricated
+ * human review or reviewer signature. Existing reviewed API retains its gates. */
+export type Rules14MacroContext=Omit<SmartMacroContext,'review'>&{policyEvidence:{version:'nutrition-policy-application-v1';policyVersion:string;policyDigest:string;sourceFingerprint:string;profileBinding:string;journeyBinding:string;computedAt:number;expiresAt:number;ageYears:number;eligibility:'eligible'|'restricted'|'unknown'}};
+export function adjustSmartMacros(input:{current:SmartTarget;newCalories:number;now:number;sourceFingerprint:string;binding?:SmartMacroBinding;context?:SmartMacroContext}){return calculateMacros(input,'review');}
+export function adjustRules14Macros(input:{current:SmartTarget;newCalories:number;now:number;sourceFingerprint:string;binding?:SmartMacroBinding;context?:Rules14MacroContext}){return calculateMacros(input,'rules14');}

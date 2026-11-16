@@ -1,3 +1,4 @@
+import { metricLossRateLabel } from '@/utils/weightUnits';
 
 import { Sex, GoalType, ActivityLevel, MacroPreference, OnboardingData } from '@/types';
 import { toLocalDateString } from '@/utils/dateUtils';
@@ -298,16 +299,9 @@ export function cmToFeetInches(cm: number): { feet: number; inches: number } {
  */
 export function getLossRateDisplayText(lossRateLbsPerWeek: number, units: 'metric' | 'imperial' = 'imperial'): string {
   if (units === 'metric') {
-    const kg = lossRateLbsPerWeek * 0.453592;
-    // Round to nearest 0.25
-    const rounded = Math.round(kg * 4) / 4;
-    const rateMap: { [key: number]: string } = {
-      0.25: '0.25 kg/week (slow and steady)',
-      0.5:  '0.5 kg/week (moderate)',
-      0.75: '0.75 kg/week (fast)',
-      1.0:  '1 kg/week (very aggressive)',
-    };
-    return rateMap[rounded] || `${rounded} kg/week`;
+    const kg = metricLossRateLabel(lossRateLbsPerWeek);
+    const labels: Record<number, string> = { 0.5: 'slow and steady', 1: 'moderate', 1.5: 'fast', 2: 'very aggressive' };
+    return `${kg} kg/week${labels[lossRateLbsPerWeek] ? ` (${labels[lossRateLbsPerWeek]})` : ''}`;
   }
   const rateMap: { [key: number]: string } = {
     0.5: '0.5 lb/week (slow and steady)',
@@ -317,3 +311,4 @@ export function getLossRateDisplayText(lossRateLbsPerWeek: number, units: 'metri
   };
   return rateMap[lossRateLbsPerWeek] || `${lossRateLbsPerWeek} lb/week`;
 }
+

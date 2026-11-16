@@ -9,7 +9,7 @@ Deno.serve(async(request:Request):Promise<Response>=>{
   {status:503,headers:{'content-type':'application/json','cache-control':'no-store'}});
  const serviceRoleKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
  const runtime=createInternalWorkerRuntime({
-  serviceRoleKey,ratePolicy:INTERNAL_RATE_POLICY_BINDING,
+  serviceRoleKey,recommendationEngine:'rules14-v1',rulesPolicy:null,ratePolicy:INTERNAL_RATE_POLICY_BINDING,
   createExistingServiceClient(){
    const url=Deno.env.get('SUPABASE_URL');
    if(!url||!serviceRoleKey)throw Error('existing_service_configuration_unavailable');

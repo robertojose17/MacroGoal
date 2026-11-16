@@ -5,7 +5,7 @@ export async function handleInternalWorker(request:Request):Promise<Response>{
  if(!INTERNAL_WORKER_RUNTIME_RELEASE.enabled)return new Response(JSON.stringify({version:'internal-daily-worker-v1',result:'disabled'}),{status:503,headers:{'content-type':'application/json','cache-control':'no-store'}});
  const serviceRoleKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
  return createInternalWorkerRuntime({
-  serviceRoleKey,ratePolicy:INTERNAL_RATE_POLICY_BINDING,
+  serviceRoleKey,recommendationEngine:'rules14-v1',rulesPolicy:null,ratePolicy:INTERNAL_RATE_POLICY_BINDING,
   createExistingServiceClient(){
    const url=Deno.env.get('SUPABASE_URL');
    if(!url||!serviceRoleKey)throw Error('existing_service_configuration_unavailable');

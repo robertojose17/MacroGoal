@@ -1,3 +1,4 @@
+import { weightFromKg, weightUnit } from '@/utils/weightUnits';
 import type { Database, Json } from '@/lib/supabase/types';
 import { jsonRecord } from './jsonValue';
 import { supabase, SUPABASE_PROJECT_URL, supabasePublicKey } from '@/lib/supabase/client';
@@ -289,6 +290,10 @@ export async function deleteEntry(
 export async function backfillWeightFromCheckIns(weightTrackerId: string): Promise<void> {
   console.log('[TrackersApi] backfillWeightFromCheckIns() trackerId:', weightTrackerId);
   const userId = await getCurrentUserId();
+  const { data: tracker, error: trackerError } = await supabase.from('trackers')
+    .select('unit').eq('id', weightTrackerId).eq('user_id', userId).single();
+  if (trackerError || !tracker) throw new Error('Weight tracker unavailable');
+  const storageUnit = weightUnit(tracker.unit);
 
   // Fetch ALL check_ins rows that have a weight value — no date range restriction,
   // so every dot on the graph gets a matching tracker_entries row.
@@ -314,7 +319,7 @@ export async function backfillWeightFromCheckIns(weightTrackerId: string): Promi
   // ProgressCard always converts kg → lbs with * 2.20462 — we do the same so
   // the value stored here matches the dot position on the graph exactly.
   const rows = checkIns.map((ci: { date: string; weight: number }) => {
-    const valueLbs = Number(ci.weight) * 2.20462;
+    const valueLbs = weightFromKg(Number(ci.weight), storageUnit);
     return {
       tracker_id: weightTrackerId,
       user_id: userId,
@@ -326,7 +331,7 @@ export async function backfillWeightFromCheckIns(weightTrackerId: string): Promi
 
   const { error: upsertError } = await supabase
     .from('tracker_entries')
-    .upsert(rows, { onConflict: 'tracker_id,date' });
+    .upsert(rows, { onConflict: 'tracker_id,date', ignoreDuplicates: true });
 
   if (upsertError) {
     console.warn('[TrackersApi] backfillWeightFromCheckIns upsert error:', upsertError.message);
@@ -437,3 +442,4 @@ export async function getStats(trackerId: string): Promise<TrackerStats> {
     status,
   };
 }
+

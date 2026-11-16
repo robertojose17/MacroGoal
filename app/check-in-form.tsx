@@ -1,3 +1,4 @@
+import { parseWeightInput, weightToKg, weightFromKg, weightDisplayUnit } from '@/utils/weightUnits';
 import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -100,13 +101,13 @@ export default function CheckInFormScreen() {
       setDate(localDate);
       
       // Weight is ALWAYS stored in kg in the database
-      // Convert to lbs for display
+      // Convert canonical kg to the selected display unit
       if (data.weight) {
         const weightInKg = data.weight;
         console.log('[CheckInForm] ⚖️ Weight from DB (always kg):', weightInKg);
-        const lbs = weightInKg * 2.20462;
-        console.log('[CheckInForm] ⚖️ Converting kg → lbs for display:', weightInKg, 'kg →', lbs, 'lbs');
-        setWeight(Math.round(lbs).toString());
+        const lbs = weightFromKg(weightInKg, weightDisplayUnit(userWithPrefs.preferred_units));
+        console.log('[CheckInForm] Weight display:', lbs, userWithPrefs.preferred_units);
+        setWeight(String(Number(lbs.toFixed(2))));
       }
       
       setSteps(data.steps?.toString() || '');
@@ -223,7 +224,7 @@ export default function CheckInFormScreen() {
       if (type === 'weight') {
         // check_ins always stores weight in kg; tracker unit is always 'lb'
         const weightInKg = checkInData.weight as number;
-        trackerValue = Math.round(weightInKg * 2.20462 * 10) / 10; // always lbs
+        trackerValue = weightFromKg(weightInKg, tracker.unit); // honor stored unit, no migration
       } else if (type === 'steps') {
         trackerValue = checkInData.steps ?? null;
       } else if (type === 'gym') {
@@ -282,10 +283,10 @@ export default function CheckInFormScreen() {
       };
 
       if (checkInType === 'weight') {
-        // Always convert lbs input to kg for storage
-        const weightValue = parseFloat(weight);
-        const weightInKg = weightValue / 2.20462;
-        console.log('[CheckInForm] ⚖️ Converting weight for storage:', weightValue, 'lbs →', weightInKg, 'kg');
+        // Convert selected display unit to canonical kg for storage
+        const weightValue = parseWeightInput(weight);
+        const weightInKg = weightToKg(weightValue, weightDisplayUnit(user?.preferred_units));
+        console.log('[CheckInForm] Canonical weight for storage:', weightInKg, 'kg');
         checkInData.weight = weightInKg;
       } else if (checkInType === 'steps') {
         checkInData.steps = liveSteps; // already a number from the hook
@@ -528,7 +529,7 @@ export default function CheckInFormScreen() {
     console.log('[CheckInForm] Photo record saved successfully');
   };
 
-  const getWeightUnit = () => 'lbs';
+  const getWeightUnit = () => user?.preferred_units === 'metric' ? 'kg' : 'lbs';
 
   const handleDateSelect = (selectedDate: Date) => {
     console.log('[CheckInForm] 📅 Date selected from calendar:', selectedDate.toLocaleDateString(getAppLocale()));
@@ -1205,3 +1206,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+

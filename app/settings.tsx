@@ -1,3 +1,6 @@
+import { TdeeRules14ReviewEntry } from '@/components/TdeeRules14ReviewEntry';
+import { TdeeRulesScreeningEntry } from '@/components/TdeeRulesScreeningEntry';
+import { TdeeDiagnosticFollowupEntry } from '@/components/TdeeDiagnosticFollowupEntry';
 import { TdeeReviewEntry } from '@/components/TdeeReviewEntry';
 import { TdeeDataReadiness } from '@/components/TdeeDataReadiness';
 import { TdeeMacroChoice } from '@/components/TdeeMacroChoice';
@@ -1390,6 +1393,9 @@ export default function SettingsScreen() {
 
                     <TdeeDataReadiness userId={editor.snapshot?.profile.id} isDark={isDark} />
                     <TdeeMacroChoice userId={editor.snapshot?.profile.id} isDark={isDark} />
+                    <TdeeRules14ReviewEntry ownerId={editor.snapshot?.profile.id} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} refreshVerifiedGoal={editor.refresh} />
+                    <TdeeRulesScreeningEntry ownerId={editor.snapshot?.profile.id} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} />
+                    <TdeeDiagnosticFollowupEntry snapshot={editor.snapshot} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} />
                     <TdeeReviewEntry ownerId={editor.snapshot?.profile.id} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} refreshVerifiedGoal={editor.refresh} />
 
                     {/* ── C. View Adjustment History ── */}
@@ -2854,3 +2860,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
