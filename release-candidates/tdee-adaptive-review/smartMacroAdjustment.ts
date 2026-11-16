@@ -1,4 +1,5 @@
 /** Pure server-only candidate. No policy defaults, I/O, or authorization from client flags. */
+export type MacroAllocationMode='smart-preserve-adequate-protein-v1'|'manual-percent-nearest-gram-v1';
 export type SmartTarget={calories:number;proteinG:number;carbsG:number;fatsG:number;fiberG:number};
 export type SmartMacroBinding={ownerId:string;goalId:string;goalRevision:string;preset:string;sourceFingerprint:string;policyVersion:string;policyDigest:string};
 export type SmartMacroContext={
@@ -18,7 +19,7 @@ const sameBinding=(a:SmartMacroBinding,b:SmartMacroBinding)=>validBinding(a)&&va
 const blocked=(reason:string)=>({kind:'blocked' as const,reason});
 /** Caller must source review/consent from trusted storage; equality is not authentication. */
 export function adjustSmartMacros(input:{current:SmartTarget;newCalories:number;now:number;sourceFingerprint:string;binding?:SmartMacroBinding;context?:SmartMacroContext}):
- {kind:'blocked';reason:string}|{kind:'candidate';actionable:false;requiresAcceptance:true;target:SmartTarget}{
+ {kind:'blocked';reason:string}|{kind:'candidate';actionable:false;requiresAcceptance:true;allocationMode:MacroAllocationMode;target:SmartTarget}{
  if(!input||!input.context||!input.binding)return blocked('macro_context_required');
  const {current:g,newCalories:calories,now,context:c,binding:b}=input;
  if(!g||!c.current||!targetKeys.every(k=>amount(g[k]))||g.calories===0||!amount(calories)||calories===0||!stamp(now))
@@ -34,15 +35,33 @@ export function adjustSmartMacros(input:{current:SmartTarget;newCalories:number;
   l.proteinMinG>l.proteinMaxG||l.carbsMinG>l.carbsMaxG||l.fatsMinG>l.fatsMaxG||
   !finite(l.fatMinFraction)||!finite(l.fatMaxFraction)||l.fatMinFraction<0||l.fatMaxFraction>1||l.fatMinFraction>l.fatMaxFraction)
   return blocked('macro_limits_invalid');
- if(g.proteinG<l.proteinMinG||g.proteinG>l.proteinMaxG)return blocked('protein_review_required');
  // A manual choice must not be silently ignored merely because the goal preset is not custom.
  if(b.preset==='custom'||c.customChoice!==undefined){
   const choice=c.customChoice;
   if(!choice||!sameBinding(b,choice.binding)||!text(choice.consentId)||!stamp(choice.acceptedAt)||choice.acceptedAt>now)
    return blocked('custom_macro_consent_required');
-  if(choice.mode==='preserve_percent')return blocked('custom_percentage_review_required');
+  if(choice.mode==='preserve_percent'){
+   const split=choice.splitBps;
+   if(!Number.isSafeInteger(choice.choiceVersion)||(choice.choiceVersion as number)<1||
+    !split||typeof split!=='object'||Array.isArray(split)||Object.keys(split).sort().join(',')!=='carbs,fats,protein'||
+    !['protein','carbs','fats'].every(k=>amount(split[k as keyof typeof split]))||
+    split.protein+split.carbs+split.fats!==10000)return blocked('manual_percentage_choice_invalid');
+   // Exact stored basis points are never normalized or replaced with Smart.
+   // Positive rational half-up rounding has deterministic PostgreSQL parity.
+   const proteinG=Math.floor((calories*split.protein+20000)/40000);
+   const carbsG=Math.floor((calories*split.carbs+20000)/40000);
+   const fatsG=Math.floor((calories*split.fats+45000)/90000);
+   if(![proteinG,carbsG,fatsG].every(amount)||
+    proteinG<l.proteinMinG||proteinG>l.proteinMaxG||carbsG<l.carbsMinG||carbsG>l.carbsMaxG||
+    fatsG<l.fatsMinG||fatsG>l.fatsMaxG||9*fatsG/calories<l.fatMinFraction||9*fatsG/calories>l.fatMaxFraction||
+    Math.abs(calories-4*proteinG-4*carbsG-9*fatsG)>10)return blocked('manual_percentage_distribution_unavailable');
+   return {kind:'candidate',actionable:false,requiresAcceptance:true,allocationMode:'manual-percent-nearest-gram-v1',
+    target:{calories,proteinG,carbsG,fatsG,fiberG:g.fiberG}};
+  }
   if(choice.mode!=='smart')return blocked('custom_macro_consent_required');
  }
+ // Current protein preservation is specific to Smart, not manual percentages.
+ if(g.proteinG<l.proteinMinG||g.proteinG>l.proteinMaxG)return blocked('protein_review_required');
  let best:{fats:number;carbs:number;distance:number;error:number;carbDistance:number}|null=null;
  for(let fats=Math.ceil(l.fatsMinG);fats<=Math.floor(l.fatsMaxG);fats++){
   const fraction=9*fats/calories;
@@ -60,5 +79,5 @@ export function adjustSmartMacros(input:{current:SmartTarget;newCalories:number;
   }
  }
  if(!best)return blocked('macro_distribution_unavailable');
- return {kind:'candidate',actionable:false,requiresAcceptance:true,target:{calories,proteinG:g.proteinG,carbsG:best.carbs,fatsG:best.fats,fiberG:g.fiberG}};
+ return {kind:'candidate',actionable:false,requiresAcceptance:true,allocationMode:'smart-preserve-adequate-protein-v1',target:{calories,proteinG:g.proteinG,carbsG:best.carbs,fatsG:best.fats,fiberG:g.fiberG}};
 }
