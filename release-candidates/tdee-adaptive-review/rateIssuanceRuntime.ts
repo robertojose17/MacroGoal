@@ -1,4 +1,5 @@
 /** Separate server rate route. OFF; never legacy expenditure/anchor fallback. */
+import {ensureRateAnchor} from './rateAnchorBootstrap.ts';
 import {verifyRateAcceptanceChain} from './rateAcceptanceChain.ts';
 import {prepareCurrentAcceptedIntakeRateAdjustment,prepareSubsequentAcceptedIntakeRateAdjustment,type SnapshotAdjustmentInput} from './snapshotAdjustment.ts';
 import {prepareRateProposalRecord,decodeRateProposalRecord,canonicalRateJson,type RateProposalRecord} from './rateProposalRecord.ts';
@@ -60,8 +61,16 @@ export async function runRateIssuanceForReview(actor:string,ports:RateIssuancePo
   return {reason:'review_available',proposal:verified as RateProposalRecord,mayHaveWritten:true};
  }catch{return blocked(writing?'reconciliation_required':'source_error',writing);}
 }
+/** Production composition. Existing pure issuance seam stays independently testable. */
+export async function runRateIssuanceWithAnchor(actor:string,ports:RateIssuancePorts){
+ const baseline=await ensureRateAnchor(actor,ports);
+ if(baseline.status==='blocked')return blocked(baseline.reason,baseline.mayHaveWritten);
+ if(baseline.status==='stored')return blocked('calibration_required',true);
+ return runRateIssuanceForReview(actor,ports);
+}
 /** Internal principal authenticated by existing worker gateway/key check. No user JWT. */
 export function createInternalRateIssuance(ports:RateIssuancePorts){return async(actor:string)=>{
  if(!RATE_ISSUANCE_RELEASE.enabled)return blocked('safety_review_required');
- return runRateIssuanceForReview(actor,ports);
+ return runRateIssuanceWithAnchor(actor,ports);
 };}
+

@@ -1,4 +1,4 @@
-import {RATE_ISSUANCE_RELEASE,runRateIssuanceForReview} from './rateIssuanceRuntime.ts';
+import {RATE_ISSUANCE_RELEASE,runRateIssuanceWithAnchor} from './rateIssuanceRuntime.ts';
 import {ADAPTIVE_RELEASE_STATE} from './proposal.ts';
 import {createSnapshotOrchestrationSupabasePorts,type SnapshotOrchestrationSupabaseConfig} from './snapshotOrchestrationSupabaseAdapter.ts';
 import type {ServerPolicyBinding} from './snapshotReviewOrchestration.ts';
@@ -21,7 +21,8 @@ export function createUserRateIssuanceRuntime(config:SnapshotOrchestrationSupaba
    const p=await ownPorts.readPolicyExact(fixed) as Record<string,unknown>|null;
    if(!p||p.enabled!==true||p.reviewed!==true||p.snapshot_contract_reviewed!==true)return stop('server_policy_required');
    await ownPorts.loadOwnContext(token); // Includes existing legitimate purchase refresh, never a TTL extension.
-   return await runRateIssuanceForReview(user.id,{rpc,now:Date.now,newProposalId:()=>crypto.randomUUID(),expectedPolicy:fixed});
+   return await runRateIssuanceWithAnchor(user.id,{rpc,now:Date.now,newProposalId:()=>crypto.randomUUID(),expectedPolicy:fixed});
   }catch{return stop('source_error');}
  };
 }
+

@@ -1,0 +1,30 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {createHash} from 'node:crypto';
+import {canonicalMethodArtifact,computeResearchRateEstimate as run,produceAutomatedRateEstimate} from '../release-candidates/tdee-adaptive-review/automatedRateEstimate.ts';
+const now=Date.parse('2026-11-16T12:00:00Z'),sha=x=>createHash('sha256').update(x).digest('hex');
+const input=()=>({timezone:'UTC',binding:{ownerId:'11111111-1111-4111-8111-111111111111',goalId:'22222222-2222-4222-8222-222222222222',goalRevision:'2026-11-01T00:00:00Z',profileUpdatedAt:'2026-11-01T00:00:00Z',profileBinding:'a'.repeat(64),journeyBinding:'b'.repeat(64),policyVersion:'research',policyDigest:'c'.repeat(64),engineVersion:'rate-review-14d-v1',sourceFingerprint:'d'.repeat(64),sourceCapturedAt:now,windowStart:'2026-11-02',windowEndExclusive:'2026-11-16'},points:Array.from({length:8},(_,i)=>({date:`2026-11-${String(2+i).padStart(2,'0')}`,kg:80-i*.01}))});
+const method=()=>{const a={version:'rate-method-research-artifact-v1',methodId:'experimental',codeDigest:'e'.repeat(64),calibrationStatus:'unvalidated',methodApprovedAt:null,evidenceReferences:[],assumptions:['Synthetic fixtures are not empirical validation.']};return {...a,digest:sha(canonicalMethodArtifact(a))};};
+const ports=()=>({executorCodeDigest:'e'.repeat(64),now:()=>now,loadMethod:async()=>method(),digest:async s=>sha(s),estimate:async()=>({pointKgPerWeek:-.07,lowerKgPerWeek:-.2,upperKgPerWeek:.2,diagnostics:{resamples:100}})});
+test('OFF invokes no ports',async()=>{const p=new Proxy({},{get(){throw Error('port accessed');}});assert.equal((await produceAutomatedRateEstimate(input(),p)).reason,'automated_estimate_off');});
+test('research output cannot assert review or action',async()=>{const r=await run(input(),ports());assert.equal(r.kind,'research_estimate');assert.equal(r.qualification,'unvalidated-research-only');assert.equal(r.methodApprovedAt,null);assert.equal(r.actionable,false);assert.equal(r.mayHaveWritten,false);assert.equal('reviewedAt' in r,false);});
+test('artifact digest tampering rejected',async()=>{const p=ports();p.loadMethod=async()=>({...method(),methodId:'tampered'});assert.equal((await run(input(),p)).reason,'research_method_digest_mismatch');});
+test('invented method approval cannot pass research contract',async()=>{const p=ports();p.loadMethod=async()=>({...method(),methodApprovedAt:now});assert.equal((await run(input(),p)).reason,'research_method_invalid');});
+test('stale snapshot rejected before method',async()=>{const s=input();s.binding.sourceCapturedAt=now-30001;const p=ports();p.loadMethod=async()=>{throw Error('should not load');};assert.equal((await run(s,p)).reason,'research_source_invalid');});
+test('calculation crossing 30s bound rejected',async()=>{const p=ports();let n=0;p.now=()=>n++?now+30001:now;assert.equal((await run(input(),p)).reason,'research_source_expired');});
+test('clock rollback rejected',async()=>{const p=ports();let n=0;p.now=()=>n++?now-1:now;assert.equal((await run(input(),p)).reason,'research_source_expired');});
+test('missing coverage cannot masquerade as precision',async()=>{const s=input();s.points.length=7;assert.equal((await run(s,ports())).reason,'research_source_invalid');});
+test('duplicate or unordered dates rejected',async()=>{const s=input();s.points[1].date=s.points[0].date;assert.equal((await run(s,ports())).reason,'research_points_invalid');});
+test('unknown binding keys rejected',async()=>{const s=input();s.binding.reviewed=true;assert.equal((await run(s,ports())).reason,'research_source_invalid');});
+test('invalid interval rejected',async()=>{const p=ports();p.estimate=async()=>({pointKgPerWeek:0,lowerKgPerWeek:1,upperKgPerWeek:-1,diagnostics:{}});assert.equal((await run(input(),p)).reason,'research_estimate_invalid');});
+test('async mutation cannot rebind source',async()=>{const s=input(),p=ports();p.loadMethod=async()=>{s.binding.sourceFingerprint='f'.repeat(64);return method();};assert.equal((await run(s,p)).binding.sourceFingerprint,'d'.repeat(64));});
+
+test('executor identity must match artifact',async()=>{const p=ports();p.executorCodeDigest='f'.repeat(64);assert.equal((await run(input(),p)).reason,'research_executor_mismatch');});
+
+test('future completed window rejected',async()=>{const s=input();s.binding.windowStart='2027-01-01';s.binding.windowEndExclusive='2027-01-15';s.points=s.points.map((p,i)=>({date:'2027-01-'+String(i+1).padStart(2,'0'),kg:p.kg}));assert.equal((await run(s,ports())).reason,'research_calendar_invalid');});
+test('window end follows trusted source timezone',async()=>{const s=input();s.timezone='Pacific/Kiritimati';assert.equal((await run(s,ports())).reason,'research_calendar_invalid');});
+test('method collection size is bounded',async()=>{const p=ports();p.loadMethod=async()=>({...method(),evidenceReferences:Array(33).fill('x')});assert.equal((await run(input(),p)).reason,'research_method_invalid');});
+test('actual experimental estimator remains a non-operational draft',async()=>{
+ const {readFile}=await import('node:fs/promises');const {estimateResearchInterval}=await import('../release-candidates/tdee-adaptive-review/research/residual-block-bootstrap.mjs');const {rateReviewEvidence}=await import('../release-candidates/tdee-adaptive-review/rateReviewEvidence.ts');
+ const p=ports(),s=input(),code=await readFile(new URL('../release-candidates/tdee-adaptive-review/research/residual-block-bootstrap.mjs',import.meta.url),'utf8');p.executorCodeDigest=sha(code);const a={...method(),codeDigest:p.executorCodeDigest};a.digest=sha(canonicalMethodArtifact(a));p.loadMethod=async()=>a;
+ p.estimate=async points=>{const origin=Date.parse(s.binding.windowStart);const r=estimateResearchInterval(points.map(x=>({day:(Date.parse(x.date)-origin)/86400000,weight:x.kg})),{seed:77});assert.equal(r.status,'research_estimate');return {pointKgPerWeek:r.pointKgPerWeek,lowerKgPerWeek:r.lowerKgPerWeek,upperKgPerWeek:r.upperKgPerWeek,diagnostics:{}};};
+ const r=await run(s,p);assert.equal(r.kind,'research_estimate');assert.equal(rateReviewEvidence(s.binding,r,now),null);
+});
