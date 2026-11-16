@@ -90,3 +90,18 @@ The source composition uses the existing server-injected service key and Revenue
 The internal authentication/context alternative is implemented; user JWT lifetime is no longer the architectural blocker. Remaining work is packaging/deploying the OFF Edge entrypoint, verifying it without exposing existing credentials, and subsequently running a bounded real diagnostic-only worker path after its gates are reviewed. A background cron has not been installed or enabled. This is not a claim of daily operation while the app is closed.
 
 Actionable recommendations and explicit acceptance still require genuine uncertainty/calibration and applicable policy/nutrition evidence, full acceptance-time arithmetic/coverage parity and positive downstream verification. Source composition and SQL OFF checks do not satisfy those release gates. No fabricated approval or operational review records were seeded.
+
+## Verified inactive Edge transport through an existing compatibility slot
+Creating a separate Edge function was blocked by the project's 100-function quota. No plan, spend cap or deletion was performed. Investigation ruled out replacing backfill-tdee-estimates (eight invocations in the observed 24-hour window) and onesignal-inspector (current bug-report dependency).
+
+The selected ai-coach-daily v13 was an explicit superseded compatibility stub, with no code dependencies found by repository search, no SQL/cron reference, and no events/invocations in the observed 24 hours. These checks do not establish that no older/manual caller exists. Therefore its normal compatibility response is preserved exactly, rather than removing it.
+
+With owner authorization, ai-coach-daily v14 now includes an exact internal subpath. Gateway verify_jwt remains true. Every other request retains the original 200 JSON compatibility response. The immutable internal OFF guard precedes imports, body reads, keys and data, returning 503 disabled; no CORS access is added. A separate lazy exported handler avoids initializing another Deno server.
+
+### Actual checks
+- The existing Vault credential was used inside the database only for bounded fixed-destination HTTP probes, never exposed in output or source. It passed the actual existing JWT gateway; the existing coach-daily-insight auth-check separately confirmed exact internal-key authentication before business logic. No credential was created or user impersonated.
+- After deployment, normal compatibility request returned 200 with its original JSON; authenticated internal request returned 503 disabled; the same internal path without authentication returned gateway 401. No request timed out.
+- All 22 files returned by deployment readback matched their submitted contents exactly. Six type-only dependencies were omitted by the bundler. The full local entrypoint passed Deno; executable entrypoint tests verified normal compatibility, OFF and zero key/network calls. The three dispatcher tests additionally cover exact-path selection and unchanged forwarding; the broader candidate suite has 315 passing tests.
+- Cron count remains 33, scheduler ledger/receipts empty, selector cursor revision 0, and production acceptor unchanged. Existing progress-intelligence was not modified. No TestFlight submission, active schedule, provider refresh through the new worker, actionable recommendation or acceptance occurred.
+
+The service transport/authentication problem and function quota obstacle are resolved without weakening the gateway. This does not prove an enabled daily evaluation. Worker and SQL gates remain OFF. Genuine calibration/uncertainty/policy evidence, complete acceptance-time parity and positive end-to-end goal/history/consumer checks remain separate requirements.
