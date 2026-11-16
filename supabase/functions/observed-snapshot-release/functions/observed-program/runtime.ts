@@ -14,8 +14,8 @@ async function rpc(authorization: string, name: string, params?: Record<string, 
   return data as ObservationContext;
 }
 const prepare = createTesterRefresh({
- readContext: authorization => rpc(authorization, 'observed_get_dynamic_tdee_context_v1'),
- refreshAuthority: async authorization => {
+ readContext: (authorization: string) => rpc(authorization, 'observed_get_dynamic_tdee_context_v1'),
+ refreshAuthority: async (authorization: string) => {
   const response=await fetch(url+'/functions/v1/common-premium-authority',{
    method:'GET',headers:{Authorization:authorization,apikey:key},signal:AbortSignal.timeout(30000)});
   if(!response.ok)throw Error('observation_unavailable');
