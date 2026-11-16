@@ -1,0 +1,43 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {fixture,actor,hash,now} from './14d-fixture.mjs';
+import {prepareFourteenDayProposal as prepare} from '../release-candidates/tdee-adaptive-review/fourteenDayProposal.ts';
+import {beginSnapshotWorkflow as begin,advanceSnapshotWorkflow as advance,createSnapshotReviewOrchestrator} from '../release-candidates/tdee-adaptive-review/snapshotReviewOrchestration.ts';
+function setup(){
+ const s=fixture();s.profile.journeyStartDate='2026-10-01';s.observation.sources.journeyStartDate='2026-10-01';
+ s.currentGoal.goal_type='maintain';s.currentGoal.macro_preset='balanced';s.observation.context.currentGoal={...s.currentGoal};
+ s.observation.sources.checkIns.forEach((w,i)=>w.weight=85-i*.1);
+ s.policy.engine_version='rate-review-14d-v1';s.policy.increment_kcal=25;
+ const input={current:{calories:2000,proteinG:150,carbsG:215,fatsG:60,fiberG:30},anchor:{baselineCapturedAt:now-14*86400000,intake:2000,expenditure:2400,acceptedDelta:0,acceptedCount:0,receiptsVerified:true,lastAcceptedAt:null},observedExpenditure:2400,policy:{reviewed:true,maxStepKcal:200,maxStepFraction:.1,maxNetDeltaKcal:400,reviewIntervalDays:14,incrementKcal:25,minIntakeKcal:1500,maxIntakeKcal:3000},evidence:{eligible:true,modelReviewed:true,logging:'confirmed',capturedAt:now-1000,fingerprint:hash,stability:'stable',goalDirectionValid:true},now};
+ s.anchor.baseline_captured_at=new Date(input.anchor.baselineCapturedAt).toISOString();s.anchor.baseline_goal_snapshot=structuredClone(s.currentGoal);s.receiptChain.anchor=structuredClone(s.anchor);s.receiptChain.currentGoal=structuredClone(s.currentGoal);
+ const binding={ownerId:actor,proposalId:actor,anchorId:actor,goalSnapshot:s.currentGoal,profileUpdatedAt:s.profile.updatedAt,sourceDate:'2026-11-13',today:'2026-11-14',policyVersion:'p1',policyDigest:hash,engineVersion:'rate-review-14d-v1',policyExpiresAt:s.policy.expires_at,eligibilityDigest:hash,eligibilityFingerprint:hash,eligibilityExpiresAt:s.policy.expires_at,offerExpiresAt:s.policy.expires_at,readinessFingerprint:hash};
+ const mb={ownerId:actor,goalId:actor,goalRevision:s.currentGoal.updated_at,preset:'balanced',sourceFingerprint:hash,policyVersion:'p1',policyDigest:hash};
+ input.macroBinding=mb;input.macroContext={binding:{...mb},current:{...input.current},review:{status:'reviewed',reviewId:'synthetic-only',reviewedAt:now-1000,expiresAt:now+600000,ageYears:30,eligibility:'eligible'},limits:{proteinMinG:0,proteinMaxG:10000,carbsMinG:0,carbsMaxG:10000,fatsMinG:0,fatsMaxG:10000,fatMinFraction:0,fatMaxFraction:1}};
+ const review={version:'fourteen-day-reviewed-input-v1',reviewId:'synthetic-not-approved',methodVersion:'synthetic-test-only',reviewedAt:now-500,expiresAt:now+10000,ownerId:actor,goalId:actor,goalRevision:s.currentGoal.updated_at,profileUpdatedAt:s.profile.updatedAt,journeyBinding:hash,policyVersion:'p1',policyDigest:hash,sourceFingerprint:hash,sourceCapturedAt:now-1000,windowStart:'2026-10-31',windowEndExclusive:'2026-11-14',uncertainty:{validated:true,stable:true,lowerKgPerWeek:-.8,upperKgPerWeek:-.6},conversion:{reviewed:true,model:'approximate-energy-equivalent-v1',kcalPerKg:7700}};
+ return {s,input,binding,review};
+}
+const run=x=>prepare(x.s,actor,x.input,x.binding,x.review);
+test('synthetic explicit reviewed14d path prepares bounded acceptance-only artifact, not TDEE',()=>{const x=setup(),before=structuredClone(x),r=run(x);assert.equal(r.kind,'prepared',JSON.stringify(r));assert.equal(r.actionable,false);assert.equal(r.requiresAcceptance,true);assert.equal(r.record.payload.deltaKcal,200);assert.equal(r.record.expiresAt,new Date(x.review.expiresAt).toISOString());assert.deepEqual(r.record.payload.rateEvidence,x.review);assert.deepEqual(x,before);});
+test('missing uncertainty holds7days; descriptive sensitivity never becomes confidence',()=>{const x=setup();x.review=null;const r=run(x);assert.equal(r.reason,'rate_uncertainty_unverified');assert.equal(r.reevaluateAt,now+7*86400000);});
+test('10 complete days and8 distributed weights permit review,9 or7 do not',()=>{for(const [weights,days,ok] of [[8,10,true],[7,10,false],[8,9,false]]){const x=setup();x.s.observation.sources.checkIns=x.s.observation.sources.checkIns.slice(-14).filter((_,i)=>[0,2,4,6,7,9,11,13].slice(0,weights).includes(i));x.s.observation.counts.checkIns=weights;x.s.readiness.days.slice(-14).forEach((d,i)=>d.confirmed=i<days);assert.equal(run(x).kind==='prepared',ok,JSON.stringify(run(x)));}});
+test('missing/rebound review fields never prepare',()=>{for(const key of ['ownerId','goalId','goalRevision','profileUpdatedAt','journeyBinding','policyVersion','policyDigest','sourceFingerprint','sourceCapturedAt','windowStart','windowEndExclusive','reviewId','methodVersion']){const x=setup();delete x.review[key];assert.notEqual(run(x).kind,'prepared',key);}});
+test('invalid uncertainty and unreviewed conversion failclosed',()=>{for(const mutate of [x=>x.review.uncertainty.validated='true',x=>x.review.uncertainty.stable=false,x=>x.review.uncertainty.upperKgPerWeek=-2,x=>x.review.uncertainty.lowerKgPerWeek=NaN,x=>x.review.conversion.reviewed=false,x=>x.review.conversion.kcalPerKg=7600,x=>x.review.expiresAt=now,x=>x.review.reviewedAt=now+1]){const x=setup();mutate(x);assert.notEqual(run(x).kind,'prepared');}});
+test('near edge uncertainty holds7days even when point is outside tolerance',()=>{const x=setup();x.review.uncertainty.upperKgPerWeek=.1;assert.equal(run(x).reason,'rate_difference_uncertain');assert.equal(run(x).reevaluateAt,now+7*86400000);});
+test('no fabricated or weakened policy, macro review, eligibility or cooldown',()=>{for(const mutate of [x=>delete x.s.policy.increment_kcal,x=>x.input.policy.maxStepKcal=201,x=>x.input.macroContext.review=null,x=>x.input.evidence.eligible=false,x=>x.input.anchor.baselineCapturedAt=now,x=>x.s.readiness.eligibility.current=false]){const x=setup();mutate(x);assert.notEqual(run(x).kind,'prepared');}});
+test('reduction suspension remains even with reviewed rate interval',()=>{const x=setup();x.s.observation.sources.checkIns.forEach((w,i)=>w.weight=80+i*.1);x.review.uncertainty={validated:true,stable:true,lowerKgPerWeek:.6,upperKgPerWeek:.8};assert.equal(run(x).reason,'individual_deficit_review_required');});
+test('state machine reads optional rate port, stages artifact but NEVER dispatches issuer',()=>{const x=setup(),b={version:'p1',digest:hash,engineVersion:'rate-review-14d-v1'};let s=advance(begin(actor,actor,b),{ok:true,value:x.s.policy},now);s=advance(s,{ok:true,value:x.s},now);assert.equal(s.phase,'load_rate_review');assert.equal(advance(s,{ok:true,value:null},now).outcome.reason,'rate_reviewed_context_unavailable');s=advance(s,{ok:true,value:{input:x.input,binding:x.binding,review:x.review}},now);assert.equal(s.phase,'done');assert.equal(s.outcome.reason,'rate_acceptance_contract_unavailable');assert.equal(s.outcome.proposal,null);assert.equal(s.outcome.mayHaveWritten,false);assert.equal(s.record.payload.deltaKcal,200);});
+test('immutableOFF interpreter invokes no port including new reviewed-rate loader',async()=>{let calls=0;const f=async()=>{calls++;throw Error('must not run');};const r=await createSnapshotReviewOrchestrator({verifyAccessToken:f,readPolicyExact:f,loadOwnContext:f,loadReviewedRateContext:f,bootstrapAsService:f,refreshAsService:f,issueAsService:f},{version:'p1',digest:hash,engineVersion:'rate-review-14d-v1'})({authorization:'Bearer synthetic'});assert.equal(r.reason,'safety_review_required');assert.equal(calls,0);});
+test('review cannot predate its source and changed receipt/anchor/source never prepare',()=>{
+ for(const mutate of [
+  x=>x.review.reviewedAt=x.review.sourceCapturedAt-1,
+  x=>x.input.now=now+30001,
+  x=>x.s.anchor.revoked=true,
+  x=>x.s.receiptChain.totalCount=1,
+  x=>x.input.anchor.receiptsVerified=false,
+  x=>x.input.anchor.acceptedDelta=1,
+  x=>x.s.currentGoal.updated_at='2026-11-13T10:00:00Z',
+  x=>x.s.profile.updatedAt='2026-11-13T10:00:00Z',
+  x=>x.s.readiness.journeyBinding='b'.repeat(64),
+ ]){const x=setup();mutate(x);assert.notEqual(run(x).kind,'prepared');}
+});
+test('rate loader failures or wrong actor/policy cannot issue',()=>{const x=setup(),b={version:'p1',digest:hash,engineVersion:'rate-review-14d-v1'};let s=advance(begin(actor,actor,b),{ok:true,value:x.s.policy},now);s=advance(s,{ok:true,value:x.s},now);assert.equal(advance(s,{ok:false},now).outcome.mayHaveWritten,false);x.binding.policyVersion='other';const r=advance(s,{ok:true,value:{input:x.input,binding:x.binding,review:x.review}},now);assert.equal(r.phase,'done');assert.equal(r.outcome.reason,'rate_review_binding_mismatch');assert.equal(r.record,undefined);});
