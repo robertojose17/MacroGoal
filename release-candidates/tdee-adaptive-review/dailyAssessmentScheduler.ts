@@ -1,3 +1,4 @@
+import type {SchedulerDiagnostic} from './schedulerDiagnostic.ts';
 /** Pure candidate scheduling only. Calendar time never grants a recommendation. */
 import {ADAPTIVE_RELEASE_STATE} from './proposal.ts';
 export const DAILY_SCHEDULER_RELEASE_STATE=Object.freeze({enabled:false} as const);
@@ -114,8 +115,8 @@ export interface DailySchedulerPorts{
  loadOwnContext():Promise<{input:AssessmentInput;record:DailyRecord|null}>;
  // Atomically claim/reload exact key and source scope; no blind upsert.
  claim(plan:DailyPlan,expectedRevision:number):Promise<{status:'claimed'|'conflict';claimId:string}>;
- evaluateReadOnly(plan:DailyPlan,claimId:string):Promise<void>;
- complete(plan:DailyPlan,claimId:string,outcome:'completed'|'uncertain'):Promise<void>;
+ evaluateReadOnly(plan:DailyPlan,claimId:string):Promise<SchedulerDiagnostic>;
+ complete(plan:DailyPlan,claimId:string,outcome:'completed'|'uncertain',diagnostic?:SchedulerDiagnostic):Promise<void>;
 }
 /** Prepared wiring only. Immutable OFF prevents even context/clock/storage callbacks. */
 export function createDailyAssessmentScheduler(ports:DailySchedulerPorts){
@@ -132,7 +133,9 @@ export function createDailyAssessmentScheduler(ports:DailySchedulerPorts){
    const fresh=await ports.loadOwnContext(),revalidated=revalidateClaimedAssessment(fresh.input,fresh.record,claimId);
    if(revalidated.kind!=='assessment_plan'||revalidated.key!==plan.key||revalidated.timezone!==plan.timezone)
     return stop('reconcile','claimed_context_changed');
-   plan=revalidated;await ports.evaluateReadOnly(plan,claimId);await ports.complete(plan,claimId,'completed');
+   plan=revalidated;const diagnostic=await ports.evaluateReadOnly(plan,claimId);
+   if(!diagnostic||!['uncertain','resolved','preserve'].includes(diagnostic.kind)||typeof diagnostic.reason!=='string')throw Error('invalid_diagnostic');
+   await ports.complete(plan,claimId,'completed',diagnostic);
    return {kind:'completed' as const,actionable:false as const,key:plan.key};
   }catch{
    if(plan&&claimId){try{await ports.complete(plan,claimId,'uncertain');}catch{/* require reconciliation */}}
