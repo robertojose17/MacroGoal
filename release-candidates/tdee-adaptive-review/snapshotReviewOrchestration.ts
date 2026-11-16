@@ -1,3 +1,6 @@
+import {prepareFourteenDayProposal,type FourteenDayReview} from './fourteenDayProposal.ts';
+import type {SnapshotAdjustmentInput} from './snapshotAdjustment.ts';
+import type {SnapshotBinding} from './snapshotProposalProducer.ts';
 /** Server-only candidate. Pure state machine plus immutable-OFF interpreter.
  * Not mounted in GET/HTTP. No policy, calibration or release defaults.
  * Enabled async execution is unverified; pure command tests are not live E2E proof.
@@ -17,9 +20,9 @@ const same=(a:unknown,b:unknown):boolean=>a===b||(obj(a)&&obj(b)&&Object.keys(a)
 export const INITIAL_RATE_ENGINE_VERSION='rate-review-14d-v1';
 export type ServerPolicyBinding={version:string;digest:string;engineVersion:string};
 type Outcome={reason:string;proposal:unknown;mayHaveWritten:boolean};
-type Phase='read_policy'|'load_context'|'write_bootstrap'|'write_refresh'|'reload_context'|'load_macro'|'issue'|'done';
+type Phase='read_policy'|'load_context'|'write_bootstrap'|'write_refresh'|'reload_context'|'load_macro'|'load_rate_review'|'issue'|'done';
 export type SnapshotWorkflow={phase:Phase;actor:string;proposalId:string;binding:ServerPolicyBinding;policy?:Obj;plan?:Obj;
- branch?:'bootstrap'|'refresh';writer?:Obj;record?:ProposalRecord;outcome?:Outcome;macroRequest?:SnapshotMacroRequest;macroRaw?:unknown};
+ branch?:'bootstrap'|'refresh';writer?:Obj;record?:ProposalRecord;outcome?:Outcome;macroRequest?:SnapshotMacroRequest;macroRaw?:unknown;rateRaw?:unknown};
 const done=(s:SnapshotWorkflow,reason:string,mayHaveWritten=false,proposal:unknown=null):SnapshotWorkflow=>
  ({...s,phase:'done',outcome:{reason,proposal,mayHaveWritten}});
 const policyMatches=(p:unknown,b:ServerPolicyBinding)=>obj(p)&&p.version===b.version&&p.digest===b.digest&&p.engine_version===b.engineVersion;
@@ -51,7 +54,8 @@ export function advanceSnapshotWorkflow(state:SnapshotWorkflow,result:{ok:boolea
    // Separate initial14d contract: no legacy expenditure substitution, no fallback
    // to21d, bootstrap, refresh or issue while uncertainty remains unverified.
    const assessment=assessFourteenDaySnapshotReview(v,s.actor,now);
-   return done(s,assessment.reason,false);
+   if(assessment.kind==='blocked'||assessment.reason!=='rate_uncertainty_unverified')return done(s,assessment.reason,false);
+   return {...s,phase:'load_rate_review',rateRaw:structuredClone(v)};
   }
   let plan;
   if(v.anchor===null){
@@ -63,6 +67,18 @@ export function advanceSnapshotWorkflow(state:SnapshotWorkflow,result:{ok:boolea
   plan=planSnapshotEligibilityRefresh(v,s.actor,now);
   if(plan.kind==='blocked')return done(s,plan.reason);
   return {...s,phase:'write_refresh',branch:'refresh',plan:structuredClone(plan)};
+ }
+ if(s.phase==='load_rate_review'){
+  if(!v)return done(s,'rate_reviewed_context_unavailable');
+  if(!obj(v)||!obj(v.input)||!obj(v.binding)||!obj(v.review)||!s.rateRaw)return done(s,'rate_reviewed_context_unavailable');
+  if(v.binding.ownerId!==s.actor||v.binding.proposalId!==s.proposalId||v.binding.policyVersion!==s.binding.version||
+   v.binding.policyDigest!==s.binding.digest||v.binding.engineVersion!==s.binding.engineVersion)return done(s,'rate_review_binding_mismatch');
+  const prepared=prepareFourteenDayProposal(s.rateRaw,s.actor,{...(v.input as unknown as SnapshotAdjustmentInput),now},
+   v.binding as unknown as SnapshotBinding,v.review as unknown as FourteenDayReview);
+  if(prepared.kind!=='prepared')return done(s,prepared.reason);
+  // Preserve the prepared private artifact for tests/review, NEVER dispatch issue.
+  // SQL does not yet lock/revalidate reviewed rate evidence at acceptance.
+  return done({...s,record:structuredClone(prepared.record),rateRaw:undefined},'rate_acceptance_contract_unavailable');
  }
  if(s.phase==='write_bootstrap'||s.phase==='write_refresh'){
   if(!obj(v)||v.actionable!==false||!uuid(v.anchorId))return done(s,'reconciliation_required',true);
@@ -126,6 +142,7 @@ export interface SnapshotOrchestrationPorts{
  readPolicyExact(binding:ServerPolicyBinding):Promise<unknown>;
  loadOwnContext(token:string):Promise<unknown>;
  // Optional trusted-server evidence store. No raw request flags or fabricated records.
+ loadReviewedRateContext?(actor:string,snapshot:unknown,proposalId:string,token:string):Promise<unknown>;
  loadReviewedMacroContext?(actor:string,request:SnapshotMacroRequest,token:string):Promise<unknown>;
  bootstrapAsService(record:Obj):Promise<unknown>;
  refreshAsService(record:Obj):Promise<unknown>;
@@ -154,6 +171,7 @@ export function createSnapshotReviewOrchestrator(ports:SnapshotOrchestrationPort
      state.phase==='load_context'||state.phase==='reload_context'?await ports.loadOwnContext(token):
      state.phase==='write_bootstrap'?await ports.bootstrapAsService(structuredClone(state.plan!)):
      state.phase==='write_refresh'?await ports.refreshAsService(structuredClone(state.plan!)):
+     state.phase==='load_rate_review'?(ports.loadReviewedRateContext?await ports.loadReviewedRateContext(actor.id,structuredClone(state.rateRaw),state.proposalId,token):null):
      state.phase==='load_macro'?(ports.loadReviewedMacroContext?await ports.loadReviewedMacroContext(actor.id,structuredClone(state.macroRequest!),token):null):
      state.phase==='issue'?await ports.issueAsService(structuredClone(state.record!)):
      await Promise.reject(new Error('invalid_workflow_phase'));
