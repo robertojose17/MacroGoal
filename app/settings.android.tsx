@@ -14,6 +14,8 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/types';
 import { useAcceptedGoalEditor, AcceptedGoalReadSuperseded, type GoalEditorSnapshot } from '@/hooks/useAcceptedGoalEditor';
+import { TdeeRateReviewEntry } from '@/components/TdeeRateReviewEntry';
+import { LegacyGoalConfirmationEntry } from '@/components/LegacyGoalConfirmationEntry';
 import { useDynamicTdeeProgram } from '@/hooks/useDynamicTdeeProgram';
 import { clearOnboardingSession } from '@/utils/onboardingAnalytics';
 import { usePremium } from '@/hooks/usePremium';
@@ -1157,6 +1159,8 @@ export default function SettingsScreen() {
                     {editor.canRetrySave && <TouchableOpacity disabled={editor.busy || saving} onPress={() => { void editor.run('save').catch(() => {}); }}><Text>Retry the same goal save</Text></TouchableOpacity>}
                     {editor.canRetryRestart && <TouchableOpacity disabled={editor.busy || saving} onPress={() => { void editor.run('restart').catch(() => {}); }}><Text>Retry the same journey restart</Text></TouchableOpacity>}
                     <TouchableOpacity disabled={editor.busy || saving} onPress={() => { closeEditModal(); setShowDatePicker(false); restartCurrent.current = () => false; void editor.review().catch(() => {}); }}><Text>Review current profile and targets</Text></TouchableOpacity>
+                    <LegacyGoalConfirmationEntry ownerId={editor.snapshot?.profile.id} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} />
+                    <TdeeRateReviewEntry ownerId={editor.snapshot?.profile.id} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} refreshVerifiedGoal={editor.refresh} />
                     {/* ── Adaptive TDEE Divider ── */}
                     <View style={[styles.adaptiveDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '30' }]} />
 
@@ -2529,3 +2533,4 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 });
+

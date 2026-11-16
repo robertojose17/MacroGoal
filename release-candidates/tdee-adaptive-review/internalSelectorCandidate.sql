@@ -86,7 +86,15 @@ BEGIN
   -- Unresolved claims across ANY scope require reconciliation; skip and advance,
   -- never let the first unresolved/completed owners starve those later in keyspace.
   IF EXISTS(SELECT 1 FROM tdee_scheduler_private.ledger l WHERE l.owner_id=candidate.user_id AND
-    l.record->>'status' IS DISTINCT FROM 'completed' AND l.record->>'status' IS DISTINCT FROM 'retryable') THEN CONTINUE; END IF;
+    l.record->>'status' IS DISTINCT FROM 'completed' AND l.record->>'status' IS DISTINCT FROM 'retryable') THEN
+   -- Enqueue only a single current-scope claim with durable insertion evidence.
+   -- This is not proof of completion: worker's bounded reconciler revalidates all.
+   IF (SELECT count(*) FROM tdee_scheduler_private.ledger l WHERE l.owner_id=candidate.user_id AND l.record->>'status' NOT IN ('completed','retryable'))<>1 OR
+    NOT EXISTS(SELECT 1 FROM tdee_scheduler_private.ledger l JOIN tdee_rate_record_private.issuance_journal j
+     ON j.owner_id=l.owner_id AND j.proposal_id=(l.record->>'claimId')::uuid
+     WHERE l.owner_id=candidate.user_id AND l.context_revision=selected->>'contextRevision' AND l.record->>'status' IN ('claimed','uncertain'))
+    THEN CONTINUE;END IF;
+  END IF;
   IF EXISTS(SELECT 1 FROM tdee_scheduler_private.ledger l WHERE l.owner_id=candidate.user_id AND
     l.context_revision=selected->>'contextRevision' AND
     ((l.record->>'claimedAt')::numeric>floor(extract(epoch FROM clock_timestamp())*1000) OR

@@ -1,4 +1,6 @@
 import React from 'react';
+import {TdeeRateReviewEntry} from '@/components/TdeeRateReviewEntry';
+import {LegacyGoalConfirmationEntry} from '@/components/LegacyGoalConfirmationEntry';
 import {Text,TouchableOpacity,View} from 'react-native';
 import {useTranslation} from 'react-i18next';
 import {colors} from '@/styles/commonStyles';
@@ -7,7 +9,7 @@ import {useTdeeProposalBridge} from '@/hooks/useTdeeProposalBridge';
 import {TdeeProposalReview} from '@/components/TdeeProposalReview';
 type Props={ownerId?:string;isDark:boolean;blocked:boolean;refreshVerifiedGoal:()=>Promise<{profile:{id:string};goal:{user_id:string}}>};
 /** The disabled release does not mount hooks, render controls, or call the issuer. */
-export function TdeeReviewEntry(props:Props){return TDEE_REVIEW_RELEASE_ENABLED?<EnabledReview {...props}/>:null;}
+export function TdeeReviewEntry(props:Props){return <><TdeeRateReviewEntry {...props}/><LegacyGoalConfirmationEntry ownerId={props.ownerId} isDark={props.isDark} blocked={props.blocked}/>{TDEE_REVIEW_RELEASE_ENABLED?<EnabledReview {...props}/>:null}</>;}
 function EnabledReview({ownerId,isDark,blocked,refreshVerifiedGoal}:Props){
  const state=useTdeeProposalBridge(ownerId,blocked,refreshVerifiedGoal),{i18n}=useTranslation(),es=i18n.language.startsWith('es');
  const label=(en:string,sp:string)=>es?sp:en,disabled=blocked||state.busy||!state.active||!ownerId;
@@ -17,3 +19,4 @@ function EnabledReview({ownerId,isDark,blocked,refreshVerifiedGoal}:Props){
   <TdeeProposalReview visible={state.visible} active={state.active&&!blocked} ownerId={ownerId} proposal={state.proposal} controller={state.controller} isDark={isDark} onClose={state.close} onResolved={state.resolved}/>
  </View>;
 }
+

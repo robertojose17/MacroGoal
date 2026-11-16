@@ -1,11 +1,11 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.83.0';
-import {createInternalWorkerRuntime,INTERNAL_WORKER_RUNTIME_RELEASE,type ExistingServiceClient} from './internalWorkerRuntime.ts';
+import {createInternalWorkerRuntime,INTERNAL_WORKER_RUNTIME_RELEASE,INTERNAL_RATE_POLICY_BINDING,type ExistingServiceClient} from './internalWorkerRuntime.ts';
 /** Lazy server entry. Existing gateway setting is untouched; internal auth is additional. */
 export async function handleInternalWorker(request:Request):Promise<Response>{
  if(!INTERNAL_WORKER_RUNTIME_RELEASE.enabled)return new Response(JSON.stringify({version:'internal-daily-worker-v1',result:'disabled'}),{status:503,headers:{'content-type':'application/json','cache-control':'no-store'}});
  const serviceRoleKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
  return createInternalWorkerRuntime({
-  serviceRoleKey,
+  serviceRoleKey,ratePolicy:INTERNAL_RATE_POLICY_BINDING,
   createExistingServiceClient(){
    const url=Deno.env.get('SUPABASE_URL');
    if(!url||!serviceRoleKey)throw Error('existing_service_configuration_unavailable');

@@ -12,11 +12,12 @@ const same=(a:unknown,b:unknown)=>canonicalRateJson(a)===canonicalRateJson(b);
 const time=(v:unknown)=>{if(typeof v!=='string')return NaN;const m=/^(\d{4}-\d\d-\d\d)T(\d\d):(\d\d):(\d\d)(?:\.\d{1,6})?(Z|[+-]\d\d:\d\d)$/.exec(v);
  if(!m||+m[2]>23||+m[3]>59||+m[4]>59||(m[5]!=='Z'&&(+m[5].slice(1,3)>23||+m[5].slice(4)>59)))return NaN;
  const day=Date.parse(m[1]+'T00:00:00Z');return Number.isFinite(day)&&new Date(day).toISOString().slice(0,10)===m[1]?Date.parse(v):NaN;};
-export async function rateReceiptDigest(unsigned:unknown):Promise<string>{return [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(canonicalRateJson(unsigned))))].map(x=>x.toString(16).padStart(2,'0')).join('');}
+export async function rateReceiptContentDigest(content:string):Promise<string>{return [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(content)))].map(x=>x.toString(16).padStart(2,'0')).join('');}
+export async function rateReceiptDigest(unsigned:unknown):Promise<string>{return rateReceiptContentDigest(canonicalRateJson(unsigned));}
 export type CommittedRateReceipt={
  version:'rate-acceptance-receipt-v1';status:'committed';sequence:number;request:RateAcceptanceRequest;anchorReference:RateAnchorReference;
  previousGoalSnapshot:Obj;acceptedGoalSnapshot:Obj;acceptedAt:number;deltaKcal:number;netDeltaKcal:number;
- previousReceiptDigest:string|null;receiptDigest:string;canonicalContent:string;
+ previousReceiptDigest:string|null;receiptDigest:string;canonicalContent:string;canonicalEncoding?:'pg-jsonb-v1';
  acceptanceEvidence:{contract:'rate-as-of-revalidated-v1';sourceFingerprint:string;sourceCapturedAt:number;reviewId:string;reviewVersion:number;policyDigest:string;profileBinding:string;journeyBinding:string};
 };
 export type VerifiedRateChain={kind:'rate_chain_verified';actionable:false;acceptanceAuthorized:false;anchorReference:RateAnchorReference;
@@ -24,7 +25,7 @@ export type VerifiedRateChain={kind:'rate_chain_verified';actionable:false;accep
 const fail=():never=>{throw Error('rate_receipt_chain_unverified');};
 /** New subsequent-state verification path. Does not weaken initial-anchor checks.
  * Hashes prove integrity only, not that a fabricated receipt was really committed. */
-export async function verifyRateAcceptanceChain(value:unknown,now:number):Promise<VerifiedRateChain>{
+export async function verifyRateAcceptanceChain(value:unknown,now:number,digestText:(value:string)=>Promise<string>=rateReceiptContentDigest):Promise<VerifiedRateChain>{
  try{
   if(!obj(value)||value.version!=='rate-acceptance-chain-source-v1'||!uuid(value.ownerId)||!integer(now)||now<0||
    !integer(value.capturedAt)||value.capturedAt>now||now-value.capturedAt>30000||!obj(value.anchorHead)||
@@ -45,14 +46,16 @@ export async function verifyRateAcceptanceChain(value:unknown,now:number):Promis
   for(let index=0;index<value.rows.length;index++){
    const row=value.rows[index];if(!obj(row)||!obj(row.receipt)||!obj(row.proposal))return fail();
    const r=row.receipt as CommittedRateReceipt,q=r.request,p=row.proposal as RateProposalRecord;
-   if(Object.keys(r).sort().join(',')!=='acceptanceEvidence,acceptedAt,acceptedGoalSnapshot,anchorReference,canonicalContent,deltaKcal,netDeltaKcal,previousGoalSnapshot,previousReceiptDigest,receiptDigest,request,sequence,status,version'||
+   const encoding=r.canonicalEncoding;
+   const expectedKeys='acceptanceEvidence,acceptedAt,acceptedGoalSnapshot,anchorReference,canonicalContent,'+(encoding==='pg-jsonb-v1'?'canonicalEncoding,':'')+'deltaKcal,netDeltaKcal,previousGoalSnapshot,previousReceiptDigest,receiptDigest,request,sequence,status,version';
+   if((encoding!==undefined&&encoding!=='pg-jsonb-v1')||Object.keys(r).sort().join(',')!==expectedKeys||
     r.version!=='rate-acceptance-receipt-v1'||r.status!=='committed'||r.sequence!==index+1||!integer(r.acceptedAt)||r.acceptedAt<=last||r.acceptedAt>value.capturedAt||
     r.previousReceiptDigest!==lastDigest||!hash(r.receiptDigest)||!same(r.anchorReference,ref)||!obj(q)||
     Object.keys(q).sort().join(',')!=='anchorReference,ownerId,rateProposalDigest,rateProposalId,requestId,version'||
     q.version!=='rate-acceptance-request-v1'||q.ownerId!==owner||!uuid(q.requestId)||!uuid(q.rateProposalId)||!hash(q.rateProposalDigest)||
     !same(q.anchorReference,ref)||requestIds.has(q.requestId)||proposalIds.has(q.rateProposalId))return fail();
-   const {receiptDigest,canonicalContent,...unsigned}=r;if(typeof canonicalContent!=='string'||new TextEncoder().encode(canonicalContent).byteLength>65536||canonicalContent!==canonicalRateJson(unsigned)||await rateReceiptDigest(unsigned)!==receiptDigest)return fail();
-   if(!await decodeRateProposalRecord(canonicalRateJson(p),{ownerId:owner,proposalId:q.rateProposalId,digest:q.rateProposalDigest},r.acceptedAt))return fail();
+   const {receiptDigest,canonicalContent,...unsigned}=r;if(typeof canonicalContent!=='string'||new TextEncoder().encode(canonicalContent).byteLength>65536||(encoding==='pg-jsonb-v1'?!same(JSON.parse(canonicalContent),unsigned):canonicalContent!==canonicalRateJson(unsigned))||await digestText(canonicalContent)!==receiptDigest)return fail();
+   if(!await decodeRateProposalRecord(canonicalRateJson(p),{ownerId:owner,proposalId:q.rateProposalId,digest:q.rateProposalDigest},r.acceptedAt,digestText))return fail();
    const payload=p.payload,g=r.acceptedGoalSnapshot,old=r.previousGoalSnapshot,policy=payload.policySnapshot,review=payload.reviewedRate,evidence=r.acceptanceEvidence;
    if(!same(payload.anchorReference,ref)||!same(payload.anchorSnapshot,a)||!same(old,prior)||!same(payload.goalSnapshot,prior)||
     !obj(g)||g.user_id!==owner||g.is_active!==true||!uuid(g.id)||goalIds.has(g.id)||

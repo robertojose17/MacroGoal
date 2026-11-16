@@ -1,5 +1,5 @@
 /** Separate source-only rate contract. NEVER insert into legacy proposals/anchors. */
-import {draftSnapshotAdjustment,preparedRateAnchorReference,type AcceptedIntakeRateAdjustmentInput} from './snapshotAdjustment.ts';
+import {draftSnapshotAdjustment,preparedRateAnchorReference,preparedRateCurrentGoal,type AcceptedIntakeRateAdjustmentInput} from './snapshotAdjustment.ts';
 import {rateReviewRequest,rateReviewEvidence} from './rateReviewEvidence.ts';
 import {RATE_TOLERANCE} from './rateAdjustmentDecision.ts';
 import {diagnoseSnapshotRateReview} from './snapshotReviewContextParser.ts';
@@ -38,10 +38,11 @@ export async function prepareRateProposalRecord(input:AcceptedIntakeRateAdjustme
   if(!request||!obj(snapshot)||!obj(snapshot.profile)||!obj(snapshot.policy)||!obj(snapshot.readiness))return block('rate_context_unavailable');
   const review=rateReviewEvidence(request,reviewRecord,input.now);if(!review)return block('rate_review_unavailable');
   const d=diagnoseSnapshotRateReview(snapshot,actor,input.now);if(d.kind==='blocked')return block(d.reason);
-  const a=input.anchor,r=input.rateReview,p=snapshot.policy;
-  if(!same(snapshot.currentGoal,a.baselineGoalSnapshot)||snapshot.profile.updatedAt!==a.sourceReceipt.acceptedProfileUpdatedAt||
+  const a=input.anchor,r=input.rateReview,p=snapshot.policy,currentGoal=preparedRateCurrentGoal(input);
+  if(!currentGoal)return block('stored_rate_current_goal_required');
+  if(!same(snapshot.currentGoal,currentGoal)||snapshot.profile.updatedAt!==a.sourceReceipt.acceptedProfileUpdatedAt||
    request.profileBinding!==a.profileBinding||request.journeyBinding!==a.journeyBinding||
-   request.goalId!==a.initialGoalId||request.goalRevision!==a.initialGoalRevision||
+   request.goalId!==currentGoal.id||request.goalRevision!==currentGoal.updated_at||
    r.capturedAt!==request.sourceCapturedAt||r.sourceFingerprint!==request.sourceFingerprint||
    r.observedKgPerWeek!==d.observedRateKgPerWeek||r.targetKgPerWeek!==d.targetRateKgPerWeek||r.coverageSufficient!==true||!same(r.tolerance,RATE_TOLERANCE)||
    r.uncertainty.status!=='reviewed'||r.uncertainty.lowerKgPerWeek!==review.uncertainty.lowerKgPerWeek||r.uncertainty.upperKgPerWeek!==review.uncertainty.upperKgPerWeek||
@@ -69,14 +70,14 @@ export async function prepareRateProposalRecord(input:AcceptedIntakeRateAdjustme
  }catch{return block('invalid_rate_proposal_input');}
 }
 /** Integrity-only decoding against a trusted stored digest, never revalidation. */
-export async function decodeRateProposalRecord(serialized:string,expected:{ownerId:string;proposalId:string;digest:string},now:number):Promise<RateProposalRecord|null>{
+export async function decodeRateProposalRecord(serialized:string,expected:{ownerId:string;proposalId:string;digest:string},now:number,digestText:(value:string)=>Promise<string>=shaText):Promise<RateProposalRecord|null>{
  try{
   if(typeof serialized!=='string'||byteSize(serialized)>65536||!uuid(expected.ownerId)||!uuid(expected.proposalId)||!hash(expected.digest)||!Number.isSafeInteger(now))return null;
   const r=JSON.parse(serialized);if(!obj(r)||Object.keys(r).sort().join(',')!=='canonicalContent,digest,expiresAt,id,ownerId,payload,version'||r.version!=='rate-proposal-record-v1'||
    r.ownerId!==expected.ownerId||r.id!==expected.proposalId||r.digest!==expected.digest||!Number.isSafeInteger(r.expiresAt)||r.expiresAt<=now||
    !obj(r.payload)||r.payload.contract!=='explicit-rate-acceptance-v1'||r.payload.actionable!==false||r.payload.requiresExplicitAcceptance!==true||
    serialized!==canonicalRateJson(r))return null;
-  const {digest,canonicalContent,...unsigned}=r;if(typeof canonicalContent!=='string'||byteSize(canonicalContent)>65536||canonicalContent!==canonicalRateJson(unsigned)||await shaText(canonicalContent)!==digest)return null;const record=freeze(r as RateProposalRecord);admittedRecords.add(record);return record;
+  const {digest,canonicalContent,...unsigned}=r;if(typeof canonicalContent!=='string'||byteSize(canonicalContent)>65536||canonicalContent!==canonicalRateJson(unsigned)||await digestText(canonicalContent)!==digest)return null;const record=freeze(r as RateProposalRecord);admittedRecords.add(record);return record;
  }catch{return null;}
 }
 export type RateAcceptanceRequest={version:'rate-acceptance-request-v1';ownerId:string;requestId:string;rateProposalId:string;rateProposalDigest:string;anchorReference:RateAnchorReference};

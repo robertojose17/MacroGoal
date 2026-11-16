@@ -1,0 +1,5 @@
+/** Read a synthetic fixture returned by rate-chain-pg-roundtrip-readonly.sql. */
+import fs from 'node:fs';import path from 'node:path';import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
+const [fixtureFile,root,implementation]=process.argv.slice(2);if(!fixtureFile||!root||!implementation)throw Error('fixture file, source root, updated implementation required');
+const f=JSON.parse(fs.readFileSync(fixtureFile,'utf8'));const temp=path.join(root,'release-candidates/tdee-adaptive-review/.pg-chain-roundtrip-temp.ts');fs.copyFileSync(implementation,temp);
+try{const {verifyRateAcceptanceChain}=await import(pathToFileURL(temp));const result=await verifyRateAcceptanceChain(f.value,f.now);assert.equal(result.acceptedCount,1);assert.equal(result.actionable,false);assert.equal(result.acceptanceAuthorized,false);assert.equal(result.lastReceiptDigest,f.value.rows[0].receipt.receiptDigest);console.log('Actual PostgreSQL byte serialization accepted by TypeScript verifier; synthetic JSON only.');}finally{fs.unlinkSync(temp);}

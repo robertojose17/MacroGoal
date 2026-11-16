@@ -1,11 +1,13 @@
+import {createInternalRateIssuance} from './rateIssuanceRuntime.ts';
 /** Final composition candidate; no runtime activation or credentials provisioned. */
 import {createInternalDailyWorker,INTERNAL_DAILY_WORKER_RELEASE,isInternalWorkerAuthorized,type WorkerSelection} from './internalDailyWorker.ts';
 import {createInternalSelectorPorts} from './internalSelectorAdapter.ts';
 import {createInternalProviderRefresh,createInternalProviderRevalidator,type ProviderProof} from './internalProviderRefresh.ts';
-import {createSchedulerRpcStorage,type InternalServiceRpc} from './schedulerRpcStorage.ts';
+import {createSchedulerRpcStorage,parseSchedulerRpc,type InternalServiceRpc} from './schedulerRpcStorage.ts';
 import {planDailyAssessment,revalidateClaimedAssessment,DAILY_SCHEDULER_RELEASE_STATE,type AssessmentInput,type DailyPlan,type DailyRecord,type UncertainHold} from './dailyAssessmentScheduler.ts';
 import {assessFourteenDaySnapshotReview} from './snapshotReviewContextParser.ts';
 import {diagnosticFromAssessment,type SchedulerDiagnostic} from './schedulerDiagnostic.ts';
+export const INTERNAL_RATE_POLICY_BINDING:null|{version:string;digest:string;engineVersion:string}=null;
 export const INTERNAL_WORKER_RUNTIME_RELEASE=Object.freeze({enabled:false} as const);
 type Obj=Record<string,any>;
 const obj=(v:unknown):v is Obj=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -14,6 +16,8 @@ export interface ExistingServiceClient{rpc(name:string,args:Record<string,unknow
 export type WorkerRuntimeBootstrap={
  /** Already injected existing key, never HTTP input. Never logged or returned. */
  serviceRoleKey?:string;
+ /** Exact trusted deployment binding; no fallback/latest policy selection. */
+ ratePolicy?:{version:string;digest:string;engineVersion:string}|null;
  createExistingServiceClient():ExistingServiceClient;
  getExistingV2Key():string|undefined;
  request:typeof fetch;
@@ -29,6 +33,8 @@ export type WorkerAssessmentReviewPorts={
  revalidate(selection:WorkerSelection,proof:ProviderProof,deadline:number,signal:AbortSignal):Promise<ProviderProof>;
  loadContext(ownerId:string,signal:AbortSignal):Promise<unknown>;
  storage:ReviewStorage;now():number;newClaimId():string;
+ reconcileIssued?(scope:AssessmentInput,record:DailyRecord):Promise<boolean>;
+ issueRateProposal?(ownerId:string,proposalId:string):Promise<{reason:string;proposal:unknown;mayHaveWritten:boolean}>;
 };
 function clock(ports:WorkerAssessmentReviewPorts,deadline:number,signal:AbortSignal){const t=ports.now();if(!Number.isSafeInteger(t)||t<0||signal.aborted||t>=deadline)throw Error('worker_deadline');return t;}
 /** Pure context envelope check, never converts caller claims into server authority. */
@@ -59,7 +65,14 @@ export async function runWorkerAssessmentForReview(ports:WorkerAssessmentReviewP
  try{
   const initial=await context(),state=await ports.storage.load(initial.input);
   const candidate=planDailyAssessment({...initial.input,hold:state.hold},state.record);
-  if(candidate.kind!=='assessment_plan')return candidate.kind==='reconcile'?'reconcile':'skipped';
+  if(candidate.kind!=='assessment_plan'){
+   if(candidate.kind==='reconcile'&&candidate.reason==='unfinished_assessment'&&state.record&&ports.reconcileIssued){
+    const recovered=await ports.reconcileIssued(initial.input,state.record);
+    await ports.revalidate(selection,proof,deadline,signal);clock(ports,deadline,signal);
+    if(recovered)return 'completed';
+   }
+   return candidate.kind==='reconcile'?'reconcile':'skipped';
+  }
   await ports.revalidate(selection,proof,deadline,signal);clock(ports,deadline,signal);
   claimId=ports.newClaimId();const receipt=await ports.storage.claim(candidate,state.record?.revision??0,claimId);
   if(receipt.status!=='claimed'||receipt.claimId!==claimId)throw Error('claim_not_current');claimed=candidate;
@@ -69,7 +82,18 @@ export async function runWorkerAssessmentForReview(ports:WorkerAssessmentReviewP
   // Use the real fourteen-day diagnostic, never the legacy21-day estimator.
   const assessedAt=clock(ports,deadline,signal),result=assessFourteenDaySnapshotReview(fresh.raw,selection.ownerId,assessedAt);
   await ports.revalidate(selection,proof,deadline,signal);
-  const diagnostic=diagnosticFromAssessment({assessedAt,result},current.plannedAt,clock(ports,deadline,signal));
+  let diagnostic=diagnosticFromAssessment({assessedAt,result},current.plannedAt,clock(ports,deadline,signal));
+  if(ports.issueRateProposal&&(!latest.hold||assessedAt>=latest.hold.reevaluateAt)){
+   await ports.revalidate(selection,proof,deadline,signal);clock(ports,deadline,signal);
+   const issued=await ports.issueRateProposal(selection.ownerId,claimId);
+   if(issued.mayHaveWritten&&issued.reason!=='review_available')throw Error('issuance_outcome_unknown');
+   if(issued.reason==='review_available'){
+    const proposal=issued.proposal as {id?:unknown;ownerId?:unknown}|null;
+    if(!proposal||proposal.id!==claimId||proposal.ownerId!==selection.ownerId)throw Error('issuance_receipt_mismatch');
+    diagnostic={kind:'resolved',reason:'reviewed_proposal_stored'};
+   }
+   await ports.revalidate(selection,proof,deadline,signal);clock(ports,deadline,signal);
+  }
   await ports.storage.complete(current,claimId,diagnostic);return 'completed';
  }catch{
   // Unknown write outcome is reconciled using durable receipts; no blind replay.
@@ -97,7 +121,11 @@ export function createInternalWorkerRuntime(bootstrap:WorkerRuntimeBootstrap){
     async runOwnAssessment(selection,proof,deadline,signal){
      const scopedRpc:InternalServiceRpc={rpc:(name,args)=>client.rpc(name,args).abortSignal(signal)};
      const storage=createSchedulerRpcStorage(scopedRpc);
-     return runWorkerAssessmentForReview({storage,now,newClaimId:()=>crypto.randomUUID(),revalidate,
+     return runWorkerAssessmentForReview({storage,now,reconcileIssued:async(scope,record)=>{
+      const data=await serviceRpc('tdee_internal_rate_issue_outcome_v1',{p_owner:scope.ownerId,p_scope:scope.contextRevision,p_claim:record.claimId,p_revision:record.revision},signal);
+      const parsed=parseSchedulerRpc(data,scope),e=(data as Obj).evidence;
+      return !!parsed.record&&parsed.record.status==='completed'&&parsed.record.claimId===record.claimId&&obj(e)&&e.version==='rate-issuance-outcome-v1'&&e.status==='historically_prepared'&&e.actionable===false&&e.ownerId===scope.ownerId&&e.contextRevision===scope.contextRevision&&e.claimId===record.claimId;
+     },issueRateProposal:(ownerId,proposalId)=>createInternalRateIssuance({rpc:(name,args)=>serviceRpc(name,args,signal),now,newProposalId:()=>proposalId,expectedPolicy:bootstrap.ratePolicy!})(ownerId),newClaimId:()=>crypto.randomUUID(),revalidate,
       loadContext:(ownerId,signal)=>serviceRpc('tdee_internal_context_v1',{p_owner:ownerId},signal)},selection,proof as ProviderProof,deadline,signal);
     },
    });

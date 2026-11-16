@@ -140,3 +140,32 @@ Interval calibration and independent-data evaluation are engineering/evidence wo
 
 ### Reproducing pure SQL checks
 The repository-relative scripts generate synthetic rollback checks from current TypeScript oracles: `tests/generate-rate-energy-sql-parity.mjs`, `tests/generate-coverage-fixtures.mjs`, `tests/generate-rate-anchor-derivation-parity.mjs`, and `tests/generate-legacy-ack-fixtures.mjs`. Generation is not execution. The anchor derivation assertions require the complete history-loader and append candidates within an explicit rollback transaction. The original reserved loader and complete history loader are ALTERNATIVES; do not install both. None of these source-only SQL candidates is a release migration.
+
+
+## Final inactive connection increment, 2026-11-16
+
+This increment connects the separate intake-only 14-day proposal path, private atomic acceptance candidate, and explicit web/iOS/Android review UI. All recommendation, acceptance, worker and UI release switches remain OFF. None of the SQL candidates in this increment has been installed. No Edge function or mobile/web build was deployed by this increment.
+
+Implemented:
+- Strict separate rate proposal/request/receipt storage, ordered full-chain verification, subsequent-proposal preparation without resetting the initial anchor, and explicit PostgreSQL receipt-byte encoding. Legacy proposal encoding is unchanged.
+- A shared owner-locked admission validator rechecks real registered policy/reviews/preferences, source coverage and freshness, current full goal, chain, energy arithmetic and deterministic Smart/manual macros. The private writer atomically updates calories and macros with the request result and receipt, with full-goal CAS and post-write chain validation. Its own-user public wrapper remains literal OFF.
+- Service-only OFF source and issuer wrappers, independent of legacy expenditure anchors. User requests retain fixed server policy binding; the internal nullable binding can select only one unambiguous enabled, reviewed, unexpired rate policy. There is no latest-policy fallback or fabricated legacy anchor.
+- Daily assessment connects issuance before completion. A real database-stamped issuance journal supports bounded recovery of known historical insertions. Expired offers remain non-actionable; no purchase/proposal TTL is extended. Changed source or missing durable proof stays uncertain. No notification sender was added.
+- Separate bilingual rate UI with current/new calories and macros, explicit acceptance or keeping current targets, isolated durable request storage, read-only outcome checks and explicit same-ID retries. Only a verified committed receipt in the authoritative chain plus current full-goal readback allows refresh/global goal-change events. Existing legacy contracts are not reused as rate contracts.
+- Explicit current-goal acknowledgment UI remains separate. It changes no goals and grants no nutritional approval, historical-intake confirmation or expenditure proof.
+- Mobile hashing uses an injected Expo SHA-256 implementation; default server hashing and validation remain unchanged. The app TypeScript config adds DOM.Iterable while preserving Expo's existing DOM and ESNext libraries.
+
+Verification:
+- Combined current source suite: 457 Node tests passed; cached Deno checking passed all candidate TypeScript and the three source entrypoints (compatibility worker slot, separate worker entry, and progress-intelligence).
+- Actual merged Settings web/iOS/Android dependency graph compiles against the real app config and official frozen-lock dependencies, without declaration shims. Install scripts were disabled. This is not an all-screen/native production build or device crash test.
+- Actual PostgreSQL transaction/rollback checks passed: 21 strict storage/request cases; 54 full-chain differential cases; 12 PostgreSQL receipt-encoding cases and conservative canonical-domain checks; 52 Smart/manual allocation cases. A synthetic receipt serialized and hashed by PostgreSQL was successfully verified by TypeScript.
+- The complete 189,654-character SQL definition graph, including issuance recovery and own-account receipt lookup, compiled in rollback. Empty-record and unauthenticated-denial checks passed. This is not a genuine positive acceptance transaction.
+- Reviews caught and corrected stale-account UI callbacks, blocked recovery, macro-limit field mapping, NULL expiry handling, legacy-anchor-dependent policy loading, missing post-issuance proof/deadline checks, and the rate HTTP/client persistence-indicator mismatch.
+- After rollback verification, new candidate schemas were absent, cron stayed at 33, and the original production acceptor remained unchanged.
+
+Remaining operational gates:
+- No genuine positive end-to-end recommendation/acceptance is claimed. Operational rate/nutrition review evidence and a selected supported policy are absent; uncertainty/calibration evidence cannot be supplied by setting a boolean or by repeating approval.
+- The owner's nutritional approval is acknowledged. It is not replaced by an invented requirement for an independent reviewer; the unresolved issue is implementing supported criteria/evidence and the applicable individual bindings.
+- The account-specific legacy provenance gap is not silently treated as consent. A real acknowledgment/goal-save path must establish its own legitimate baseline, without backdating history.
+- Native visual/accessibility and SecureStore interruption/restore QA, deployment verification, deliberate rollout activation and daily scheduling remain separate. Unknown outcomes without adequate durable proof remain blocked rather than being called completed.
+- No TestFlight, production policy seeding, fictitious operational review, automatic goal change or new credential was performed.

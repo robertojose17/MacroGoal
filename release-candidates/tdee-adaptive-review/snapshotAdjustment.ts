@@ -1,3 +1,4 @@
+import {verifyRateAcceptanceChain,type VerifiedRateChain} from './rateAcceptanceChain.ts';
 import {isInitialRateAnchorCurrent} from './rateAnchorPersistencePlan.ts';
 import {prepareAcceptedIntakeRateAnchor,type AcceptedIntakeRateAnchor} from './acceptedIntakeRateAnchor.ts';
 import {compareInitialRateToTarget} from './rateAdjustmentDecision.ts';
@@ -29,7 +30,7 @@ export type AcceptedIntakeRateAdjustmentInput=Omit<SnapshotAdjustmentInput,'anch
  anchor:AcceptedIntakeRateAnchor;observedExpenditure?:never;rateReview:NonNullable<SnapshotAdjustmentInput['rateReview']>;
 };
 export type PersistedRateAnchorReference={ownerId:string;version:number;sourceRequestId:string;sourceGoalId:string};
-const admittedRateInputs=new WeakMap<object,{anchor:string;reference?:PersistedRateAnchorReference}>();
+const admittedRateInputs=new WeakMap<object,{anchor:string;reference?:PersistedRateAnchorReference;chain?:VerifiedRateChain;chainCapturedAt?:number}>();
 /** Source must come from the coherent trusted SQL goal/receipt/profile loader.
  * No source is accepted from HTTP. An arbitrary tagged object is never admitted. */
 export function prepareAcceptedIntakeRateAdjustment(source:unknown,actor:string,
@@ -63,6 +64,26 @@ export function prepareCurrentAcceptedIntakeRateAdjustment(source:unknown,actor:
 export function preparedRateAnchorReference(input:AcceptedIntakeRateAdjustmentInput):PersistedRateAnchorReference|null{
  const proof=admittedRateInputs.get(input);return proof?.reference&&proof.anchor===JSON.stringify(input.anchor)?structuredClone(proof.reference):null;
 }
+/** Subsequent admission verifies the complete authentic stored chain. Never
+ * clears presence or edits the initial anchor to pretend history is empty. */
+export async function prepareSubsequentAcceptedIntakeRateAdjustment(source:unknown,actor:string,
+ input:Omit<SnapshotAdjustmentInput,'anchor'|'observedExpenditure'|'rateReview'>&{rateReview:NonNullable<SnapshotAdjustmentInput['rateReview']>},expected:PersistedRateAnchorReference){
+ try{
+  if(!input||!input.rateReview)return {kind:'blocked' as const,reason:'rate_review_required'};
+  const coherent=structuredClone(source);
+  const chain=await verifyRateAcceptanceChain(coherent,input.now);
+  if(chain.acceptedCount<1||chain.anchorReference.ownerId!==actor||!expected||!(['ownerId','version','sourceRequestId','sourceGoalId'] as const).every(k=>chain.anchorReference[k]===expected[k]))return {kind:'blocked' as const,reason:'subsequent_rate_chain_unverified'};
+  const h=(coherent as {anchorHead:{anchor:AcceptedIntakeRateAnchor}}).anchorHead,g=chain.currentGoal;
+  if(input.current.calories!==g.daily_calories||input.current.proteinG!==g.protein_g||input.current.carbsG!==g.carbs_g||input.current.fatsG!==g.fats_g||input.current.fiberG!==g.fiber_g||
+   input.macroBinding?.ownerId!==actor||input.macroBinding?.goalId!==g.id||input.macroBinding?.goalRevision!==g.updated_at)return {kind:'blocked' as const,reason:'rate_current_goal_mismatch'};
+  const value:AcceptedIntakeRateAdjustmentInput={...structuredClone(input),anchor:structuredClone(h.anchor)};
+  admittedRateInputs.set(value,{anchor:JSON.stringify(value.anchor),reference:structuredClone(chain.anchorReference),chain:structuredClone(chain),chainCapturedAt:(coherent as {capturedAt:number}).capturedAt});
+  return {kind:'rate_input_prepared' as const,actionable:false as const,input:value};
+ }catch{return {kind:'blocked' as const,reason:'subsequent_rate_chain_unverified'};}
+}
+export function preparedRateCurrentGoal(input:AcceptedIntakeRateAdjustmentInput):Record<string,unknown>|null{
+ const p=admittedRateInputs.get(input);return p?.anchor===JSON.stringify(input.anchor)?structuredClone(p.chain?.currentGoal??input.anchor.baselineGoalSnapshot):null;
+}
 export type SnapshotAdjustmentResult={kind:'blocked'|'no_change';reason:string;reevaluateAt?:number}|
  {kind:'draft';actionable:false;allocationMode:MacroAllocationMode;target:SnapshotTarget;deltaKcal:number;netDeltaKcal:number;sourceFingerprint:string;sourceCapturedAt:number;contract:'as-of-revalidated-v1'};
 const finite=(n:unknown):n is number=>typeof n==='number'&&Number.isFinite(n);
@@ -72,12 +93,14 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput|AcceptedIn
  if(!input||!input.current||!input.anchor||!input.policy||!input.evidence||!finite(input.now))return blocked('invalid_input');
  const rateAnchor=typeof input.anchor==='object'&&'contract' in input.anchor&&input.anchor.contract==='accepted-intake-rate-anchor-v1';
  if(rateAnchor&&(admittedRateInputs.get(input)?.anchor!==JSON.stringify(input.anchor)||input.rateReview===undefined||Object.hasOwn(input,'observedExpenditure')))return blocked('rate_anchor_unverified');
+ const admission=admittedRateInputs.get(input);
+ if(admission?.chain&&(admission.chainCapturedAt===undefined||admission.chainCapturedAt>input.now||input.now-admission.chainCapturedAt>30000))return blocked('rate_chain_source_expired');
  const {current:g,policy:p,evidence:e,now}=input;
  const original=input.anchor;
  const a=rateAnchor?{baselineCapturedAt:(original as AcceptedIntakeRateAnchor).acceptedAt,
  intake:(original as AcceptedIntakeRateAnchor).baselineIntakeKcal,expenditure:undefined,
- acceptedDelta:(original as AcceptedIntakeRateAnchor).acceptedDeltaKcal,acceptedCount:original.acceptedCount,
- receiptsVerified:true,lastAcceptedAt:original.lastAcceptedAt}:original as SnapshotAdjustmentInput['anchor'];
+ acceptedDelta:admittedRateInputs.get(input)?.chain?.acceptedDeltaKcal??(original as AcceptedIntakeRateAnchor).acceptedDeltaKcal,acceptedCount:admittedRateInputs.get(input)?.chain?.acceptedCount??original.acceptedCount,
+ receiptsVerified:true,lastAcceptedAt:admittedRateInputs.get(input)?.chain?.lastAcceptedAt??original.lastAcceptedAt}:original as SnapshotAdjustmentInput['anchor'];
  if(p.reviewed!==true||e.eligible!==true||e.modelReviewed!==true)return blocked('review_required');
  if(e.logging!=='confirmed')return blocked('logging_confirmation_required');
  if(e.stability!=='stable'||e.goalDirectionValid!==true)return blocked('evidence_uncertain');

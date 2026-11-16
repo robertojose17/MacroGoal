@@ -7,7 +7,7 @@ SET LOCAL statement_timeout='3s';
 CREATE FUNCTION macrogoal_snapshot_review_private.validate_rate_energy_candidate_v1(i jsonb, proposal jsonb)
 RETURNS jsonb LANGUAGE plpgsql IMMUTABLE SECURITY INVOKER SET search_path=pg_catalog,pg_temp SET extra_float_digits=3 AS $fn$
 DECLARE g jsonb; a jsonb; p jsonb; e jsonb; r jsonb; k text; group_value jsonb;
- is_rate_anchor boolean:=false; original_anchor jsonb;
+ is_rate_anchor boolean:=false; original_anchor jsonb; verified_chain jsonb; chain_goal jsonb;
  state text:='blocked'; reason text:='invalid_input'; now_ms double precision; captured double precision;
  current_kcal double precision; accepted double precision; observed double precision; target double precision;
  lo double precision; hi double precision; nearest double precision; difference double precision;
@@ -23,7 +23,20 @@ BEGIN
   -- Tagged initial intake anchor is already verified by the trusted receipt loader.
   -- This pure function does not authenticate or grant authority to a JSON tag.
   is_rate_anchor:=a->>'contract'='accepted-intake-rate-anchor-v1';
-  IF is_rate_anchor THEN
+  IF is_rate_anchor AND i ? 'chainSource' THEN
+   IF jsonb_typeof(i->'now') IS DISTINCT FROM 'number' OR (i->>'now')::numeric<>trunc((i->>'now')::numeric) THEN reason:='invalid_time';EXIT validation;END IF;
+   verified_chain:=tdee_rate_record_private.verify_chain(i->'chainSource',(i->>'now')::bigint);
+   chain_goal:=verified_chain->'currentGoal';
+   IF verified_chain->>'kind' IS DISTINCT FROM 'rate_chain_verified' OR verified_chain->'receiptsVerified' IS DISTINCT FROM 'true'::jsonb OR
+    i#>'{chainSource,anchorHead,anchor}' IS DISTINCT FROM a OR verified_chain#>>'{anchorReference,ownerId}' IS DISTINCT FROM a->>'ownerId' OR
+    chain_goal->>'user_id' IS DISTINCT FROM a->>'ownerId' OR chain_goal->>'id' IS DISTINCT FROM i#>>'{macroBinding,goalId}' OR
+    chain_goal->>'updated_at' IS DISTINCT FROM i#>>'{macroBinding,goalRevision}' OR
+    chain_goal->'daily_calories' IS DISTINCT FROM g->'calories' OR chain_goal->'protein_g' IS DISTINCT FROM g->'proteinG' OR
+    chain_goal->'carbs_g' IS DISTINCT FROM g->'carbsG' OR chain_goal->'fats_g' IS DISTINCT FROM g->'fatsG' OR chain_goal->'fiber_g' IS DISTINCT FROM g->'fiberG' OR
+    i ? 'observedExpenditure' OR a ? 'expenditure' THEN reason:='rate_chain_unverified';EXIT validation;END IF;
+   a:=jsonb_build_object('baselineCapturedAt',a->'acceptedAt','intake',a->'baselineIntakeKcal','acceptedDelta',verified_chain->'acceptedDeltaKcal',
+    'acceptedCount',verified_chain->'acceptedCount','receiptsVerified',true,'lastAcceptedAt',verified_chain->'lastAcceptedAt');
+  ELSIF is_rate_anchor THEN
    original_anchor:=a;
    IF i ? 'observedExpenditure' OR a ? 'expenditure' OR a->'acceptedDeltaKcal' IS DISTINCT FROM '0'::jsonb OR
     a->'acceptedCount' IS DISTINCT FROM '0'::jsonb OR a->'lastAcceptedAt' IS DISTINCT FROM 'null'::jsonb OR

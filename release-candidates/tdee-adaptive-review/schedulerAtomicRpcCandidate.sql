@@ -83,7 +83,15 @@ begin
      if next_hold is null or (next_hold->>'reevaluateAt')::bigint<=at_ms then
       next_hold:=jsonb_build_object('assessedAt',at_ms,'reevaluateAt',at_ms+604800000); end if;
     elsif diagnostic='resolved' then
-     if reason<>'same_rate_target' then raise exception using errcode='22023',message='unknown_resolution_reason'; end if;
+     if reason='reviewed_proposal_stored' then
+      selected:=tdee_scheduler_private.current_selection(owner);
+      if selected is null or selected->>'contextRevision' is distinct from scope or selected->>'timezone' is distinct from zone then
+       raise exception using errcode='40001',message='current_selection_changed'; end if;
+      if not exists(select 1 from tdee_rate_record_private.proposals p where p.owner_id=owner and p.id=claim
+       and p.expires_at_ms>at_ms and p.record#>>'{payload,windowEndExclusive}'=local_day
+       and p.record#>>'{payload,goalSnapshot,id}'=(select g.id::text from public.goals g where g.user_id=owner and g.is_active=true)) then
+       raise exception using errcode='22023',message='issued_proposal_receipt_required'; end if;
+     elsif reason<>'same_rate_target' then raise exception using errcode='22023',message='unknown_resolution_reason'; end if;
      next_hold:=null;
     end if;
     insert into tdee_scheduler_private.receipt(owner_id,context_revision,claim_id,daily_key,outcome,observed_at)

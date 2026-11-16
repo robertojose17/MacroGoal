@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {createHash} from 'node:crypto';
+import {fixture} from './rate-client-fixture.mjs';
+import {createSnapshotHttpHandler} from '../release-candidates/tdee-adaptive-review/snapshotHttpHandler.ts';
+import {parseRateClientOffer} from '../utils/rateProposalController.ts';
+const digest=s=>Promise.resolve(createHash('sha256').update(s).digest('hex'));
+const request=()=>new Request('https://example.supabase.co/functions/v1/progress-intelligence?mode=adaptive-review-v1',{method:'POST',headers:{Authorization:'Bearer synthetic-token'}});
+test('actual rate HTTP response is accepted by separate actual client decoder',async()=>{const f=await fixture(1),p=f.value.rows[0].proposal;const handler=createSnapshotHttpHandler(async()=>({reason:'review_available',proposal:p,mayHaveWritten:true}),[]);const response=await handler(request());assert.equal(response.status,200);const body=await response.json();assert.equal(body.mayHaveWritten,true);const view=await parseRateClientOffer(body,f.value.ownerId,f.value.rows[0].receipt.acceptedAt-1000,digest);assert.equal(view.target.calories,2200);});
+test('legacy HTTP shape is unchanged and cannot enter rate decoder',async()=>{const f=await fixture(1);const handler=createSnapshotHttpHandler(async()=>({reason:'review_available',proposal:{version:'legacy-synthetic'},mayHaveWritten:true}),[]);const response=await handler(request()),body=await response.json();assert.equal(response.status,200);assert.equal(Object.hasOwn(body,'mayHaveWritten'),false);await assert.rejects(()=>parseRateClientOffer(body,f.value.ownerId,f.now,digest));});
+test('rate HTTP missing persistence indicator fails closed before client',async()=>{const f=await fixture(1);const handler=createSnapshotHttpHandler(async()=>({reason:'review_available',proposal:f.value.rows[0].proposal}),[]);assert.equal((await handler(request())).status,503);});

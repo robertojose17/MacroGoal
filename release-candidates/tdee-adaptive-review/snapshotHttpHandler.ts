@@ -24,7 +24,11 @@ export function createSnapshotHttpHandler(runtime:Runtime,allowedOrigins:readonl
   if(!authorization||authorization.length>16384||!/^Bearer [^\s]+$/.test(authorization))return reply(401,'authentication_required');
   try{
    const result=await runtime({authorization});
-   if(result.reason==='review_available'&&result.proposal!==null)return reply(200,'review_available',result.proposal);
+   if(result.reason==='review_available'&&result.proposal!==null){
+    const rate=typeof result.proposal==='object'&&(result.proposal as {version?:unknown}).version==='rate-proposal-record-v1';
+    if(rate&&result.mayHaveWritten!==true)return reply(503,'source_error');
+    return reply(200,'review_available',result.proposal,rate&&result.mayHaveWritten===true);
+   }
    // Preserve successful calibration and uncertain writes before auth/error mapping.
     if(result.reason==='calibration_required'&&result.proposal===null&&result.mayHaveWritten===true)return reply(202,'calibration_required',null,true);
     if(['same_anchored_target','policy_limit','same_rate_target','within_product_tolerance','coverage_insufficient','target_or_trend_unavailable','rate_uncertainty_unverified','rate_difference_uncertain'].includes(result.reason)&&result.proposal===null)return reply(200,'no_change',null,result.mayHaveWritten===true);
