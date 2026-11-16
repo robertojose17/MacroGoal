@@ -45,7 +45,7 @@ export function prepareSnapshotProposal(input:SnapshotAdjustmentInput,b:Snapshot
  if(!input.macroBinding||!input.macroContext)return block('macro_context_required');
  const mc=input.macroContext;
  const macroEvidence={
-  version:'snapshot-macro-context-v1',allocationMode:'smart-preserve-adequate-protein-v1',
+  version:'snapshot-macro-context-v1',allocationMode:draft.allocationMode,
   binding:structuredClone(input.macroBinding),
   review:structuredClone(mc.review),
   limits:structuredClone(mc.limits),
