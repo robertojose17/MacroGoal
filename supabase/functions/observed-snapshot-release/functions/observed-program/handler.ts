@@ -81,15 +81,19 @@ export function createObservationHandler(deps: ObservationDependencies) {
       let rateDiagnostic: ReturnType<typeof observedRateDiagnostic> | undefined;
       if (context.premium && context.enabled) {
         const now = new Date(snapshot.capturedAt);
-        const fingerprint = context.fingerprint;
         const sources = snapshot.sources!;
         if (todayInZone(now, sources.timezone) !== context.today) return reply(409, { error: 'context_changed' });
         estimate = estimateFromSources(sources, now);
-        context = parseObservationContext(await deps.context(authorization), owner);
-        if (context.fingerprint !== fingerprint || !context.premium || !context.enabled)
-          return reply(409, { error: 'context_changed' });
-        if (requestedView === 'program') rateDiagnostic = observedRateDiagnostic(snapshot, owner, Date.now());
       }
+      // The atomic snapshot may omit the caller-scoped access expiry. Re-read
+      // the authoritative context even when observations are disabled; otherwise
+      // a fresh provider grant loses its expiry on the disabled response path.
+      const current = parseObservationContext(await deps.context(authorization), owner);
+      if (current.fingerprint !== context.fingerprint || current.premium !== context.premium || current.enabled !== context.enabled)
+        return reply(409, { error: 'context_changed' });
+      context = current;
+      if (context.premium && context.enabled && requestedView === 'program')
+        rateDiagnostic = observedRateDiagnostic(snapshot, owner, Date.now());
       return reply(200, requestedView === 'estimate' ? {...markedEstimate(estimate ?? emptyTdee()),...(context.accessValidUntil === undefined ? {} : {accessValidUntil:context.accessValidUntil})} : view(context, estimate, rateDiagnostic));
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
@@ -98,3 +102,4 @@ export function createObservationHandler(deps: ObservationDependencies) {
     }
   };
 }
+
