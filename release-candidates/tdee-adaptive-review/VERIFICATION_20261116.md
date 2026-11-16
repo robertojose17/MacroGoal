@@ -105,3 +105,10 @@ With owner authorization, ai-coach-daily v14 now includes an exact internal subp
 - Cron count remains 33, scheduler ledger/receipts empty, selector cursor revision 0, and production acceptor unchanged. Existing progress-intelligence was not modified. No TestFlight submission, active schedule, provider refresh through the new worker, actionable recommendation or acceptance occurred.
 
 The service transport/authentication problem and function quota obstacle are resolved without weakening the gateway. This does not prove an enabled daily evaluation. Worker and SQL gates remain OFF. Genuine calibration/uncertainty/policy evidence, complete acceptance-time parity and positive end-to-end goal/history/consumer checks remain separate requirements.
+
+## Nullable policy shape installed without activation
+Migration `20261116142518_nullable_tdee_policy_increment_without_activation` adds nullable integer `increment_kcal` with no default or backfill, constrained to 1 through the policy's own max_step_kcal only when supplied. Policies remain empty. It removes a schema representation gap, not the absence of a genuinely reviewed value or policy.
+
+The DDL first compiled in rollback. Installation metadata confirms nullable/no default and the exact check; cron remains unchanged. The combined suite is now 319 passing tests. Four additional tests verify missing/null/invalid increments fail closed with no fallback, explicit synthetic shape preserves its value, and review/eligibility gates are not replaced by this field. No operational review/policy fixture was inserted.
+
+Remaining decisions are substantive, not transport permissions: validated uncertainty method and its evidence, the initial calibration/anchor contract, an applicable explicit increment and reviewed policy/nutrition limits, and total-deficit handling before reductions. Full 14-day acceptance parity and positive downstream verification remain engineering work. None is inferred from adding a column; worker, recommendations and acceptance stay OFF.
