@@ -1,3 +1,5 @@
+import {rateReviewRequest,rateReviewEvidence} from './rateReviewEvidence.ts';
+import {rateMacroRequest,buildRateReviewedContext} from './rateReviewedContext.ts';
 /** Server-only candidate ports. No entrypoint mount, release switch or policy defaults. */
 import {nutritionReviewExpected,nutritionReviewEvidence} from './nutritionReviewEvidence.ts';
 import {createSnapshotReviewOrchestrator,type SnapshotOrchestrationPorts,type ServerPolicyBinding} from './snapshotReviewOrchestration.ts';
@@ -11,7 +13,7 @@ const RPC=Object.freeze({
  context:'observed_get_dynamic_tdee_context_v1',
  read:'tdee_read_review_context_v1',policy:'tdee_read_snapshot_policy_v1',
  bootstrap:'tdee_bootstrap_snapshot_review_v1',refresh:'tdee_refresh_snapshot_eligibility_v1',
- issue:'tdee_issue_snapshot_proposal_v1',choice:'tdee_read_macro_choice_v1',nutrition:'tdee_read_nutrition_review_v1'
+ issue:'tdee_issue_snapshot_proposal_v1',choice:'tdee_read_macro_choice_v1',nutrition:'tdee_read_nutrition_review_v1',rate:'tdee_read_rate_review_v1'
 });
 
 /** Only validates a read from the authenticated own-actor RPC, never request body data.
@@ -133,6 +135,25 @@ export function createSnapshotOrchestrationSupabasePorts(config:SnapshotOrchestr
     const value=await serviceRpc(RPC.nutrition,{p_owner:actor,p_expected:nutritionReviewExpected(copied,fixed.engineVersion)});
     evidence.review=nutritionReviewEvidence(actor,copied,fixed.engineVersion,value,Date.now());
     return evidence;
+   }catch{throw new Error('source_error');}
+  },
+  async loadReviewedRateContext(actor,snapshot,proposalId,token){
+   try{
+    const copied=structuredClone(snapshot),now=Date.now();
+    const expected=rateReviewRequest(copied,actor,fixed,now),request=rateMacroRequest(copied,actor,fixed,now);
+    if(!expected||!request)return null;
+    // Fixed service getter only. Never accept a review object or approval flag
+    // from snapshot/request; server provenance is validated independently.
+    const raw=await serviceRpc(RPC.rate,{p_owner:actor,p_expected:expected});
+    const review=rateReviewEvidence(expected,raw,Date.now());
+    if(!review)return null;
+    const choice=await own(token).rpc(RPC.choice);
+    if(choice.error)throw new Error('source_error');
+    const macro=macroPreferenceEvidence(actor,request,structuredClone(choice.data),Date.now());
+    if(macro.preferenceStatus!=='current')return null;
+    const nutrition=await serviceRpc(RPC.nutrition,{p_owner:actor,p_expected:nutritionReviewExpected(request,fixed.engineVersion)});
+    macro.review=nutritionReviewEvidence(actor,request,fixed.engineVersion,nutrition,Date.now());
+    return buildRateReviewedContext(copied,actor,proposalId,fixed,review,macro,Date.now());
    }catch{throw new Error('source_error');}
   },
   async bootstrapAsService(record){return serviceRpc(RPC.bootstrap,{p_record:record});},
