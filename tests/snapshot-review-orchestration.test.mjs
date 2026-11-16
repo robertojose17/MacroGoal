@@ -154,7 +154,8 @@ test('initial14 route does not bootstrap or require legacy21d when interval unav
  const v=initial14Fixture(),cut='2026-10-31';
  v.observation.sources.checkIns=v.observation.sources.checkIns.filter(w=>w.date>=cut);
  v.observation.counts.checkIns=v.observation.sources.checkIns.length;
- const s=initial14(v);assert.equal(s.phase,'done');assert.equal(s.outcome.reason,'rate_uncertainty_unverified');
+ const pending=initial14(v);assert.equal(pending.phase,'load_rate_review');
+ const s=advance(pending,null);assert.equal(s.phase,'done');assert.equal(s.outcome.reason,'rate_reviewed_context_unavailable');
  assert.equal(s.outcome.mayHaveWritten,false);assert.equal(s.outcome.proposal,null);
  assert.equal(s.plan,undefined);assert.equal(s.record,undefined);
 });
@@ -173,3 +174,4 @@ test('initial14 server selection cannot enable OFF or accept request version ove
  assert.equal((await run({authorization:'Bearer token',engineVersion:'rate-review-14d-v1'})).reason,'invalid_request');
  assert.equal(calls,0);
 });
+
