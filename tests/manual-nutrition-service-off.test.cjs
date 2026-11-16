@@ -4,8 +4,10 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const ts=require(process.env.TS_TEST_COMPILER_PATH || 'typescript');
-test('real service OFF factory throws before constructing any storage or network dependency',()=>{
- const source=fs.readFileSync(path.join(__dirname,'../utils/manualNutritionEvidenceServices.ts'),'utf8');
+test('disabled service factory throws before constructing any storage or network dependency',()=>{
+ const released=fs.readFileSync(path.join(__dirname,'../utils/manualNutritionEvidenceServices.ts'),'utf8');
+ assert.match(released,/MANUAL_NUTRITION_EVIDENCE_ENABLED=true/);
+ const source=released.replace('MANUAL_NUTRITION_EVIDENCE_ENABLED=true','MANUAL_NUTRITION_EVIDENCE_ENABLED=false');
  const calls=[];const forbidden=()=>{calls.push('io');throw Error('unexpected_io');};
  const dependencies={
  '@react-native-async-storage/async-storage':{getItem:forbidden,setItem:forbidden,getAllKeys:forbidden,removeItem:forbidden},
@@ -21,10 +23,10 @@ test('real service OFF factory throws before constructing any storage or network
  assert.deepEqual(calls,[]);
 });
 function enabledBranchHarness(corrupt=false){
- // Unit harness only: exercising the otherwise unreachable branch does not activate the application.
+ // Unit harness uses fake dependencies only; it never contacts the application or database.
  const original=fs.readFileSync(path.join(__dirname,'../utils/manualNutritionEvidenceServices.ts'),'utf8');
- assert.match(original,/MANUAL_NUTRITION_EVIDENCE_ENABLED=false/);
- const source=original.replace('MANUAL_NUTRITION_EVIDENCE_ENABLED=false','MANUAL_NUTRITION_EVIDENCE_ENABLED=true');
+ assert.match(original,/MANUAL_NUTRITION_EVIDENCE_ENABLED=true/);
+ const source=original;
  const calls=[];let entry={ownerId:'owner',itemId:'item',request:{requestId:'request',expected:{values:'private'}}};let owner='owner';
  const transport={requireSession:async expected=>{calls.push('session');if(owner!==expected)throw Error('account_changed');},dispose(){}};
  const journal={discardInvalidKeyExact:async(o,k,raw)=>{calls.push('discard-key');assert.equal(o,'owner');assert.equal(k,'own-private-corrupt-key');assert.equal(raw,'not-json');return true;},discardInvalidExact:async(o,r,raw)=>{calls.push('discard-invalid');assert.equal(o,'owner');assert.equal(r,'request');assert.equal(raw,'not-json');return true;},inspectOwnerPending:async()=>{calls.push('list');return corrupt==='key'?[{kind:'invalid-key',storageKey:'own-private-corrupt-key',raw:'not-json'}]:corrupt?[{kind:'invalid',requestId:'request',raw:'not-json'}]:[{kind:'valid',entry}];},read:async()=>{calls.push('read');return entry;},clearExact:async(_o,_r,value)=>{calls.push('clear');assert.equal(value,entry);entry=null;return true;},listPending:async()=>[]};

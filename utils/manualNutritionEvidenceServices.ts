@@ -4,8 +4,8 @@ import {supabase,SUPABASE_PROJECT_URL,supabasePublicKey} from '@/lib/supabase/cl
 import {createManualNutritionEvidenceTransport} from './manualNutritionEvidenceTransport';
 import {createManualNutritionEvidenceJournal} from './manualNutritionEvidenceJournal';
 import {createManualNutritionEvidenceController} from './manualNutritionEvidenceController';
-/** Runtime release remains OFF until review, authenticated QA and bundle validation. */
-export const MANUAL_NUTRITION_EVIDENCE_ENABLED=false;
+/** Reviewed manual-entry metadata release. TDEE recommendation release is separate and remains OFF. */
+export const MANUAL_NUTRITION_EVIDENCE_ENABLED=true;
 /** Requests use the signed-in account. Journal contains nutrition requests, never tokens. */
 export function makeManualNutritionEvidenceServices(isCurrent:(owner:string)=>boolean){
  if(!MANUAL_NUTRITION_EVIDENCE_ENABLED)throw Error('manual_evidence_disabled');
