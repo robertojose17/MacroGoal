@@ -1,3 +1,5 @@
+import {isInitialRateAnchorCurrent} from './rateAnchorPersistencePlan.ts';
+import {prepareAcceptedIntakeRateAnchor,type AcceptedIntakeRateAnchor} from './acceptedIntakeRateAnchor.ts';
 import {compareInitialRateToTarget} from './rateAdjustmentDecision.ts';
 import {adjustSmartMacros, type MacroAllocationMode, type SmartMacroBinding, type SmartMacroContext} from './smartMacroAdjustment.ts';
 /**
@@ -22,14 +24,60 @@ export type SnapshotAdjustmentInput={
   capturedAt:number;fingerprint:string;stability:'stable'|'uncertain';goalDirectionValid:boolean};
  now:number;
 };
+/** Initial rate-anchor input is ephemeral server-prepared, not deserialized HTTP. */
+export type AcceptedIntakeRateAdjustmentInput=Omit<SnapshotAdjustmentInput,'anchor'|'observedExpenditure'|'rateReview'>&{
+ anchor:AcceptedIntakeRateAnchor;observedExpenditure?:never;rateReview:NonNullable<SnapshotAdjustmentInput['rateReview']>;
+};
+export type PersistedRateAnchorReference={ownerId:string;version:number;sourceRequestId:string;sourceGoalId:string};
+const admittedRateInputs=new WeakMap<object,{anchor:string;reference?:PersistedRateAnchorReference}>();
+/** Source must come from the coherent trusted SQL goal/receipt/profile loader.
+ * No source is accepted from HTTP. An arbitrary tagged object is never admitted. */
+export function prepareAcceptedIntakeRateAdjustment(source:unknown,actor:string,
+ input:Omit<SnapshotAdjustmentInput,'anchor'|'observedExpenditure'|'rateReview'>&{rateReview:NonNullable<SnapshotAdjustmentInput['rateReview']>}){
+ if(!input||input.rateReview===undefined)return {kind:'blocked' as const,reason:'rate_review_required'};
+ const prepared=prepareAcceptedIntakeRateAnchor(source,actor,input.now);
+ if(prepared.kind!=='rate_anchor_draft')return prepared;
+ return admitAcceptedRateInput(prepared.anchor,actor,input);
+}
+function admitAcceptedRateInput(a:AcceptedIntakeRateAnchor,actor:string,input:Omit<SnapshotAdjustmentInput,'anchor'|'observedExpenditure'|'rateReview'>&{rateReview:NonNullable<SnapshotAdjustmentInput['rateReview']>},reference?:PersistedRateAnchorReference){
+ const g=a.baselineGoalSnapshot;
+ if(!input.current||input.current.calories!==g.daily_calories||input.current.proteinG!==g.protein_g||
+ input.current.carbsG!==g.carbs_g||input.current.fatsG!==g.fats_g||input.current.fiberG!==g.fiber_g||
+ input.macroBinding?.ownerId!==actor||input.macroBinding?.goalId!==a.initialGoalId||input.macroBinding?.goalRevision!==a.initialGoalRevision)
+ return {kind:'blocked' as const,reason:'rate_anchor_binding_mismatch'};
+ const value:AcceptedIntakeRateAdjustmentInput={...structuredClone(input),anchor:structuredClone(a)};
+ // Copying/serializing a prepared input strips this local admission capability.
+ admittedRateInputs.set(value,{anchor:JSON.stringify(value.anchor),reference:reference?structuredClone(reference):undefined});return {kind:'rate_input_prepared' as const,actionable:false as const,input:value};
+}
+/** Existing anchor verification is distinct from initial creation. No reset or
+ * pretend absence: provenance is recomputed only for exact stored-head comparison. */
+export function prepareCurrentAcceptedIntakeRateAdjustment(source:unknown,actor:string,
+ input:Omit<SnapshotAdjustmentInput,'anchor'|'observedExpenditure'|'rateReview'>&{rateReview:NonNullable<SnapshotAdjustmentInput['rateReview']>},expected:PersistedRateAnchorReference){
+ const s=source as {existingAnchor?:{kind?:string;ownerId?:string;version?:number;sourceRequestId?:string;sourceGoalId?:string;anchor?:AcceptedIntakeRateAnchor}}|null,h=s?.existingAnchor;
+ if(!input||input.rateReview===undefined||!expected||!h||h.kind!=='rate_anchor_head'||h.ownerId!==actor||expected.ownerId!==actor||
+ !Number.isSafeInteger(h.version)||h.version!<1||h.version!==expected.version||!h.anchor||
+ h.sourceRequestId!==expected.sourceRequestId||h.sourceGoalId!==expected.sourceGoalId||h.anchor.sourceReceipt?.requestId!==expected.sourceRequestId||h.anchor.initialGoalId!==expected.sourceGoalId||
+ !isInitialRateAnchorCurrent(h.anchor,source,actor,input.now))return {kind:'blocked' as const,reason:'stored_rate_anchor_unverified'};
+ return admitAcceptedRateInput(h.anchor,actor,input,expected);
+}
+export function preparedRateAnchorReference(input:AcceptedIntakeRateAdjustmentInput):PersistedRateAnchorReference|null{
+ const proof=admittedRateInputs.get(input);return proof?.reference&&proof.anchor===JSON.stringify(input.anchor)?structuredClone(proof.reference):null;
+}
 export type SnapshotAdjustmentResult={kind:'blocked'|'no_change';reason:string;reevaluateAt?:number}|
  {kind:'draft';actionable:false;allocationMode:MacroAllocationMode;target:SnapshotTarget;deltaKcal:number;netDeltaKcal:number;sourceFingerprint:string;sourceCapturedAt:number;contract:'as-of-revalidated-v1'};
 const finite=(n:unknown):n is number=>typeof n==='number'&&Number.isFinite(n);
 const positive=(n:unknown):n is number=>finite(n)&&n>0;
 const blocked=(reason:string):SnapshotAdjustmentResult=>({kind:'blocked',reason});
-export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotAdjustmentResult {
+export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput|AcceptedIntakeRateAdjustmentInput):SnapshotAdjustmentResult {
  if(!input||!input.current||!input.anchor||!input.policy||!input.evidence||!finite(input.now))return blocked('invalid_input');
- const {current:g,anchor:a,policy:p,evidence:e,now}=input;
+ const rateAnchor=typeof input.anchor==='object'&&'contract' in input.anchor&&input.anchor.contract==='accepted-intake-rate-anchor-v1';
+ if(rateAnchor&&(admittedRateInputs.get(input)?.anchor!==JSON.stringify(input.anchor)||input.rateReview===undefined||Object.hasOwn(input,'observedExpenditure')))return blocked('rate_anchor_unverified');
+ const {current:g,policy:p,evidence:e,now}=input;
+ const original=input.anchor;
+ const a=rateAnchor?{baselineCapturedAt:(original as AcceptedIntakeRateAnchor).acceptedAt,
+ intake:(original as AcceptedIntakeRateAnchor).baselineIntakeKcal,expenditure:undefined,
+ acceptedDelta:(original as AcceptedIntakeRateAnchor).acceptedDeltaKcal,acceptedCount:original.acceptedCount,
+ receiptsVerified:true,lastAcceptedAt:original.lastAcceptedAt}:original as SnapshotAdjustmentInput['anchor'];
  if(p.reviewed!==true||e.eligible!==true||e.modelReviewed!==true)return blocked('review_required');
  if(e.logging!=='confirmed')return blocked('logging_confirmation_required');
  if(e.stability!=='stable'||e.goalDirectionValid!==true)return blocked('evidence_uncertain');
@@ -41,7 +89,7 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
  if(!positive(g.calories)||![g.proteinG,g.carbsG,g.fatsG,g.fiberG].every(n=>finite(n)&&n>=0)||
   Math.abs(g.calories-4*g.proteinG-4*g.carbsG-9*g.fatsG)>10)return blocked('current_target_invalid');
  if(g.calories<p.minIntakeKcal||g.calories>p.maxIntakeKcal)return blocked('current_target_outside_policy');
- if(!positive(a.intake)||!positive(a.expenditure)||!positive(input.observedExpenditure)||!finite(a.acceptedDelta)||
+ if(!positive(a.intake)||(!rateAnchor&&(!positive(a.expenditure)||!positive(input.observedExpenditure)))||!finite(a.acceptedDelta)||
   a.receiptsVerified!==true||!Number.isSafeInteger(a.acceptedCount)||a.acceptedCount<0||a.intake+a.acceptedDelta!==g.calories||Math.abs(a.acceptedDelta)>p.maxNetDeltaKcal)return blocked('anchor_mismatch');
  if(a.lastAcceptedAt!==null&&(!finite(a.lastAcceptedAt)||a.lastAcceptedAt>now))return blocked('acceptance_history_invalid');
  if((a.acceptedCount>0&&a.lastAcceptedAt===null)||(a.acceptedCount===0&&(a.acceptedDelta!==0||a.lastAcceptedAt!==null)))return blocked('acceptance_history_invalid');
@@ -77,7 +125,8 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
   if(!finite(difference))return blocked('rate_numeric_range_invalid');
  }else{
   // Preserve the original accepted energy gap; never subtract another deficit.
-  const desired=a.intake+(input.observedExpenditure-a.expenditure);
+  const legacy=input as SnapshotAdjustmentInput;
+  const desired=a.intake+(legacy.observedExpenditure-legacy.anchor.expenditure);
   difference=desired-g.calories;
  }
  if(difference===0)return {kind:'no_change',reason:input.rateReview?'same_rate_target':'same_anchored_target'};
