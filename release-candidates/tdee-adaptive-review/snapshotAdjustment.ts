@@ -1,5 +1,5 @@
 import {compareInitialRateToTarget} from './rateAdjustmentDecision.ts';
-import {adjustSmartMacros, type SmartMacroBinding, type SmartMacroContext} from './smartMacroAdjustment.ts';
+import {adjustSmartMacros, type MacroAllocationMode, type SmartMacroBinding, type SmartMacroContext} from './smartMacroAdjustment.ts';
 /**
  * Snapshot-as-of bidirectional engine. Pure, not an active application binding.
  * Thresholds are explicit policy inputs, not clinical assurances.
@@ -23,7 +23,7 @@ export type SnapshotAdjustmentInput={
  now:number;
 };
 export type SnapshotAdjustmentResult={kind:'blocked'|'no_change';reason:string;reevaluateAt?:number}|
- {kind:'draft';actionable:false;target:SnapshotTarget;deltaKcal:number;netDeltaKcal:number;sourceFingerprint:string;sourceCapturedAt:number;contract:'as-of-revalidated-v1'};
+ {kind:'draft';actionable:false;allocationMode:MacroAllocationMode;target:SnapshotTarget;deltaKcal:number;netDeltaKcal:number;sourceFingerprint:string;sourceCapturedAt:number;contract:'as-of-revalidated-v1'};
 const finite=(n:unknown):n is number=>typeof n==='number'&&Number.isFinite(n);
 const positive=(n:unknown):n is number=>finite(n)&&n>0;
 const blocked=(reason:string):SnapshotAdjustmentResult=>({kind:'blocked',reason});
@@ -94,6 +94,6 @@ export function draftSnapshotAdjustment(input:SnapshotAdjustmentInput):SnapshotA
  const allocation=adjustSmartMacros({current:g,newCalories:calories,now,sourceFingerprint:e.fingerprint,binding:input.macroBinding,context:input.macroContext});
  if(allocation.kind!=='candidate')return blocked(allocation.reason);
  const target=allocation.target;
- return {kind:'draft',actionable:false,target,deltaKcal:delta,netDeltaKcal:a.acceptedDelta+delta,
+ return {kind:'draft',actionable:false,allocationMode:allocation.allocationMode,target,deltaKcal:delta,netDeltaKcal:a.acceptedDelta+delta,
   sourceFingerprint:e.fingerprint,sourceCapturedAt:e.capturedAt,contract:'as-of-revalidated-v1'};
 }
