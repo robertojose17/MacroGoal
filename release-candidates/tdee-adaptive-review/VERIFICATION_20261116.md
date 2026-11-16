@@ -25,8 +25,28 @@ The allocation mode is carried through draft and proposal evidence. The rollback
 ## Remaining release gates
 recommendationsEnabled=false, acceptanceEnabled=false and reviewedPolicyId=null remain unchanged. The new manual/acceptance candidate is source-only and is not the deployed observation bundle.
 
-The 14-day route still produces an assessment rather than an actionable issued proposal. Operational policy/applicable nutrition review records, appropriate uncertainty handling, daily evaluation/seven-day reassessment scheduling, SQL hardening execution, and positive proposal→explicit acceptance→goal/history/consumer synchronization remain unfinished. No positive enabled core-acceptance test is claimed.
+The 14-day route now has a pure preparation bridge and an optional authoritative-review orchestration phase, described below. It still cannot issue an actionable live proposal. Operational policy/applicable review records, live scheduling, SQL hardening execution and positive proposal→explicit acceptance→goal/history/consumer synchronization remain unfinished. No positive enabled core-acceptance test is claimed.
 
 The user's reference ranges and approval authorize design/implementation; they are not evidence of an independent clinical validation or of any particular person's eligibility. Do not seed fictitious reviewed operational records to pass activation gates.
 
 No TestFlight submission occurred.
+
+## Subsequent 14-day and daily-scheduler source integration
+- The 14-day bridge recomputes the actual snapshot diagnostic and 8-weight/10-complete-day coverage. It binds an explicitly supplied reviewed uncertainty interval and conversion to exact owner, goal revision, profile, journey, policy, source and calendar window. It checks the actual receipt chain rather than accepting a receipt-verification boolean.
+- Synthetic positive preparation uses the existing bounded macro allocator, a maximum 200 kcal step, unchanged cooldown and explicit acceptance. It does not estimate confidence from pairwise slope extrema, invent a review, replace the 14-day route with the legacy 21-day model, or authorize calorie reductions.
+- The orchestration phase defaults closed without an authoritative reviewed-rate loader. Even successful preparation ends at rate_acceptance_contract_unavailable with no issuer call or externally offered proposal. Source artifacts are not a live feature.
+- The pure daily scheduler uses local calendar dates and stable goal/profile/journey scope, not rolling food fingerprints. Atomic claim/revision contracts, claim revalidation, interrupted outcomes, authoritative reconciliation, DST/timezone changes and first-uncertainty plus seven elapsed days are covered. Daily polls do not postpone the seven-day deadline. The immutable scheduler switch remains OFF and invokes no ports.
+- The rollback-only acceptance SQL candidate now uses the requested 19+ age floor and explicitly rejects the new 14-day/rateEvidence contract until an acceptance-time validator exists. Source assertions check these guards; SQL execution is not claimed.
+
+### Decisions and implementation still required
+1. Define and validate the uncertainty method that can supply the reviewed interval. Coverage alone does not establish precision. No method or interval has been approved or manufactured by these tests.
+2. Define the initial 14-day anchor/calibration contract. The bridge requires a genuine existing receipt-verified anchor; it does not bootstrap a baseline expenditure from insufficient evidence.
+3. Bind actual operational policy limits and individual nutrition eligibility, including protein reference weight and any exceptions. Define individual total-deficit handling before allowing reductions.
+4. Implement authoritative rate-review loading/storage, acceptance-time locked revalidation, durable scheduler ledger/hold storage and bounded scheduler dispatch. No cron or persistent schedule was installed.
+5. Verify positive acceptance and all downstream goal/history/consumer synchronization, revocation, expiry, replay and concurrency using genuine prerequisites, then consider activation. User approval of implementation is not a substitute for those engineering checks.
+
+### Final integrated checks for this source increment
+- 233 tests passed, zero failed/skipped: the 194-test baseline plus 12 new 14-day tests, 25 scheduler tests and 2 SQL-source assertions.
+- Deno type checking passed for every candidate TypeScript module and the full observation entrypoint import graph using existing cached tooling.
+- Independent review found and fixed scheduler completion-time clock rollback and malformed-hold handling; both have regression tests.
+- No live data, database definitions, deployment, TTL, release switches or TestFlight state changed in this increment. Source-only checks do not prove enabled scheduler concurrency or live acceptance.
