@@ -469,7 +469,9 @@ export default function SettingsScreen() {
     setEditingField(field);
   };
 
-  const recalculateGoals = (_profile: unknown, _goal: unknown) => { Alert.alert('Review accepted targets', 'Changes require a new review and confirmation in Edit Goals.', [{ text: 'Open Edit Goals', onPress: () => router.push('/edit-goals') }, { text: 'Cancel', style: 'cancel' }]); };
+  const recalculateGoals = (_profile: unknown, _goal: unknown) => {
+    if (Platform.OS === 'web') { router.push('/edit-goals'); return; }
+    Alert.alert('Review accepted targets', 'Changes require a new review and confirmation in Edit Goals.', [{ text: 'Open Edit Goals', onPress: () => router.push('/edit-goals') }, { text: 'Cancel', style: 'cancel' }]); };
   // The modal owns its original profile/goal CAS and units until dismissed.
   const closeEditModal = () => { modalCurrent.current = () => false; setEditingField(null); setEditValue(''); setEditValue2(''); };
   const saveProfilePatch = async (patch: Database['public']['Tables']['users']['Update'], snapshot: GoalEditorSnapshot, current: () => boolean) => {
@@ -1100,6 +1102,7 @@ export default function SettingsScreen() {
                       value={goalTypeDisplayValue}
                       onPress={() => {
                         console.log('[Profile] Goal type field tapped');
+                        if (Platform.OS === 'web') { router.push('/edit-goals'); return; }
                         Alert.alert(
                           t('profile.selectGoal'),
                           '',
@@ -1166,6 +1169,7 @@ export default function SettingsScreen() {
                       value={macroPresetDisplayValue}
                       onPress={() => {
                         console.log('[Profile] Macro Split row tapped, current preset:', currentMacroPreset);
+                        if (Platform.OS === 'web') { router.push('/edit-goals'); return; }
                         Alert.alert(
                           t('profile.selectMacroSplit'),
                           '',
@@ -1297,18 +1301,10 @@ export default function SettingsScreen() {
                     {/* Recalculate Goals button */}
                     <TouchableOpacity
                       style={[styles.recalculateButton, { borderColor: colors.primary }]}
-                      onPress={async () => {
-                        console.log('[Profile] Recalculate Goals button pressed');
+                      onPress={() => {
                         if (!user || !goal) return;
-                        setSaving(true);
-                        try {
-                          await recalculateGoals(user, goal);
-                          Alert.alert(t('profile.goalsUpdated'), t('profile.goalsRecalculated'));
-                        } catch (e: any) {
-                          Alert.alert(t('common.error'), t('errors.failedToSave'));
-                        } finally {
-                          setSaving(false);
-                        }
+                        // Opening review is navigation only, not a saved goal change.
+                        recalculateGoals(user, goal);
                       }}
                     >
                       <IconSymbol
@@ -2862,4 +2858,3 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
-
