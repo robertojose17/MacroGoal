@@ -1,0 +1,50 @@
+name: Synthetic browser journal checks
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tdee-browser-journal.yml'
+      - 'tests/browser-journal/**'
+      - 'utils/*Journal*.ts'
+      - 'utils/browserEncryptedJournalStorage.ts'
+      - 'hooks/useAcceptedGoalEditor.ts'
+      - 'hooks/useInitialOnboarding.ts'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: tdee-browser-journal-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  chromium:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      EXPO_NO_DOTENV: '1'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.11.0'
+      - name: Install only locked isolated browser test tooling
+        working-directory: tests/browser-journal
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install pinned Playwright Chromium and system dependencies
+        working-directory: tests/browser-journal
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Check harness syntax
+        working-directory: tests/browser-journal
+        run: npm run check
+      - name: Actual repository modules in isolated Chromium
+        working-directory: tests/browser-journal
+        run: npm test
+      - name: Emit synthetic JSON evidence even on failure
+        if: always()
+        working-directory: tests/browser-journal
+        run: test ! -f results.json || cat results.json

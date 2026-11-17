@@ -1,0 +1,4 @@
+<!doctype html><script type="module">
+import{createBrowserGoalRequestJournal}from'./browserDurableRequestJournals.js';
+addEventListener('message',async e=>{if(e.origin!==location.origin)return;const{id,entry,project,method}=e.data;try{const j=createBrowserGoalRequestJournal(project);let value=method==='prepare'?await j.prepare(entry):await j.load(entry.owner);parent.postMessage({id,ok:true,value},location.origin);}catch(error){parent.postMessage({id,ok:false,error:error.message},location.origin);}});parent.postMessage({ready:true},location.origin);
+</script>

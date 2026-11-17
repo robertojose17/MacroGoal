@@ -1,3 +1,4 @@
+import { acceptedGoalJournalAvailable } from '@/utils/acceptedGoalJournalCapability';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { Platform } from 'react-native';
@@ -20,8 +21,9 @@ function errorMessage(error: unknown): string { return error instanceof Error ? 
 
 export function useAcceptedGoalEditor(autoLoad = true) {
   // SecureStore recovery is a write prerequisite, not an authentication or
-  // profile-reading prerequisite. Browsers currently support read-only goals.
-  const nativeEditingSupported = Platform.OS === 'ios' || Platform.OS === 'android';
+  // profile-reading prerequisite on unsupported browsers. Supported web uses the
+  // same durable recovery protocol before editing; API presence is not storage proof.
+  const journalEditingSupported = acceptedGoalJournalAvailable(Platform.OS);
   const [snapshot, setSnapshot] = useState<GoalEditorSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -47,7 +49,7 @@ export function useAcceptedGoalEditor(autoLoad = true) {
       const auth = await supabase.auth.getUser();
       if (auth.error || !auth.data.user || !latestRead()) throw new Error('Account unavailable');
       const id = auth.data.user.id; const bound = bind(id);
-      if (nativeEditingSupported) await bound.recover(() => isCurrent(id, revision) && latestRead());
+      if (journalEditingSupported) await bound.recover(() => isCurrent(id, revision) && latestRead());
       if (bound.save.pendingScope() === 'initial_onboarding') throw new Error('An onboarding request is unresolved. Reopen onboarding to retry or review that exact request.');
       const [profile, goal] = await Promise.all([
         supabase.from('users').select('*').eq('id', id).maybeSingle(),
@@ -62,7 +64,7 @@ export function useAcceptedGoalEditor(autoLoad = true) {
       if (latestRead()) { setSnapshot(null); setError(errorMessage(failure)); }
       throw failure;
     } finally { if (latestRead()) setLoading(false); }
-  }, [bind, isCurrent, nativeEditingSupported]);
+  }, [bind, isCurrent, journalEditingSupported]);
   useFocusEffect(useCallback(() => {
     active.current = true; epoch.current += 1;
     if (autoLoad) void refresh().catch(() => {});
@@ -79,7 +81,7 @@ export function useAcceptedGoalEditor(autoLoad = true) {
     return () => { data.subscription.unsubscribe(); unsubscribe.current?.(); active.current = false; epoch.current += 1; };
   }, []);
   const run = useCallback(async (kind: 'save' | 'restart', input?: Parameters<SaveController['save']>[0] | Parameters<RestartController['save']>[0]) => {
-    if (!nativeEditingSupported) throw new Error('Goal editing is unavailable in this browser. Your current profile and targets can still be viewed.');
+    if (!journalEditingSupported) throw new Error('Goal editing is unavailable in this browser. Your current profile and targets can still be viewed.');
     const current = session.current, id = owner.current, revision = epoch.current;
     if (!current || !id || !isCurrent(id, revision)) throw new Error('Account changed. Reopen this screen.');
     const target = kind === 'save' ? current.save : current.restart;
@@ -102,9 +104,9 @@ export function useAcceptedGoalEditor(autoLoad = true) {
       return result;
     } catch (failure) { if (isCurrent(id, revision) && !(failure instanceof AcceptedGoalReadSuperseded)) setError(errorMessage(failure)); throw failure; }
     finally { notify(); }
-  }, [isCurrent, refresh, nativeEditingSupported]);
+  }, [isCurrent, refresh, journalEditingSupported]);
   const review = useCallback(async () => {
-    if (!nativeEditingSupported) return false;
+    if (!journalEditingSupported) return false;
     const current = session.current, id = owner.current, revision = epoch.current;
     if (!current || !id || !isCurrent(id, revision) || current.save.isBusy() || current.restart.isBusy()) return false;
     await current.recover(() => isCurrent(id, revision));
@@ -114,13 +116,14 @@ export function useAcceptedGoalEditor(autoLoad = true) {
     }
     await current.recover(() => isCurrent(id, revision));
     await refresh(); return true;
-  }, [isCurrent, refresh, nativeEditingSupported]);
+  }, [isCurrent, refresh, journalEditingSupported]);
   const capture = useCallback(() => { const id = owner.current, revision = epoch.current; return () => !!id && isCurrent(id, revision); }, [isCurrent]);
   const s = session.current;
-  return { snapshot, loading, error, refresh, run, review, isCurrent, capture, readOnly: !nativeEditingSupported,
+  return { snapshot, loading, error, refresh, run, review, isCurrent, capture, readOnly: !journalEditingSupported,
     busy: !!s && (s.save.isBusy() || s.restart.isBusy()),
     pending: !!s && (s.save.hasPending() || s.restart.hasPending()),
-    canRetrySave: nativeEditingSupported && !!s && s.save.pendingScope() === 'manual_goal' && s.save.canRetry() && !s.restart.ownsPending() && !s.restart.isBusy(),
-    canRetryRestart: nativeEditingSupported && !!s && s.restart.canRetry() && !s.save.ownsPending() && !s.save.isBusy(),
+    canRetrySave: journalEditingSupported && !!s && s.save.pendingScope() === 'manual_goal' && s.save.canRetry() && !s.restart.ownsPending() && !s.restart.isBusy(),
+    canRetryRestart: journalEditingSupported && !!s && s.restart.canRetry() && !s.save.ownsPending() && !s.save.isBusy(),
   };
 }
+

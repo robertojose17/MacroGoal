@@ -1,3 +1,4 @@
+import {createBrowserGoalRequestJournal} from './browserDurableRequestJournals';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from 'expo-crypto';
@@ -6,6 +7,7 @@ import { createGoalRequestJournal } from './goalRequestJournal';
 
 /** Source configuration is not proof of a built artifact; native QA remains required. */
 export function createSecureGoalRequestJournal(project: string, nativeConfigurationDeclared: boolean) {
+  if (Platform.OS === 'web') return createBrowserGoalRequestJournal(project);
   const ensureSupported = async () => {
     if (!nativeConfigurationDeclared || (Platform.OS !== 'ios' && Platform.OS !== 'android') || !await SecureStore.isAvailableAsync()) throw new Error('secure_goal_journal_not_ready');
   };
@@ -42,3 +44,4 @@ export function createSecureGoalRequestJournal(project: string, nativeConfigurat
     },
   });
 }
+

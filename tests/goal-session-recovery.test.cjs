@@ -10,7 +10,7 @@ const newId = '00000000-0000-4000-8000-000000000003';
 const requestId = '00000000-0000-4000-8000-000000000004';
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function goal() { return { id: oldId, user_id: owner, is_active: true, created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-01T00:00:00.123456+00:00', goal_type: 'lose', goal_intensity: 1, target_weight: 70, daily_calories: 2000, protein_g: 150, carbs_g: 200, fats_g: 67, fiber_g: 0, loss_rate_lbs_per_week: 1, macro_preset: 'balanced', start_date: '2026-11-01', start_journey_date: '2026-11-01', base_daily_calories: 2000, last_adaptive_update: null }; }
-function fixture({ reject = null, platform = 'ios', secureUnavailable = false } = {}) {
+function fixture({ reject = null, platform = 'ios', secureUnavailable = false, webReady = false } = {}) {
   const secure = new Map(), witness = new Map(), calls = [], authListeners = new Set();
   let actor = owner, row = goal(), lose = true, paused = null;
   const profile = { id: owner, updated_at: '2026-11-01T01:02:03.123456+00:00', activity_level: 'moderate', goal_weight: 70, onboarding_completed: false };
@@ -52,6 +52,16 @@ function fixture({ reject = null, platform = 'ios', secureUnavailable = false } 
         if (id === '@/lib/supabase/client') return { supabase: client, SUPABASE_PROJECT_URL: 'https://esgptfiofoaeguslgvcq.supabase.co' };
         if (id === 'expo-secure-store') return storage;
         if (id === '@react-native-async-storage/async-storage') return { getItem: async key => witness.get(key) ?? null, setItem: async (key, value) => { witness.set(key, value); }, removeItem: async key => { witness.delete(key); } };
+        if (id === '@/utils/acceptedGoalJournalCapability') return { acceptedGoalJournalAvailable: p => p === 'ios' || p === 'android' || p === 'web' && webReady };
+        // Hook/controller isolation only. Crypto/IDB durability is covered by the separate adapter suite.
+        if (id === './browserDurableRequestJournals') return { createBrowserGoalRequestJournal(project) {
+          const {createGoalRequestJournal} = load('utils/goalRequestJournal.ts');
+          return createGoalRequestJournal({project,newGeneration:crypto.randomUUID,digest:async value=>crypto.createHash('sha256').update(value).digest('hex'),storage:{
+            get:async key=>{if(secureUnavailable)throw Error('browser_storage_failed');const value=secure.get(key)??null;if(key.endsWith('.head')&&value===null&&witness.has(key))throw Error('browser_storage_lost');return value;},
+            set:async(key,value)=>{if(secureUnavailable)throw Error('browser_storage_failed');secure.set(key,value);if(key.endsWith('.head'))witness.set(key,'present');},
+            remove:async key=>{secure.delete(key);witness.delete(key);}
+          }});
+        }};
         if (id === 'react-native') return { Platform: { OS: platform } };
         if (id === 'expo-crypto') return { randomUUID: () => requestId, CryptoDigestAlgorithm: { SHA256: 'SHA256' }, digestStringAsync: async (_, value) => crypto.createHash('sha256').update(value).digest('hex') };
         if (id === './goalChangeEvents') return { emitGoalChanged() {} };
@@ -171,3 +181,17 @@ test('lost-key UI failure does not silently permit another new request', async (
   await assert.rejects(h.render().run('save', { userId: owner, expectedProfileUpdatedAt: f.profile.updated_at, expectedGoal: goal(), operation: 'manual_goal', goal: { fiber_g: 0 }, profile: {}, isCurrent: () => true }));
   assert.equal(f.calls.length, 1); assert.ok(f.witness.size > 0);
 });
+
+
+for(const operation of ['manual_goal','initial_onboarding'])test(`supported web ${operation} cold recovery never auto replays, exact retry persists`,async()=>{
+ const f=fixture({platform:'web',webReady:true}),original=await f.seed(operation);
+ const h=f.process().hook(operation==='manual_goal'?'editor':'onboarding');await flush();
+ assert.equal(f.calls.length,1);
+ if(operation==='manual_goal'){assert.equal(h.render().readOnly,false);assert.equal(h.render().canRetrySave,true);await h.render().run('save');}
+ else {assert.equal(h.render().canRetry,true);assert.equal(await h.render().run(),true);}
+ assert.equal(f.calls.length,2);assert.deepEqual(f.calls[1],original);
+ const cold=f.process().session();await cold.recover(()=>true);assert.equal(cold.save.hasPending(),false);assert.equal(f.calls.length,2);
+});
+test('supported web storage failure blocks form and RPC, not readonly bypass',async()=>{const f=fixture({platform:'web',webReady:true,secureUnavailable:true}),h=f.process().hook('editor');await flush();assert.equal(h.render().snapshot,null);assert.match(h.render().error,/storage/);await assert.rejects(h.render().run('save',{userId:owner,expectedProfileUpdatedAt:f.profile.updated_at,expectedGoal:goal(),operation:'manual_goal',goal:{fiber_g:0},profile:{},isCurrent:()=>true}));assert.equal(f.calls.length,0);});
+test('supported web unknown pending cannot discard and missing head cannot become new request',async()=>{const f=fixture({platform:'web',webReady:true});await f.seed();const h=f.process().hook('editor');await flush();assert.equal(await h.render().review(),false);assert.equal(f.calls.length,1);for(const key of f.secure.keys())if(key.endsWith('.head'))f.secure.delete(key);const cold=f.process().hook('editor');await flush();assert.equal(cold.render().snapshot,null);assert.match(cold.render().error,/lost/);assert.equal(f.calls.length,1);});
+test('supported web account switch invalidates stale retry',async()=>{const f=fixture({platform:'web',webReady:true});await f.seed();const h=f.process().hook('editor');await flush();const old=h.render();f.actor(null);await assert.rejects(old.run('save'));assert.equal(h.render().snapshot,null);assert.equal(f.calls.length,1);});
