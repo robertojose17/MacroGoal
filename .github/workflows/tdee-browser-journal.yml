@@ -58,5 +58,5 @@ jobs:
         if: always()
         env:
           # Temporary diagnostic target for this deployment; remove env to make this step a no-op.
-          DIAGNOSTIC_DEPLOYMENT_URL: 'https://macro-goal--ej3utqm2j7.expo.app/'
+          DIAGNOSTIC_DEPLOYMENT_URL: 'https://macro-goal--yev0y2o08u.expo.app/'
         run: node tests/browser-journal/public-deployment-diagnostic.mjs

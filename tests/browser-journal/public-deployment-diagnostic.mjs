@@ -1,7 +1,7 @@
 // Public GET-only diagnostic, separate from isolated Chromium tests. No cookies, auth, or browser profile.
 const supplied=process.env.DIAGNOSTIC_DEPLOYMENT_URL;
 if(!supplied){console.log(JSON.stringify({diagnostic:'public-deployment-response',skipped:true,reason:'no_target'}));process.exit(0)}
-const allowed=new Set(['macro-goal.expo.app','macro-goal--ej3utqm2j7.expo.app']);
+const allowed=new Set(['macro-goal.expo.app','macro-goal--yev0y2o08u.expo.app']);
 function validate(value){const url=new URL(value);if(url.protocol!=='https:'||!allowed.has(url.hostname)||url.port||url.username||url.password||url.search||url.hash||url.pathname!=='/')throw Error('diagnostic_target_not_allowed');return url.href}
 const targets=[...new Set([validate('https://macro-goal.expo.app/'),validate(supplied)])];
 const headersAllowed=new Set(['date','age','cache-control','etag','last-modified','vary','via','x-cache','x-cache-hits','cf-cache-status','content-type','eas-deployment-id','x-eas-deployment-id','eas-deployment','x-eas-deployment']);
