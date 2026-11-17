@@ -7,7 +7,7 @@ BEGIN
  at_time:=clock_timestamp();at_ms:=floor(extract(epoch FROM at_time)*1000)::bigint;
  SELECT * INTO l FROM tdee_scheduler_private.ledger WHERE owner_id=p_owner AND context_revision=p_scope;
  IF NOT FOUND OR l.record->>'claimId' IS DISTINCT FROM p_claim::text OR l.record->>'status' NOT IN ('claimed','uncertain','completed') THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;
- selection:=tdee_scheduler_private.current_selection(p_owner);
+ selection:=tdee_scheduler_private.current_selection_as_of(p_owner,clock_timestamp());
  IF selection->>'engineVersion' IS DISTINCT FROM 'rules14-v1' OR selection->>'contextRevision' IS DISTINCT FROM p_scope OR selection->>'timezone' IS DISTINCT FROM l.record->>'timezone' THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;
  -- Never relabel an uncertain offer as baseline calibration.
  IF EXISTS(SELECT 1 FROM tdee_rules14_private.proposals WHERE owner_id=p_owner AND id=p_claim) OR EXISTS(SELECT 1 FROM tdee_rules14_private.issuance_journal WHERE owner_id=p_owner AND proposal_id=p_claim) THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;
@@ -24,7 +24,7 @@ BEGIN
  IF derived IS DISTINCT FROM h.anchor THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;
  access:=tdee_scheduler_private.read_access(p_owner);at_ms:=floor(extract(epoch FROM clock_timestamp())*1000)::bigint;
  IF access->'allowed' IS DISTINCT FROM 'true'::jsonb OR jsonb_typeof(access->'validUntil') IS DISTINCT FROM 'number' OR (access->>'validUntil')::numeric<=at_ms OR
- tdee_scheduler_private.current_selection(p_owner)->>'contextRevision' IS DISTINCT FROM p_scope THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;
+ tdee_scheduler_private.current_selection_as_of(p_owner,clock_timestamp())->>'contextRevision' IS DISTINCT FROM p_scope THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;
  RETURN jsonb_build_object('version','rules14-anchor-outcome-v1','status','current_baseline_verified','ownerId',p_owner,'contextRevision',p_scope,'claimId',p_claim,
  'anchorVersion',h.version,'sourceRequestId',h.source_request_id,'sourceGoalId',h.source_goal_id,'observedAt',at_ms,'actionable',false);
 END $fn$;

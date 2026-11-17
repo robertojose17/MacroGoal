@@ -1,0 +1,7 @@
+# Coherent selection as of a server readback time
+
+The immutable screening trigger stamps `accepted_at` with the actual insertion clock. The original scheduler selector evaluates at the outer statement start, so a newly inserted screening in the same request is correctly not yet current at that older time. This blocked the single-transaction recovery fixture after the core acceptance stage had succeeded.
+
+The exact rules selector is now shared through revoked `current_selection_as_of(owner, as_of)`. Its source snapshot remains STABLE and every existing account, policy, screening, goal and scope condition remains intact. Future or null as-of values return no selection. The ordinary `current_selection(owner)` preserves its existing statement-start semantics. Recovery, which already revalidates current source and access after owner/ledger locks, passes the real current clock to the shared reader. No external API accepts an as-of parameter, and no screening/provider timestamp is altered.
+
+Three source tests pass. Actual PostgreSQL rollback compilation of the migration and private diagnostic extension passed. Isolated screening-envelope assertions demonstrate statement-start rejection, fresh-real-clock acceptance and expiry rejection; future-as-of rejection also passed. Existing function hashes and absence of the new helper were verified after rollback. Genuine owner recovery success remains a separate required test.

@@ -35,11 +35,13 @@ BEGIN
 END $scope$;
 REVOKE ALL ON FUNCTION tdee_rules14_private.legacy_current_selection(uuid) FROM PUBLIC,anon,authenticated,service_role;
 
-CREATE OR REPLACE FUNCTION tdee_scheduler_private.current_selection(p_owner uuid)
+CREATE FUNCTION tdee_scheduler_private.current_selection_as_of(p_owner uuid,p_as_of timestamptz)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $rules_scope$
 DECLARE u public.users;s macrogoal_observed_private.settings;g public.goals;pol tdee_rules14_private.policy_versions;screen tdee_rules14_private.screenings;
- account record;b jsonb;binding jsonb;rev text;n integer;t date;at_time timestamptz:=statement_timestamp();
+ account record;b jsonb;binding jsonb;rev text;n integer;t date;at_time timestamptz:=p_as_of;
 BEGIN
+ -- Private explicit real readback time; never permit future authority.
+ IF p_as_of IS NULL OR p_as_of>clock_timestamp() THEN RETURN NULL;END IF;
  -- No registered rules policy preserves the old reviewed-engine selection exactly.
  -- A revoked/expired/ambiguous rules registration never silently downgrades.
  IF NOT EXISTS(SELECT 1 FROM tdee_rules14_private.policy_versions) THEN RETURN tdee_rules14_private.legacy_current_selection(p_owner);END IF;
@@ -61,6 +63,11 @@ BEGIN
  rev:=encode(sha256(convert_to(jsonb_build_object('contract','internal-daily-rules14-selection-v1','owner',p_owner,'goal',to_jsonb(g),'profile',b,'settings',to_jsonb(s),'screening',to_jsonb(screen),'policyBinding',binding)::text,'UTF8')),'hex');
  RETURN jsonb_build_object('ownerId',p_owner,'contextRevision',rev,'timezone',u.timezone,'localDate',t,'enrolled',true,'accountActive',true,'engineVersion','rules14-v1','policyBinding',binding);
 END $rules_scope$;
+REVOKE ALL ON FUNCTION tdee_scheduler_private.current_selection_as_of(uuid,timestamptz) FROM PUBLIC,anon,authenticated,service_role;
+CREATE OR REPLACE FUNCTION tdee_scheduler_private.current_selection(p_owner uuid)
+RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $selection$
+ SELECT tdee_scheduler_private.current_selection_as_of(p_owner,statement_timestamp())
+$selection$;
 REVOKE ALL ON FUNCTION tdee_scheduler_private.current_selection(uuid) FROM PUBLIC,anon,authenticated,service_role;
 CREATE OR REPLACE FUNCTION public.tdee_internal_current_selection_v1(p_owner uuid,p_context_revision text)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $current$
