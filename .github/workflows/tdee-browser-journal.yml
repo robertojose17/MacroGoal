@@ -54,3 +54,9 @@ jobs:
         if: always()
         working-directory: tests/browser-journal
         run: test ! -f results.json || cat results.json
+      - name: Public deployment response diagnostic (no authentication)
+        if: always()
+        env:
+          # Temporary diagnostic target for this deployment; remove env to make this step a no-op.
+          DIAGNOSTIC_DEPLOYMENT_URL: 'https://macro-goal--ej3utqm2j7.expo.app/'
+        run: node tests/browser-journal/public-deployment-diagnostic.mjs
