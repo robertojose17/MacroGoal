@@ -11,7 +11,13 @@ export function createTdeeAccessRefresh({readContext,refreshAuthority,now=Date.n
    if(!Number.isSafeInteger(remaining)||remaining<=0)throw Error('observation_unavailable');
    const result=await refreshAuthority(authorization,{timeoutMs:remaining});
    if(!result || result.ownerId!==before.ownerId || result.version!=='premium-authority-v1' || !['premium','free','unknown'].includes(result.access)) throw Error('observation_unavailable');
-   if(result.access==='unknown') throw Error('observation_unavailable');
+   // A simultaneous genuine refresh can lose the cache CAS and report unknown.
+   // Retry the authority read once within the ORIGINAL deadline; never grant
+   // from the old SQL marker or extend provider proof/source validity.
+   if(result.access==='unknown'){
+    if(attempt===0)continue;
+    throw Error('observation_unavailable');
+   }
    const at=now();
    if(at>=deadline||!Number.isSafeInteger(result.checkedAt)||!Number.isSafeInteger(result.validUntil)||result.checkedAt>at||result.validUntil<=at||result.validUntil>result.checkedAt+30000) throw Error('observation_unavailable');
    // Reread SQL authority after provider/CAS. A response flag cannot grant access.
