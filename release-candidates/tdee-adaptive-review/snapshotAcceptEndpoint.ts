@@ -1,7 +1,7 @@
 /** OFF source candidate. Own-bearer acceptance, never service-role or request evidence. */
 import {ADAPTIVE_RELEASE_STATE} from './proposal.ts';
 import {parseAdaptiveRequest,validReceipt,type AdaptiveRequest,type AdaptiveReceipt} from './apiContract.ts';
-import {createTesterRefresh} from '../../supabase/functions/observed-snapshot-release/functions/observed-program/scoped-tester-refresh.mjs';
+import {createTdeeAccessRefresh} from '../../supabase/functions/observed-snapshot-release/functions/observed-program/tdee-access-refresh.mjs';
 import type {SnapshotSupabaseConfig} from './snapshotSupabaseAdapter.ts';
 export const SNAPSHOT_ACCEPT_MODE='adaptive-accept-v1';
 type Failure={reason:string;receipt:null;mayHaveWritten:boolean};
@@ -67,7 +67,7 @@ export function createSnapshotAcceptPorts(config:SnapshotAcceptConfig):SnapshotA
   receipt:(token,request)=>rpc(token,'tdee_read_snapshot_receipt_v1',{p_request:request}),
   accept:(token,request)=>rpc(token,'tdee_accept_snapshot_proposal_v1',{p_request:request}),
   async prepare(token,actor){
-   const refresh=createTesterRefresh({
+   const refresh=createTdeeAccessRefresh({
     readContext:async()=>{
      const data=await rpc(token,'observed_get_dynamic_tdee_context_v1');
      if(!object(data)||data.ownerId!==actor)throw Error('source_error');
@@ -136,3 +136,4 @@ export function createSnapshotAcceptHttpHandler(runtime:Runtime,allowedOrigins:r
   }
  };
 }
+

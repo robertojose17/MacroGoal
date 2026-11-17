@@ -37,7 +37,7 @@ export type WorkerAssessmentReviewPorts={
  loadContext(ownerId:string,signal:AbortSignal):Promise<unknown>;
  storage:ReviewStorage;now():number;newClaimId():string;
  reconcileIssued?(scope:AssessmentInput,record:DailyRecord):Promise<boolean>;
- issueRateProposal?(ownerId:string,proposalId:string):Promise<{reason:string;proposal:unknown;mayHaveWritten:boolean}>;
+ issueRateProposal?(ownerId:string,proposalId:string):Promise<{reason:string;proposal:unknown;mayHaveWritten:boolean;baselineStatus?:'stored';engineVersion?:string}>;
 };
 function clock(ports:WorkerAssessmentReviewPorts,deadline:number,signal:AbortSignal){const t=ports.now();if(!Number.isSafeInteger(t)||t<0||signal.aborted||t>=deadline)throw Error('worker_deadline');return t;}
 /** Pure context envelope check, never converts caller claims into server authority. */
@@ -89,7 +89,9 @@ export async function runWorkerAssessmentForReview(ports:WorkerAssessmentReviewP
   if(ports.issueRateProposal&&(!latest.hold||assessedAt>=latest.hold.reevaluateAt)){
    await ports.revalidate(selection,proof,deadline,signal);clock(ports,deadline,signal);
    const issued=await ports.issueRateProposal(selection.ownerId,claimId);
-   if(issued.mayHaveWritten&&issued.reason!=='review_available')throw Error('issuance_outcome_unknown');
+   const baselineStored=issued.reason==='calibration_required'&&issued.baselineStatus==='stored'&&issued.engineVersion==='rules14-v1'&&issued.proposal===null;
+   if(issued.mayHaveWritten&&issued.reason!=='review_available'&&!baselineStored)throw Error('issuance_outcome_unknown');
+   if(baselineStored)diagnostic={kind:'preserve',reason:'calibration_required'};
    if(issued.reason==='review_available'){
     const proposal=issued.proposal as {id?:unknown;ownerId?:unknown;version?:unknown}|null;
     if(!proposal||proposal.id!==claimId||proposal.ownerId!==selection.ownerId)throw Error('issuance_receipt_mismatch');
@@ -103,6 +105,23 @@ export async function runWorkerAssessmentForReview(ports:WorkerAssessmentReviewP
   if(claimed&&claimId&&!signal.aborted){try{await ports.storage.uncertain(claimed,claimId);}catch{/* durable reconciliation required */}}
   return 'reconcile';
  }
+}
+/** Reconcile an interrupted assessment from authoritative SQL evidence only.
+ * A current-baseline outcome is desired-state verification, not writer attribution.
+ * A missing/changed/older anchor cannot produce this server evidence. */
+export async function reconcileAssessmentOutcomeForReview(scope:AssessmentInput,record:DailyRecord,rules14:boolean,rpc:(name:string,args:Record<string,unknown>)=>Promise<unknown>):Promise<boolean>{
+ const args={p_owner:scope.ownerId,p_scope:scope.contextRevision,p_claim:record.claimId,p_revision:record.revision};
+ const verified=(data:unknown,version:string,status:string)=>{
+  try {const parsed=parseSchedulerRpc(data,scope),e=(data as Obj).evidence;
+   return !!parsed.record&&parsed.record.status==='completed'&&parsed.record.claimId===record.claimId&&obj(e)&&e.version===version&&e.status===status&&e.actionable===false&&e.ownerId===scope.ownerId&&e.contextRevision===scope.contextRevision&&e.claimId===record.claimId;
+  }catch{return false;}
+ };
+ // Never continue after transport uncertainty: the first reconciliation may write.
+ const issued=await rpc('tdee_internal_rate_issue_outcome_v1',args);
+ if(verified(issued,'rate-issuance-outcome-v1','historically_prepared'))return true;
+ if(!rules14||!obj(issued)||issued.status!=='unverified'||issued.actionable!==false)return false;
+ const baseline=await rpc('tdee_internal_rules14_anchor_outcome_v1',args);
+ return verified(baseline,'rules14-anchor-outcome-v1','current_baseline_verified');
 }
 const disabled=()=>new Response(JSON.stringify({version:'internal-daily-worker-v1',result:'disabled'}),{status:503,headers:{'content-type':'application/json','cache-control':'no-store'}});
 /** Existing service factory is deferred until runtime ON and exact internal auth. */
@@ -125,9 +144,7 @@ export function createInternalWorkerRuntime(bootstrap:WorkerRuntimeBootstrap){
      const scopedRpc:InternalServiceRpc={rpc:(name,args)=>client.rpc(name,args).abortSignal(signal)};
      const storage=createSchedulerRpcStorage(scopedRpc);
      return runWorkerAssessmentForReview({storage,now,reconcileIssued:async(scope,record)=>{
-      const data=await serviceRpc('tdee_internal_rate_issue_outcome_v1',{p_owner:scope.ownerId,p_scope:scope.contextRevision,p_claim:record.claimId,p_revision:record.revision},signal);
-      const parsed=parseSchedulerRpc(data,scope),e=(data as Obj).evidence;
-      return !!parsed.record&&parsed.record.status==='completed'&&parsed.record.claimId===record.claimId&&obj(e)&&e.version==='rate-issuance-outcome-v1'&&e.status==='historically_prepared'&&e.actionable===false&&e.ownerId===scope.ownerId&&e.contextRevision===scope.contextRevision&&e.claimId===record.claimId;
+      return reconcileAssessmentOutcomeForReview(scope,record,bootstrap.recommendationEngine==='rules14-v1',(name,args)=>serviceRpc(name,args,signal));
      },issueRateProposal:(ownerId,proposalId)=>bootstrap.recommendationEngine==='rules14-v1'?createInternalRules14Runtime({rpc:(name,args)=>serviceRpc(name,args,signal),now,newProposalId:()=>proposalId,expectedPolicy:bootstrap.rulesPolicy??null})(ownerId):createInternalRateIssuance({rpc:(name,args)=>serviceRpc(name,args,signal),now,newProposalId:()=>proposalId,expectedPolicy:bootstrap.ratePolicy!})(ownerId),newClaimId:()=>crypto.randomUUID(),revalidate,
       loadContext:(ownerId,signal)=>serviceRpc('tdee_internal_context_v1',{p_owner:ownerId},signal)},selection,proof as ProviderProof,deadline,signal);
     },
@@ -136,3 +153,4 @@ export function createInternalWorkerRuntime(bootstrap:WorkerRuntimeBootstrap){
   }catch{return new Response(JSON.stringify({result:'internal_worker_unavailable'}),{status:503,headers:{'content-type':'application/json','cache-control':'no-store'}});}
  };
 }
+

@@ -1,3 +1,4 @@
+import {ensureRateAnchor,bootstrapRateAnchorForReview} from './rateAnchorBootstrap.ts';
 import {prepareRules14Proposal,decodeRules14Record} from './rules14Proposal.ts';
 import {canonicalRateJson} from './rateProposalRecord.ts';
 export const RULES14_RELEASE=Object.freeze({enabled:false} as const);
@@ -21,4 +22,20 @@ export async function runRules14ForReview(actor:string,p:Rules14Ports){
   return {reason:'review_available',proposal:verified,mayHaveWritten:true,engineVersion:'rules14-v1' as const};
  }catch{return stop(writing?'reconciliation_required':'source_error',writing);}
 }
-export function createInternalRules14Runtime(p:Rules14Ports){return async(owner:string)=>RULES14_RELEASE.enabled?runRules14ForReview(owner,p):{reason:'safety_review_required',proposal:null,mayHaveWritten:false};}
+/** Shared production composition for own and service-selected scheduled routes.
+ * Only genuine accepted-goal receipts can establish an anchor; bootstrap never
+ * invents a historical acceptance or resets an existing accepted window. */
+async function afterAnchor(actor:string,p:Rules14Ports,baseline:Awaited<ReturnType<typeof ensureRateAnchor>>){
+ if(baseline.status==='blocked')return {reason:baseline.reason,proposal:null,mayHaveWritten:baseline.mayHaveWritten,engineVersion:'rules14-v1' as const};
+ if(baseline.status==='stored')return {reason:'calibration_required',proposal:null,mayHaveWritten:true,baselineStatus:'stored' as const,engineVersion:'rules14-v1' as const};
+ return runRules14ForReview(actor,p);
+}
+export async function runRules14WithAnchor(actor:string,p:Rules14Ports){
+ return afterAnchor(actor,p,await ensureRateAnchor(actor,p));
+}
+/** Unmounted test/review seam invokes the real bootstrap with synthetic ports.
+ * Runtime composition above keeps the immutable persistence release guard. */
+export async function runRules14WithAnchorForReview(actor:string,p:Rules14Ports){
+ return afterAnchor(actor,p,await bootstrapRateAnchorForReview(actor,p));
+}
+export function createInternalRules14Runtime(p:Rules14Ports){return async(owner:string)=>RULES14_RELEASE.enabled?runRules14WithAnchor(owner,p):{reason:'safety_review_required',proposal:null,mayHaveWritten:false};}

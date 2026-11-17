@@ -179,7 +179,8 @@ BEGIN
   IF jsonb_typeof(target) IS DISTINCT FROM 'object' OR (g->>'daily_calories')::numeric IS DISTINCT FROM (old_goal->>'daily_calories')::numeric+(r->>'deltaKcal')::bigint
   OR (g->>'daily_calories')::numeric IS DISTINCT FROM (a->>'baselineIntakeKcal')::numeric+(r->>'netDeltaKcal')::numeric OR (g->>'daily_calories')::numeric<(policy->>'min_intake_kcal')::numeric OR (g->>'daily_calories')::numeric>(policy->>'max_intake_kcal')::numeric
   OR g->'base_daily_calories' IS DISTINCT FROM a->'baselineIntakeKcal' OR tdee_rules14_chain_private.instant(g->'created_at') IS DISTINCT FROM (r->>'acceptedAt')::bigint
-  OR tdee_rules14_chain_private.instant(g->'updated_at') IS DISTINCT FROM (r->>'acceptedAt')::bigint OR tdee_rules14_chain_private.instant(g->'last_adaptive_update') IS DISTINCT FROM (r->>'acceptedAt')::bigint THEN RAISE EXCEPTION 'invalid_goal'; END IF;
+  OR tdee_rules14_chain_private.instant(g->'updated_at') IS DISTINCT FROM (r->>'acceptedAt')::bigint OR jsonb_typeof(e->'acceptanceTimezone') IS DISTINCT FROM 'string' OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_timezone_names z WHERE z.name=e->>'acceptanceTimezone')
+  OR g->'last_adaptive_update' IS DISTINCT FROM to_jsonb((to_timestamp((r->>'acceptedAt')::double precision/1000) AT TIME ZONE (e->>'acceptanceTimezone'))::date) THEN RAISE EXCEPTION 'invalid_goal'; END IF;
   FOR goal_key,target_key IN SELECT * FROM (VALUES('daily_calories','calories'),('protein_g','proteinG'),('carbs_g','carbsG'),('fats_g','fatsG'),('fiber_g','fiberG')) x LOOP
    IF NOT tdee_rules14_chain_private.integer(g->goal_key) OR (g->>goal_key)::bigint NOT BETWEEN 0 AND 10000 OR g->goal_key IS DISTINCT FROM target->target_key THEN RAISE EXCEPTION 'invalid_macro'; END IF;
   END LOOP;

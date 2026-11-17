@@ -4,6 +4,16 @@
 import {canonicalRateJson,type RateAnchorReference} from './rateProposalRecord.ts';
 import {decodeRules14Record,type Rules14Record} from './rules14Proposal.ts';
 import {adjustRules14Macros,type Rules14MacroContext} from './smartMacroAdjustment.ts';
+// goals.last_adaptive_update is DATE, not a timestamp. The server records the
+// actual acceptance timezone; receipt/goal timestamps retain millisecond precision.
+export function acceptedGoalDate(acceptedAt:number, timezone:unknown):string|null {
+ if(!Number.isSafeInteger(acceptedAt)||typeof timezone!=='string'||!timezone)return null;
+ try {const parts=new Intl.DateTimeFormat('en-US',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(acceptedAt));
+ const part=(type:string)=>parts.find(p=>p.type===type)?.value;
+ const result=`${part('year')}-${part('month')}-${part('day')}`;
+ return /^\d{4}-\d{2}-\d{2}$/.test(result)?result:null;
+ }catch{return null;}
+}
 export const RULES14_ACCEPTANCE_CHAIN_RELEASE=Object.freeze({enabled:false} as const);
 type Obj=Record<string,any>;
 const obj=(v:unknown):v is Obj=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -101,7 +111,7 @@ export async function verifyRules14AcceptanceChain(value:unknown,now:number,dige
    const target=payload.target;
    if(!obj(target)||g.daily_calories!==old.daily_calories+r.deltaKcal||g.daily_calories!==a.baselineIntakeKcal+r.netDeltaKcal||
     g.daily_calories<policy.min_intake_kcal||g.daily_calories>policy.max_intake_kcal||g.base_daily_calories!==a.baselineIntakeKcal||
-    time(g.created_at)!==r.acceptedAt||time(g.updated_at)!==r.acceptedAt||time(g.last_adaptive_update)!==r.acceptedAt)return fail();
+    time(g.created_at)!==r.acceptedAt||time(g.updated_at)!==r.acceptedAt||acceptedGoalDate(r.acceptedAt,evidence.acceptanceTimezone)===null||g.last_adaptive_update!==acceptedGoalDate(r.acceptedAt,evidence.acceptanceTimezone))return fail();
    for(const [goalKey,targetKey] of [['daily_calories','calories'],['protein_g','proteinG'],['carbs_g','carbsG'],['fats_g','fatsG'],['fiber_g','fiberG']])if(!integer(g[goalKey])||g[goalKey]<0||g[goalKey]>10000||g[goalKey]!==target[targetKey])return fail();
    if(Math.abs(g.daily_calories-4*g.protein_g-4*g.carbs_g-9*g.fats_g)>10)return fail();
    const mutable=new Set(['id','daily_calories','protein_g','carbs_g','fats_g','fiber_g','is_active','last_adaptive_update','created_at','updated_at','base_daily_calories']);

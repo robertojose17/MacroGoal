@@ -6,7 +6,7 @@ import {rateMacroRequest,buildRateReviewedContext} from './rateReviewedContext.t
 import {nutritionReviewExpected,nutritionReviewEvidence} from './nutritionReviewEvidence.ts';
 import {createSnapshotReviewOrchestrator,type SnapshotOrchestrationPorts,type ServerPolicyBinding} from './snapshotReviewOrchestration.ts';
 import {snapshotIssueArguments} from './snapshotServerRuntime.ts';
-import {createTesterRefresh} from '../../supabase/functions/observed-snapshot-release/functions/observed-program/scoped-tester-refresh.mjs';
+import {createTdeeAccessRefresh} from '../../supabase/functions/observed-snapshot-release/functions/observed-program/tdee-access-refresh.mjs';
 import type {SnapshotMacroRequest,SnapshotMacroEvidence} from './snapshotReviewContextParser.ts';
 import type {SnapshotSupabaseConfig} from './snapshotSupabaseAdapter.ts';
 
@@ -76,7 +76,7 @@ export function createSnapshotOrchestrationSupabasePorts(config:SnapshotOrchestr
   if(typeof token!=='string'||!token||token.length>16377||/\s/.test(token))throw new Error('source_error');
   return createClient(url,anonKey,{...options(),global:{headers:{Authorization:'Bearer '+token}}});
  };
- const prepare=createTesterRefresh({
+ const prepare=createTdeeAccessRefresh({
   readContext:async(authorization:string)=>{
    const result=await own(authorization.slice(7)).rpc(RPC.context);
    if(result.error||!result.data)throw new Error('source_error');
@@ -170,4 +170,5 @@ export function createSnapshotOrchestrationSupabaseRuntime(config:SnapshotOrches
  if(fixed.engineVersion==='rate-review-14d-v1')return createUserRateIssuanceRuntime(config,fixed);
  return createSnapshotReviewOrchestrator(createSnapshotOrchestrationSupabasePorts(config,fixed),fixed);
 }
+
 

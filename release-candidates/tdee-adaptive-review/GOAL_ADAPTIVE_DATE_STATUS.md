@@ -1,0 +1,9 @@
+# Goal adaptive date contract
+
+`public.goals.last_adaptive_update` is a PostgreSQL DATE. The rules14 writer previously inserted an implicit timestamp-to-date cast and then incorrectly required equality with a full timestamp. It now writes and verifies `(at_time AT TIME ZONE u.timezone)::date`. `created_at`, `updated_at` and receipt `acceptedAt` retain their exact original timestamp/millisecond checks.
+
+The receipt records the server-read profile timezone in `acceptanceEvidence.acceptanceTimezone`. SQL and TypeScript chain verifiers require the exact calendar date derived from that timezone and `acceptedAt`. Missing or invalid timezone, a timestamp in the DATE field, and a different date are rejected, including after recomputing fixture digests. No legacy fallback is allowed. Existing rules14 receipts were verified globally empty before this change. The profile/journey bindings already include timezone; the writer obtains it from the same locked profile used for admission.
+
+Verification: 43 rules14 runtime tests pass. Actual PostgreSQL rollback compile and 14 pure chain fixtures pass: increase, decrease, two successive accepted offers, five existing negative evidence cases, and six date-specific cases. Live writer and chain definitions were verified unchanged after rollback. No owner data or real receipt was modified by these parity tests. Runtime end-to-end owner testing remains required after deployment.
+
+The writer source is based on the separately reviewed finite-provider-access overlay and requires that helper. Apply both reviewed changes together or apply this date upgrade after the access upgrade. Historical migrations stay unchanged. This repair does not enable recommendation routes or relax eligibility, provider, cadence, macro, goal-preservation, or receipt checks. Legacy non-rules14 writer candidates have the same date/timestamp mismatch and are outside this patch; they must not be enabled without equivalent review.

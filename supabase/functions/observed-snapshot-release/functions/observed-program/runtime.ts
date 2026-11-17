@@ -1,4 +1,4 @@
-import { createTesterRefresh } from './scoped-tester-refresh.mjs';
+import { createTdeeAccessRefresh } from './tdee-access-refresh.mjs';
 import { createClient } from 'npm:@supabase/supabase-js@2.83.0';
 import { createObservationHandler, type ObservationContext } from './handler.ts';
 
@@ -13,7 +13,7 @@ async function rpc(authorization: string, name: string, params?: Record<string, 
   if (error || !data) throw new Error(error?.message ?? 'source_error');
   return data as ObservationContext;
 }
-const prepare = createTesterRefresh({
+const prepare = createTdeeAccessRefresh({
  readContext: (authorization: string) => rpc(authorization, 'observed_get_dynamic_tdee_context_v1'),
  refreshAuthority: async (authorization: string) => {
   const response=await fetch(url+'/functions/v1/common-premium-authority',{
@@ -33,3 +33,4 @@ export const handleObservation = createObservationHandler({
     return data;
   },
 });
+

@@ -1,4 +1,4 @@
-import {RULES14_RELEASE,runRules14ForReview} from './rules14Runtime.ts';
+import {RULES14_RELEASE,runRules14WithAnchor} from './rules14Runtime.ts';
 import {ADAPTIVE_RELEASE_STATE} from './proposal.ts';
 import {createSnapshotOrchestrationSupabasePorts,type SnapshotOrchestrationSupabaseConfig} from './snapshotOrchestrationSupabaseAdapter.ts';
 import type {ServerPolicyBinding} from './snapshotReviewOrchestration.ts';
@@ -17,7 +17,8 @@ export function createRules14SupabaseRuntime(config:SnapshotOrchestrationSupabas
   try{
    const token=r.authorization.slice(7),user=await authPorts.verifyAccessToken(token);if(!user)return stop('authentication_required');
    await authPorts.loadOwnContext(token); // Existing legitimate purchase refresh; no expiry extension.
-   return runRules14ForReview(user.id,{rpc,now:Date.now,newProposalId:()=>crypto.randomUUID(),expectedPolicy:fixed});
+   return runRules14WithAnchor(user.id,{rpc,now:Date.now,newProposalId:()=>crypto.randomUUID(),expectedPolicy:fixed});
   }catch{return stop('source_error');}
  };
 }
+

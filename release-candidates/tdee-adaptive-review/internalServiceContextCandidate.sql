@@ -134,18 +134,13 @@ BEGIN
   ), access_snapshot AS MATERIALIZED (
     -- Read the genuine entitlement decision once. Premium and its validity
     -- marker must describe the same proof; never manufacture a replacement TTL.
-    SELECT entitlement_cache_candidate.tester_access(actor) AS value
+    SELECT tdee_scheduler_private.read_access(actor) AS value
   ), context_input AS MATERIALIZED (
     SELECT p.*,a.value AS access_info,
       CASE WHEN p.valid_zone THEN (captured_at AT TIME ZONE p.timezone)::date END AS today,
       coalesce(s.enabled,false) AS enabled, coalesce(s.review_day,0) AS review_day,
       s.started_on, to_jsonb(s) AS settings_record,
-      CASE WHEN coalesce((a.value->>'managed')::boolean,false)
-        THEN coalesce((a.value->>'allowed')::boolean,false)
-        ELSE EXISTS(SELECT 1 FROM public.subscriptions sub
-        WHERE sub.user_id=actor::text AND sub.status IN ('active','trialing')
-        AND sub.entitlement_ids && ARRAY['pro','Macrogoal Pro','macrogoal_pro','premium']::text[]
-        AND (sub.expiration_at IS NULL OR sub.expiration_at>captured_at)) END AS premium
+      coalesce((a.value->>'allowed')::boolean,false) AS premium
     FROM profile p CROSS JOIN access_snapshot a LEFT JOIN macrogoal_observed_private.settings s ON s.user_id=actor
   ), goal_rows AS MATERIALIZED (
     SELECT g.id,g.daily_calories,g.protein_g,g.carbs_g,g.fats_g,g.fiber_g,
@@ -237,7 +232,7 @@ BEGIN
         'reviewDay',p.review_day,'today',p.today,'nextReviewDate',p.due,'reviewDue',false,
         'currentGoal',p.goal,'proposal',NULL,'profile',jsonb_build_object('journey_start_date',p.journey_start_date),
         'fingerprint',p.context_fingerprint,'safety',jsonb_build_object('enabled',false,'eligibility','unverified')) ||
-        CASE WHEN coalesce((p.access_info->>'managed')::boolean,false) AND p.premium
+        CASE WHEN p.premium
           THEN jsonb_build_object('accessValidUntil',p.access_info->'validUntil')
           ELSE '{}'::jsonb END,
       'sourceFingerprint',encode(sha256(convert_to(jsonb_build_object(
@@ -351,3 +346,4 @@ END $worker$;
 REVOKE ALL ON FUNCTION public.tdee_internal_context_v1(uuid) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.tdee_internal_context_v1(uuid) TO service_role;
 ROLLBACK;
+

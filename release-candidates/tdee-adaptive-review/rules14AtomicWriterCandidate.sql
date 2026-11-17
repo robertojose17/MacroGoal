@@ -64,15 +64,14 @@ BEGIN
   -- Exact final current-source cut after all locks; later food changes belong to
   -- the next review, not an invented transaction-wide source barrier.
   final_context:=tdee_rules14_private.read_source(actor,payload->'policyBinding')->'snapshot';
-  final_access:=macrogoal_observed_private.tester_access(actor);
+  final_access:=tdee_scheduler_private.read_access(actor);
   at_time:=date_trunc('milliseconds',clock_timestamp());at_ms:=floor(extract(epoch FROM at_time)*1000)::bigint;
   IF final_context->'currentGoal' IS DISTINCT FROM to_jsonb(g) OR final_context#>>'{observation,sourceFingerprint}' IS DISTINCT FROM payload->>'sourceFingerprint' OR
    final_context#>>'{readiness,profileBinding}' IS DISTINCT FROM payload->>'profileBinding' OR final_context#>>'{readiness,journeyBinding}' IS DISTINCT FROM payload->>'journeyBinding' OR
    final_context#>'{readiness,eligibility,current}' IS DISTINCT FROM 'true'::jsonb OR final_context#>'{observation,context,premium}' IS DISTINCT FROM 'true'::jsonb OR
    final_context#>'{observation,context,enabled}' IS DISTINCT FROM 'true'::jsonb OR
    jsonb_typeof(final_context#>'{observation,context,accessValidUntil}') IS DISTINCT FROM 'number' OR (final_context#>>'{observation,context,accessValidUntil}')::numeric<=at_ms OR
-   jsonb_typeof(final_access->'managed') IS DISTINCT FROM 'boolean' OR
-   (final_access->'managed'='true'::jsonb AND (final_access->'allowed' IS DISTINCT FROM 'true'::jsonb OR jsonb_typeof(final_access->'validUntil') IS DISTINCT FROM 'number' OR (final_access->>'validUntil')::numeric<=at_ms)) OR
+   final_access->'allowed' IS DISTINCT FROM 'true'::jsonb OR jsonb_typeof(final_access->'validUntil') IS DISTINCT FROM 'number' OR (final_access->>'validUntil')::numeric<=at_ms OR
    at_ms-source_ms>30000 OR source_ms>at_ms OR p.expires_at_ms<=at_ms OR policy.expires_at<=at_time OR NOT tdee_rules14_private.screening_current(final_context,actor,at_time) OR final_context->'rulesScreening' IS DISTINCT FROM payload->'screeningEvidence' OR
    at_time<=g.created_at OR at_ms-coalesce((verified_chain->>'lastAcceptedAt')::numeric,(h.anchor->>'acceptedAt')::numeric)<(policy.document->>'min_days_between_acceptances')::numeric*86400000::numeric THEN
    reason:='authority_or_source_expired';commit_obligations_verified:=false;
@@ -84,9 +83,9 @@ BEGIN
     loss_rate_lbs_per_week,start_date,start_journey_date,macro_preset,base_daily_calories,last_adaptive_update,created_at,updated_at)
    VALUES(actor,g.goal_type,g.goal_intensity,g.target_weight,(target->>'calories')::integer,(target->>'proteinG')::integer,(target->>'carbsG')::integer,
     (target->>'fatsG')::integer,(target->>'fiberG')::integer,true,g.loss_rate_lbs_per_week,g.start_date,g.start_journey_date,g.macro_preset,
-    (h.anchor->>'baselineIntakeKcal')::integer,at_time,at_time,at_time) RETURNING * INTO new_goal;
+    (h.anchor->>'baselineIntakeKcal')::integer,(at_time AT TIME ZONE u.timezone)::date,at_time,at_time) RETURNING * INTO new_goal;
    IF new_goal.id=g.id OR new_goal.user_id IS DISTINCT FROM actor OR new_goal.is_active IS DISTINCT FROM true OR
-    new_goal.created_at IS DISTINCT FROM at_time OR new_goal.updated_at IS DISTINCT FROM at_time OR new_goal.last_adaptive_update IS DISTINCT FROM at_time OR
+    new_goal.created_at IS DISTINCT FROM at_time OR new_goal.updated_at IS DISTINCT FROM at_time OR new_goal.last_adaptive_update IS DISTINCT FROM (at_time AT TIME ZONE u.timezone)::date OR
     new_goal.daily_calories IS DISTINCT FROM (target->>'calories')::integer OR new_goal.protein_g IS DISTINCT FROM (target->>'proteinG')::integer OR
     new_goal.carbs_g IS DISTINCT FROM (target->>'carbsG')::integer OR new_goal.fats_g IS DISTINCT FROM (target->>'fatsG')::integer OR new_goal.fiber_g IS DISTINCT FROM (target->>'fiberG')::integer OR
     (to_jsonb(new_goal)-ARRAY['id','daily_calories','protein_g','carbs_g','fats_g','fiber_g','is_active','last_adaptive_update','created_at','updated_at','base_daily_calories']) IS DISTINCT FROM
@@ -96,7 +95,7 @@ BEGIN
     'request',q,'anchorReference',ref,'previousGoalSnapshot',to_jsonb(g),'acceptedGoalSnapshot',to_jsonb(new_goal),'acceptedAt',at_ms,'deltaKcal',delta,'netDeltaKcal',net_delta,
     'previousReceiptDigest',verified_chain->'lastReceiptDigest','acceptanceEvidence',jsonb_build_object('contract','rules14-as-of-revalidated-v1','sourceFingerprint',payload->>'sourceFingerprint',
     'sourceCapturedAt',source_ms,'policyRevision',policy.revision,'screeningRequestId',payload#>'{screeningEvidence,requestId}','screeningVersion',payload#>'{screeningEvidence,rowVersion}','policyDigest',policy.digest,
-    'profileBinding',payload->>'profileBinding','journeyBinding',payload->>'journeyBinding'));
+    'profileBinding',payload->>'profileBinding','journeyBinding',payload->>'journeyBinding','acceptanceTimezone',u.timezone));
    receipt_content:=unsigned_receipt::text;receipt_hash:=encode(sha256(convert_to(receipt_content,'UTF8')),'hex');
    receipt_record:=unsigned_receipt||jsonb_build_object('canonicalContent',receipt_content,'receiptDigest',receipt_hash);
    IF octet_length(receipt_record::text)>65536 OR NOT tdee_rules14_private.valid_content(receipt_record,receipt_content,receipt_hash,'receiptDigest') THEN
@@ -133,5 +132,6 @@ BEGIN
 END $fn$;
 REVOKE ALL ON FUNCTION public.tdee_accept_rules14_proposal_v1(jsonb) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.tdee_accept_rules14_proposal_v1(jsonb) TO authenticated;
+
 
 
