@@ -4,7 +4,9 @@ import {createNutritionGoalSaveController} from './saveNutritionGoal.js';
 import {createJourneyRestartController} from './restartNutritionJourney.js';
 const owner='00000000-0000-4000-8000-000000000001',oldId='00000000-0000-4000-8000-000000000002',newId='00000000-0000-4000-8000-000000000003';
 const assert=(x,m)=>{if(!x)throw Error(m)};
-const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+// Object key insertion order is not request data; array order and all values remain exact.
+const canonical=value=>Array.isArray(value)?value.map(canonical):value!==null&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
+const same=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 async function rejects(fn,pattern){try{await fn()}catch(e){assert(pattern.test(String(e)),String(e));return}throw Error('expected rejection')}
 function goal(){return {id:oldId,user_id:owner,is_active:true,created_at:'2026-11-01T00:00:00Z',updated_at:'2026-11-01T00:00:00.123456+00:00',goal_type:'lose',goal_intensity:1,target_weight:70,daily_calories:2000,protein_g:150,carbs_g:200,fats_g:67,fiber_g:0,loss_rate_lbs_per_week:1,macro_preset:'balanced',start_date:'2026-11-01',start_journey_date:'2026-11-01',base_daily_calories:2000,last_adaptive_update:null}}
 function fixture(project,state){
