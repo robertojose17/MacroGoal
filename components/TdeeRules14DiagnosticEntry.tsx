@@ -1,3 +1,4 @@
+import {RULES14_REVIEW_UI_RELEASE} from '@/utils/rules14ProposalController';
 import React,{useEffect,useRef,useState} from 'react';
 import {Modal,Platform,Text,TouchableOpacity,View} from 'react-native';
 import {useTranslation} from 'react-i18next';
@@ -8,7 +9,13 @@ import {loadRules14DiagnosticCapability,runRules14RollbackDiagnostic,type Diagno
 type Props={ownerId?:string;blocked:boolean;isDark:boolean};
 /** Existing signed-in Settings only; capability absence/404 is silently hidden.
  * No owner identity, permit value, fixture, source or receipt is rendered/logged. */
-export function TdeeRules14DiagnosticEntry({ownerId,blocked,isDark}:Props){
+/** Full release never mounts the maintenance diagnostic: no capability request,
+ * auth subscription, fixture UI or test execution callback is created. */
+export function TdeeRules14DiagnosticEntry(props:Props){
+ if(RULES14_REVIEW_UI_RELEASE.enabled)return null;
+ return React.createElement(PrivateRules14DiagnosticEntry,props);
+}
+function PrivateRules14DiagnosticEntry({ownerId,blocked,isDark}:Props){
  const {i18n}=useTranslation(),es=i18n.language.startsWith('es'),t=(en:string,sp:string)=>es?sp:en;
  const [permit,setPermit]=useState<string|null>(null),[open,setOpen]=useState(false),[busy,setBusy]=useState(false),[status,setStatus]=useState<'none'|'pass'|'unverified'|'provider'>('none');const generation=useRef(0),flight=useRef(false);
  const ports:DiagnosticPorts={refreshProvider:async owner=>{
@@ -28,3 +35,4 @@ export function TdeeRules14DiagnosticEntry({ownerId,blocked,isDark}:Props){
  {status!=='none'&&<Text accessibilityRole="alert" style={{color}}>{status==='pass'?t('PASS: producer, acceptance, replay and receipt chain verified. Temporary test data rolled back and account state restored. Recommendations remain off.','PASS: productor, aceptación, reintentos y cadena verificados. Datos temporales revertidos y cuenta restaurada. Las recomendaciones siguen apagadas.'):status==='provider'?t('An active purchase could not be verified freshly. No test data was created.','No se pudo verificar una compra activa reciente. No se crearon datos de prueba.'):t('Verification was not confirmed. No automatic retry was made. Check the diagnostic before continuing.','No se confirmó la verificación. No se reintentó automáticamente. Revisa el diagnóstico antes de continuar.')}</Text>}
  <Modal transparent visible={open} onRequestClose={()=>{if(!busy)setOpen(false);}}><View style={{flex:1,justifyContent:'center',padding:24,backgroundColor:'rgba(0,0,0,.45)'}}><View style={{padding:20,gap:14,borderRadius:12,backgroundColor:isDark?'#171717':'#fff'}}><Text style={{color}}>{t('This test temporarily creates fictional data in your own account, tests acceptance and retries, then rolls back the entire fixture and verifies restoration. It does not enable recommendations or save real consent.','Esta prueba crea temporalmente datos ficticios en tu propia cuenta, prueba aceptación y reintentos, revierte todo y verifica la restauración. No activa recomendaciones ni guarda consentimiento real.')}</Text>{button(t('Run temporary test and verify restoration','Ejecutar prueba temporal y verificar restauración'),()=>{void run();},busy)}{button(t('Cancel','Cancelar'),()=>setOpen(false),busy)}{busy&&<Text style={{color}}>{t('Verification in progress. Do not repeat the test.','Verificación en curso. No repitas la prueba.')}</Text>}</View></View></Modal></View>;
 }
+

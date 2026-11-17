@@ -1,7 +1,7 @@
 /** Internal background transport, never a user/foreground request adapter.
  * Existing deployment environment supplies SUPABASE_SERVICE_ROLE_KEY in closure.
  * No secrets are read here, no credentials minted, no decoded JWT claim trusted. */
-export const INTERNAL_DAILY_WORKER_RELEASE=Object.freeze({enabled:false} as const);
+export const INTERNAL_DAILY_WORKER_RELEASE=Object.freeze({enabled:true} as const);
 export const INTERNAL_DAILY_WORKER_LIMITS=Object.freeze({maxOwners:25,maxRunMs:5000,maxBodyBytes:256,providerProofMaxAgeMs:30000} as const);
 const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 const digest=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);

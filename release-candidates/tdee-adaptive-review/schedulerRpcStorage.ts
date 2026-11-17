@@ -1,7 +1,7 @@
 import {diagnosticFromAssessment,type AssessedSnapshot} from './schedulerDiagnostic.ts';
 import type {DailyPlan,DailyRecord,ScheduleScope,UncertainHold} from './dailyAssessmentScheduler.ts';
 import type {SchedulerDiagnostic} from './schedulerDiagnostic.ts';
-export const SCHEDULER_RPC_RELEASE=Object.freeze({enabled:false} as const);
+export const SCHEDULER_RPC_RELEASE=Object.freeze({enabled:true} as const);
 export interface InternalServiceRpc{rpc(name:string,args:{p_request:Record<string,unknown>}):PromiseLike<{data:unknown;error:unknown}>;}
 type State={record:DailyRecord|null;hold:UncertainHold|null};
 const uuid=(s:unknown)=>typeof s==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);

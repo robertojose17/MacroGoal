@@ -3,6 +3,8 @@ import {ADAPTIVE_RELEASE_STATE} from './proposal.ts';
 import {parseAdaptiveRequest,validReceipt,type AdaptiveRequest,type AdaptiveReceipt} from './apiContract.ts';
 import {createTdeeAccessRefresh} from '../../supabase/functions/observed-snapshot-release/functions/observed-program/tdee-access-refresh.mjs';
 import type {SnapshotSupabaseConfig} from './snapshotSupabaseAdapter.ts';
+/** Separate legacy API release. Rules14 uses its own guarded acceptance RPC. */
+export const LEGACY_SNAPSHOT_HTTP_ACCEPT_RELEASE=Object.freeze({enabled:false} as const);
 export const SNAPSHOT_ACCEPT_MODE='adaptive-accept-v1';
 type Failure={reason:string;receipt:null;mayHaveWritten:boolean};
 type Outcome=Failure|{receipt:AdaptiveReceipt;reason:'receipt';mayHaveWritten:false};
@@ -29,7 +31,7 @@ export function createSnapshotAcceptRuntime(ports:SnapshotAcceptPorts){
    !object(value.request)||typeof value.request.ownerId!=='string')return failure('invalid_request');
   const request=parseAdaptiveRequest(value.request,value.request.ownerId);
   if(!request)return failure('invalid_request');
-  if(!ADAPTIVE_RELEASE_STATE.recommendationsEnabled||!ADAPTIVE_RELEASE_STATE.acceptanceEnabled)return failure('safety_review_required');
+  if(!LEGACY_SNAPSHOT_HTTP_ACCEPT_RELEASE.enabled||!ADAPTIVE_RELEASE_STATE.recommendationsEnabled||!ADAPTIVE_RELEASE_STATE.acceptanceEnabled)return failure('safety_review_required');
   const token=value.authorization.slice(7);
   let accepting=false;
   try{
@@ -136,4 +138,5 @@ export function createSnapshotAcceptHttpHandler(runtime:Runtime,allowedOrigins:r
   }
  };
 }
+
 

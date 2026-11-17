@@ -15,9 +15,9 @@ async function rpc(authorization: string, name: string, params?: Record<string, 
 }
 const prepare = createTdeeAccessRefresh({
  readContext: (authorization: string) => rpc(authorization, 'observed_get_dynamic_tdee_context_v1'),
- refreshAuthority: async (authorization: string) => {
+ refreshAuthority: async (authorization: string, options: {timeoutMs:number}) => {
   const response=await fetch(url+'/functions/v1/common-premium-authority',{
-   method:'GET',headers:{Authorization:authorization,apikey:key},signal:AbortSignal.timeout(30000)});
+   method:'GET',headers:{Authorization:authorization,apikey:key},signal:AbortSignal.timeout(options.timeoutMs)});
   if(!response.ok)throw Error('observation_unavailable');
   return response.json();
  },

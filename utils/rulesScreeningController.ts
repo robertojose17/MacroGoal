@@ -1,5 +1,5 @@
 import type {RulesScreeningRequestJournal} from './rulesScreeningJournal.ts';
-export const RULES_SCREENING_UI_RELEASE=Object.freeze({enabled:false} as const);
+export const RULES_SCREENING_UI_RELEASE=Object.freeze({enabled:true} as const);
 export const RULES_SCREENING_COPY_VERSION='rules-screening-copy-v1';
 export type ScreeningResponse='eligible'|'restricted'|'unsure'|'revoked';
 export type ScreeningRequest={version:'rules-screening-request-v1';requestId:string;response:ScreeningResponse;copyVersion:typeof RULES_SCREENING_COPY_VERSION;profileBinding:string;journeyBinding:string;profileUpdatedAt:string};

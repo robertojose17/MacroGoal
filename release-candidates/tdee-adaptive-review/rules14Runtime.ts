@@ -1,7 +1,7 @@
 import {ensureRateAnchor,bootstrapRateAnchorForReview} from './rateAnchorBootstrap.ts';
 import {prepareRules14Proposal,decodeRules14Record} from './rules14Proposal.ts';
 import {canonicalRateJson} from './rateProposalRecord.ts';
-export const RULES14_RELEASE=Object.freeze({enabled:false} as const);
+export const RULES14_RELEASE=Object.freeze({enabled:true} as const);
 export const RULES14_RPC=Object.freeze({source:'tdee_internal_rules14_source_v1',issue:'tdee_internal_issue_rules14_proposal_v1'});
 export type Rules14Ports={rpc(name:string,args:Record<string,unknown>):Promise<unknown>;now():number;newProposalId():string;expectedPolicy?:{version:string;revision:number;digest:string;engineVersion:string}|null};
 /** Server service ports only, not client-supplied source. Actual deterministic

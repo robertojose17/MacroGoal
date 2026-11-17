@@ -1,7 +1,7 @@
 import type {SchedulerDiagnostic} from './schedulerDiagnostic.ts';
 /** Pure candidate scheduling only. Calendar time never grants a recommendation. */
 import {ADAPTIVE_RELEASE_STATE} from './proposal.ts';
-export const DAILY_SCHEDULER_RELEASE_STATE=Object.freeze({enabled:false} as const);
+export const DAILY_SCHEDULER_RELEASE_STATE=Object.freeze({enabled:true} as const);
 const DAY=86400000;
 // contextRevision is a stable server digest of accepted goal revision, profile/journey
 // scope and scheduler contract version. NEVER include rolling meal/weight source

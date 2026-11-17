@@ -1,5 +1,5 @@
 import {prepareAcceptedIntakeRateAnchor, type AcceptedIntakeRateAnchor} from './acceptedIntakeRateAnchor.ts';
-export const RATE_ANCHOR_PERSISTENCE_RELEASE=Object.freeze({enabled:false} as const);
+export const RATE_ANCHOR_PERSISTENCE_RELEASE=Object.freeze({enabled:true} as const);
 type Obj=Record<string,unknown>;
 const obj=(v:unknown):v is Obj=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const block=(reason:string)=>({kind:'blocked' as const,actionable:false as const,reason});

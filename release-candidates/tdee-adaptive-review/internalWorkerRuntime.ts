@@ -9,7 +9,7 @@ import {planDailyAssessment,revalidateClaimedAssessment,DAILY_SCHEDULER_RELEASE_
 import {assessFourteenDaySnapshotReview} from './snapshotReviewContextParser.ts';
 import {diagnosticFromAssessment,type SchedulerDiagnostic} from './schedulerDiagnostic.ts';
 export const INTERNAL_RATE_POLICY_BINDING:null|{version:string;digest:string;engineVersion:string}=null;
-export const INTERNAL_WORKER_RUNTIME_RELEASE=Object.freeze({enabled:false} as const);
+export const INTERNAL_WORKER_RUNTIME_RELEASE=Object.freeze({enabled:true} as const);
 type Obj=Record<string,any>;
 const obj=(v:unknown):v is Obj=>!!v&&typeof v==='object'&&!Array.isArray(v);
 export interface ServiceRpcBuilder extends PromiseLike<{data:unknown;error:unknown}>{abortSignal(signal:AbortSignal):ServiceRpcBuilder;}

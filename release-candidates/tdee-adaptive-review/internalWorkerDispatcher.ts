@@ -1,5 +1,5 @@
 type Handler=(request:Request)=>Promise<Response>;
-export const INTERNAL_DISPATCH_RELEASE=Object.freeze({enabled:false} as const);
+export const INTERNAL_DISPATCH_RELEASE=Object.freeze({enabled:true} as const);
 const paths=new Set(['/functions/v1/ai-coach-daily/internal-tdee-daily-v1','/ai-coach-daily/internal-tdee-daily-v1']);
 /** Preserve every existing route and its original Request. Gateway unchanged.
  * Only the exact new path is selected. No actor/context/credential query input. */

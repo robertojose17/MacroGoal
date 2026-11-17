@@ -2,7 +2,7 @@ import {parseRules14Hold,type Rules14Hold} from './rules14Hold.ts';
 import {canonicalRateJson} from '../release-candidates/tdee-adaptive-review/rateProposalRecord.ts';
 import {decodeRules14Record,rules14AcceptanceRequest,type Rules14Record} from '../release-candidates/tdee-adaptive-review/rules14Proposal.ts';
 import type {Rules14RequestJournal} from './rules14AcceptanceJournal.ts';
-export const RULES14_REVIEW_UI_RELEASE=Object.freeze({enabled:false} as const);
+export const RULES14_REVIEW_UI_RELEASE=Object.freeze({enabled:true} as const);
 type Obj=Record<string,any>;const obj=(x:unknown):x is Obj=>!!x&&typeof x==='object'&&!Array.isArray(x),same=(a:unknown,b:unknown)=>canonicalRateJson(a)===canonicalRateJson(b);
 const uuid=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(v),hash=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
 export type Rules14Request=ReturnType<typeof rules14AcceptanceRequest>;

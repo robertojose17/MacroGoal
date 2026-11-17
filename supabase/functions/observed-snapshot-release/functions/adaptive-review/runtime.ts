@@ -19,10 +19,10 @@ export const handleAdaptiveReview=createSnapshotHttpHandler(async request=>{
 },['https://macro-goal.expo.app']);
 
 /** Separate explicit acceptance route. Never exposes or constructs a service-key client. */
-import {createSnapshotAcceptHttpHandler,createSnapshotAcceptSupabaseRuntime} from '../../../../../release-candidates/tdee-adaptive-review/snapshotAcceptEndpoint.ts';
+import {LEGACY_SNAPSHOT_HTTP_ACCEPT_RELEASE,createSnapshotAcceptHttpHandler,createSnapshotAcceptSupabaseRuntime} from '../../../../../release-candidates/tdee-adaptive-review/snapshotAcceptEndpoint.ts';
 let acceptRuntime:ReturnType<typeof createSnapshotAcceptSupabaseRuntime>|undefined;
 export const handleAdaptiveAccept=createSnapshotAcceptHttpHandler(async request=>{
- if(!ADAPTIVE_RELEASE_STATE.recommendationsEnabled||!ADAPTIVE_RELEASE_STATE.acceptanceEnabled)return {reason:'safety_review_required',receipt:null,mayHaveWritten:false};
+ if(!LEGACY_SNAPSHOT_HTTP_ACCEPT_RELEASE.enabled||!ADAPTIVE_RELEASE_STATE.recommendationsEnabled||!ADAPTIVE_RELEASE_STATE.acceptanceEnabled)return {reason:'safety_review_required',receipt:null,mayHaveWritten:false};
  try{
   acceptRuntime??=createSnapshotAcceptSupabaseRuntime({
    url:Deno.env.get('SUPABASE_URL')??'',anonKey:Deno.env.get('SUPABASE_ANON_KEY')??'',createClient

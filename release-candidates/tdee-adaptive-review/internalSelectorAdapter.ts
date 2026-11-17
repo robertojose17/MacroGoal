@@ -1,5 +1,5 @@
 /** Fixed service-only selector calls. No HTTP body or JWT actor, no new credentials. */
-export const INTERNAL_SELECTOR_RELEASE_STATE=Object.freeze({enabled:false} as const);
+export const INTERNAL_SELECTOR_RELEASE_STATE=Object.freeze({enabled:true} as const);
 export type SelectorSelection={ownerId:string;contextRevision:string};
 export type SelectorPorts={serviceRpc(name:string,args:Record<string,unknown>,signal:AbortSignal):Promise<unknown>;now?:()=>number};
 const obj=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==='object'&&!Array.isArray(x);

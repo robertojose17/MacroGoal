@@ -1,7 +1,7 @@
 /** Offline engineering candidate. No runtime binding, storage, network or prescription. */
 export const ADAPTIVE_RELEASE_STATE = Object.freeze({
-  recommendationsEnabled: false,
-  acceptanceEnabled: false,
+  recommendationsEnabled:true,
+  acceptanceEnabled:true,
   reviewedPolicyId: null,
 } as const);
 

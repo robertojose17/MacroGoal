@@ -1,7 +1,7 @@
 /** Server-selected owners only. Not an endpoint and never authenticates as a user. */
 import {createRCV2Reader} from '../../supabase/functions/common-premium-authority/rc-v2-adapter.mjs';
 import {evaluateV2Evidence} from '../../supabase/functions/common-premium-authority/v2-evidence.mjs';
-export const INTERNAL_PROVIDER_RELEASE_STATE=Object.freeze({enabled:false} as const);
+export const INTERNAL_PROVIDER_RELEASE_STATE=Object.freeze({enabled:true} as const);
 export type ProviderSelection={ownerId:string;contextRevision:string};
 export type RegistryBinding={actor:string;kind:string;registryVersion:string;expiresAt:number};
 export type ProviderProof=ProviderSelection&{checkedAt:number;expiresAt:number;active:boolean;revoked:boolean;authority:{version:'internal-provider-proof-v1';scopes:{environment:string;version:number}[];registry:RegistryBinding|null}};
