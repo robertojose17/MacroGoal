@@ -15,11 +15,13 @@ export async function build(){
   if(emitted.diagnostics?.some(x=>x.category===ts.DiagnosticCategory.Error))throw Error('transpile_failed:'+name);
   let code=emitted.outputText;
   const imports=[...code.matchAll(/(?:from\s*|import\s*)['"]([^'"]+)['"]/g)].map(m=>m[1]);
-  for(const spec of imports){if(!/^\.\/[A-Za-z0-9]+(?:\.ts)?$/.test(spec))throw Error('nonlocal_dependency_not_allowed:'+spec);const dep=spec.slice(2).replace(/\.ts$/,'');await module(dep);code=code.replaceAll(`'${spec}'`,`'./${dep}.js'`).replaceAll(`"${spec}"`,`"./${dep}.js"`);}
+  for(const spec of imports){if(spec==='expo-crypto'){code=code.replaceAll("'expo-crypto'","'./expo-crypto-test-adapter.js'").replaceAll('"expo-crypto"','"./expo-crypto-test-adapter.js"');continue;}if(!/^\.\/[A-Za-z0-9]+(?:\.ts)?$/.test(spec))throw Error('nonlocal_dependency_not_allowed:'+spec);const dep=spec.slice(2).replace(/\.ts$/,'');await module(dep);code=code.replaceAll(`'${spec}'`,`'./${dep}.js'`).replaceAll(`"${spec}"`,`"./${dep}.js"`);}
   await writeFile(resolve(out,name+'.js'),code);manifest.push({path:relative(root,file),sha256:createHash('sha256').update(source).digest('hex')});
  }
- await module('browserDurableRequestJournals');await module('acceptedGoalJournalCapability');
- for(const name of ['tests.js','index.html','realm.html'])await writeFile(resolve(out,name),await readFile(resolve(here,name)));
+ await module('browserDurableRequestJournals');await module('acceptedGoalJournalCapability');await module('saveNutritionGoal');await module('restartNutritionJourney');
+ const adapter='// Explicit test boundary: expo-crypto randomUUID delegates to browser WebCrypto; no other Expo exports mocked.\nexport const randomUUID=()=>globalThis.crypto.randomUUID();\n';
+ await writeFile(resolve(out,'expo-crypto-test-adapter.js'),adapter);manifest.push({path:'TEST-ADAPTER:expo-crypto.randomUUID -> WebCrypto.randomUUID',sha256:createHash('sha256').update(adapter).digest('hex')});
+ for(const name of ['tests.js','controller-tests.js','index.html','realm.html'])await writeFile(resolve(out,name),await readFile(resolve(here,name)));
  await writeFile(resolve(out,'blank.html'),'<!doctype html><title>Synthetic journal QA</title>');
  await writeFile(resolve(out,'source-manifest.json'),JSON.stringify(manifest,null,2));
  return {out,manifest};
