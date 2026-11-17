@@ -98,7 +98,7 @@ export async function requestObservation(input: {
   if (!input.enabled) throw Error('observation_unavailable');
   if (input.signal.aborted || !input.isCurrent() || input.session.user.id !== input.expectedOwner) throw Error('account_changed');
   if (input.settings && (input.kind !== 'program' || typeof input.settings.enabled !== 'boolean' || !Number.isInteger(input.settings.reviewDay) || input.settings.reviewDay < 0 || input.settings.reviewDay > 6)) throw Error('invalid_request');
-  const mode = input.kind === 'program' ? 'observed-program-v1' : 'observed-progress-v1';
+  const mode = input.kind === 'program' ? 'automatic-program-v1' : 'observed-progress-v1';
   const body = input.settings ? { action:'dynamic_settings', ...input.settings } : input.kind === 'progress' ? { userId: input.expectedOwner } : undefined;
   const response = await (input.fetcher ?? fetch)(input.endpoint + '?mode=' + mode, {
     method:body ? 'POST' : 'GET', signal:input.signal, cache:'no-store',

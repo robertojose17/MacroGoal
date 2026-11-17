@@ -1,3 +1,4 @@
+import {runLifecycleCases} from './lifecycle-run.mjs';
 import {build,here} from './build.mjs';import {chromium} from 'playwright';import {createServer} from 'node:http';import {readFile,writeFile} from 'node:fs/promises';import {resolve} from 'node:path';
 const {out,manifest}=await build(),results=[];let browser,server;const blocked=[];
 const assert=(x,m)=>{if(!x)throw Error(m)};
@@ -25,6 +26,7 @@ try{
  });
  await controllerCase('actual save controller rejects mismatched readback without resolving pending',async()=>{await page.evaluate(async p=>(await import('./controller-tests.js')).invalidReadback(p),project('readback'))});
  await controllerCase('actual restart controller verifies mock receipt and kg profile readback',async()=>{await page.evaluate(async p=>(await import('./controller-tests.js')).successfulRestart(p),project('restart'))});
+ await runLifecycleCases(context,origin,results);
  assert(blocked.length===0,'nonlocal_network_attempted');
 }catch(error){results.push({test:'runner',pass:false,error:String(error.stack||error)})}finally{await browser?.close();if(server)await new Promise(r=>server.close(r));}
 const report={suite:'actual-repository-browser-journal',syntheticOnly:true,commit:process.env.GITHUB_SHA??null,passed:results.filter(x=>x.pass).length,total:results.length,results,sourceManifest:manifest,nonlocalRequests:blocked};await writeFile(resolve(here,'results.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));if(results.some(x=>!x.pass))process.exitCode=1;

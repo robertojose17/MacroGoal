@@ -1,3 +1,4 @@
+import { deriveDashboardJourney } from '../../../../../release-candidates/tdee-adaptive-review/dashboardJourney.ts';
 import { progressHeaders } from './dispatcher.ts';
 import { buildTargetTimeline, hasTargetIntegrityConflict } from '../preview-progress/historicalTargets.ts';
 import { resolveWeightSource } from '../preview-progress/weightSource.ts';
@@ -65,14 +66,17 @@ export function createObservedProgressHandler(deps:Dependencies) {
       // Observations and accepted targets only. No legacy TDEE/formula, pace target,
       // deadline projection, recommendation or mutation is activated by this route.
       const adaptiveHistory=state.adaptiveHistory.map(h=>({...h,effectiveDate:timeline.find(e=>e.sourceWeekStart===h.weekStart&&e.calorieTarget===h.prescribedCalories)?.effectiveDate??h.effectiveDate}));
-      const progressFraction = observedJourneyProgress(state.journeyStartWeightLbs, state.goalWeightLbs, state.currentWeightLbs);
+      const dashboardJourney = deriveDashboardJourney({journeyStartDate:profile.journey_start_date,today:todayStr,goalWeightKg:profile.goal_weight,checkIns:data.journeyCheckIns??checkInWeights});
+      const toLbs=(kg:number|null)=>kg===null?null:kg*2.20462262185;
+      const start=toLbs(dashboardJourney.startWeightKg),current=toLbs(dashboardJourney.currentWeightKg),goal=toLbs(dashboardJourney.goalWeightKg);
+      const progressFraction = observedJourneyProgress(start, goal, current);
       const journeyProgress = {
-        startWeightLbs: state.journeyStartWeightLbs,
-        goalWeightLbs: state.goalWeightLbs,
-        currentWeightLbs: state.currentWeightLbs,
+        startWeightLbs: start,
+        goalWeightLbs: goal,
+        currentWeightLbs: current,
         progressFraction,
       };
-      return reply(200,{...state,progressToGoalFraction:progressFraction,journeyProgress,adaptiveHistory,lastAdaptiveAdjustment:adaptiveHistory[0]??null,observationOnly:true,
+      return reply(200,{...state,dashboardJourney,journeyStartWeightLbs:start,currentWeightLbs:current,goalWeightLbs:goal,lastWeighInDate:dashboardJourney.currentWeightDate,daysSinceLastWeighIn:dashboardJourney.currentWeightDate?Math.floor((Date.parse(todayStr+'T00:00:00Z')-Date.parse(dashboardJourney.currentWeightDate+'T00:00:00Z'))/86400000):null,totalWeightChangeLbs:current!==null&&start!==null?current-start:null,progressToGoalFraction:progressFraction,journeyProgress,adaptiveHistory,lastAdaptiveAdjustment:adaptiveHistory[0]??null,observationOnly:true,
         observationVersion:'observed-progress-v1',interpretationAvailable:false,proposal:null,safety:{enabled:false,eligibility:'unverified'}});
     } catch(error) {
       const message=error instanceof Error?error.message:'';

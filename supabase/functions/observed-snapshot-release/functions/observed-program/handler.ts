@@ -10,6 +10,7 @@ export interface ObservationGoal {
 }
 export interface ObservationContext {
   accessValidUntil?: number;
+  analysisMode?: 'automatic-v1';
   ownerId: string; premium: boolean; enabled: boolean; reviewDay: number; today: string;
   nextReviewDate: string; reviewDue: boolean; currentGoal: ObservationGoal | null;
   fingerprint: string; proposal: null; safety: { enabled: false; eligibility: 'unverified' };
@@ -28,6 +29,7 @@ function view(context: ObservationContext, estimate: DynamicTdeeResult | null, r
   return {
     ...(context.accessValidUntil === undefined ? {} : {accessValidUntil:context.accessValidUntil}),
     ...(rateDiagnostic === undefined ? {} : {rateDiagnostic}),
+    ...(context.analysisMode === undefined ? {} : {analysisMode:context.analysisMode}),
     version: 'dynamic-program-v1', observationOnly: true, observationVersion: 'observation-v1', premium: context.premium, enabled: context.enabled,
     reviewDay: context.reviewDay, today: context.today, nextReviewDate: context.nextReviewDate,
     reviewDue: false, currentGoal: context.currentGoal, estimate: estimate ? markedEstimate(estimate) : null,
@@ -39,15 +41,15 @@ function assertOwner(context: ObservationContext, owner: string) {
   if (!context || context.ownerId !== owner || context.safety?.enabled !== false ||
       context.safety?.eligibility !== 'unverified' || context.proposal !== null) throw new Error('observation_unavailable');
 }
-export function createObservationHandler(deps: ObservationDependencies) {
+export function createObservationHandler(deps: ObservationDependencies, automatic = false) {
   return async (req: Request): Promise<Response> => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: previewHeaders });
     if (!['GET','POST'].includes(req.method)) return reply(405, { error: 'method_not_allowed' });
     const params = new URL(req.url).searchParams;
     const requestedView = params.get('view') ?? 'program';
-    if (params.getAll('mode').length !== 1 || params.get('mode') !== 'observed-program-v1' || params.getAll('view').length > 1 || !['program','estimate'].includes(requestedView) ||
+    if (params.getAll('mode').length !== 1 || params.get('mode') !== (automatic ? 'automatic-program-v1' : 'observed-program-v1') || params.getAll('view').length > 1 || !['program','estimate'].includes(requestedView) ||
       [...params.keys()].some(k => !['mode','view'].includes(k))) return reply(400, { error: 'invalid_request' });
-    if (req.method === 'POST' && requestedView === 'estimate') return reply(405, { error: 'method_not_allowed' });
+    if (req.method === 'POST' && (requestedView === 'estimate' || automatic)) return reply(405, { error: 'method_not_allowed' });
     const authorization = req.headers.get('authorization') ?? '';
     if (!/^Bearer \S+$/i.test(authorization)) return reply(401, { error: 'authentication_required' });
     try {

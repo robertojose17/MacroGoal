@@ -1,3 +1,4 @@
+import { parseDashboardJourney, type DashboardJourney } from '@/release-candidates/tdee-adaptive-review/dashboardJourney';
 import { useObservationResource } from './useObservationResource';
 import { nullableNumber, record } from '@/utils/dynamicTdeeObservation';
 import { emitGoalChanged } from '@/utils/goalChangeEvents';
@@ -38,6 +39,7 @@ interface TDEEInfo {
 }
 
 export interface ProgressState {
+  dashboardJourney?: DashboardJourney | null;
   currentWeightLbs: number | null;
   trendWeightLbs: number | null;
   weightPace: WeightPace;
@@ -81,7 +83,9 @@ export function parseObservedProgress(value: unknown): ProgressState {
   if (reliability !== 'insufficient' && reliability !== 'low' && reliability !== 'medium' && reliability !== 'high') throw Error('invalid_observation');
   if (v.progressStatus !== 'INSUFFICIENT_DATA' || !Array.isArray(v.dataQualityFlags) || !v.dataQualityFlags.every((flag: unknown) => typeof flag === 'string')) throw Error('invalid_observation');
   const flags: string[] = []; for (const flag of v.dataQualityFlags) if (typeof flag === 'string') flags.push(flag);
-  return { currentWeightLbs:weight(v.currentWeightLbs), trendWeightLbs:weight(v.trendWeightLbs),
+  const dashboardJourney = v.dashboardJourney === undefined ? null : parseDashboardJourney(v.dashboardJourney);
+  if (v.dashboardJourney !== undefined && dashboardJourney === null) throw Error('invalid_dashboard_journey');
+  return { dashboardJourney, currentWeightLbs:weight(v.currentWeightLbs), trendWeightLbs:weight(v.trendWeightLbs),
     weightPace:{lbsPerWeek:nullableNumber(pace.lbsPerWeek),confidence:pace.confidence}, progressStatus:v.progressStatus,
     loggingReliability:reliability, adherence:{score:fraction(adherence.score),calorieAdherenceFraction:fraction(adherence.calorieAdherenceFraction),
       proteinAdherenceFraction:fraction(adherence.proteinAdherenceFraction),coverageFraction:requiredFraction(adherence.coverageFraction),
@@ -96,3 +100,4 @@ export function useProgressIntelligence(userId?: string) {
   const resource = useObservationResource('progress', parseObservedProgress, userId);
   return { state:resource.value, loading:resource.loading, error:resource.error, refresh:resource.refresh };
 }
+

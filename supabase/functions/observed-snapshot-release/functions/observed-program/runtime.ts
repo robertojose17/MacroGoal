@@ -13,8 +13,8 @@ async function rpc(authorization: string, name: string, params?: Record<string, 
   if (error || !data) throw new Error(error?.message ?? 'source_error');
   return data as ObservationContext;
 }
-const prepare = createTdeeAccessRefresh({
- readContext: (authorization: string) => rpc(authorization, 'observed_get_dynamic_tdee_context_v1'),
+const makePrepare = (contextName:string) => createTdeeAccessRefresh({
+ readContext: (authorization: string) => rpc(authorization, contextName),
  refreshAuthority: async (authorization: string, options: {timeoutMs:number}) => {
   const response=await fetch(url+'/functions/v1/common-premium-authority',{
    method:'GET',headers:{Authorization:authorization,apikey:key},signal:AbortSignal.timeout(options.timeoutMs)});
@@ -23,7 +23,7 @@ const prepare = createTdeeAccessRefresh({
  },
 });
 export const handleObservation = createObservationHandler({
-  prepare,
+  prepare: makePrepare('observed_get_dynamic_tdee_context_v1'),
   authenticate: async token => { const { data, error } = await client().auth.getUser(token); return error ? null : data.user?.id ?? null; },
   context: authorization => rpc(authorization, 'observed_get_dynamic_tdee_context_v1'),
   settings: (authorization, enabled, reviewDay) => rpc(authorization, 'observed_set_dynamic_tdee_settings_v1', { p_enabled: enabled, p_review_day: reviewDay }),
@@ -34,3 +34,11 @@ export const handleObservation = createObservationHandler({
   },
 });
 
+
+export const handleAutomaticObservation = createObservationHandler({
+ prepare:makePrepare('automatic_get_dynamic_tdee_context_v1'),
+ authenticate:async token=>{const {data,error}=await client().auth.getUser(token);return error?null:data.user?.id??null;},
+ context:authorization=>rpc(authorization,'automatic_get_dynamic_tdee_context_v1'),
+ settings:async()=>{throw Error('automatic_analysis_enabled');},
+ snapshot:async authorization=>{const {data,error}=await client(authorization).rpc('automatic_get_tdee_snapshot_v1');if(error||!data)throw Error('source_error');return data;},
+},true);

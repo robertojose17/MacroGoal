@@ -70,13 +70,14 @@ export async function fetchPreviewData(db: DB, owner: string, now: Date) {
   if (tracker.error || !Array.isArray(tracker.data) || tracker.data.length > 1) throw new Error('source_unavailable');
   const selected = tracker.data[0];
   if (selected && !['kg','kgs','kilograms','lb','lbs','pounds'].includes(String(selected.unit).toLowerCase())) throw new Error('weight_unit_unavailable');
-  const [allGoals, checkInWeights, rawTracker, meals, tdeeEstimates] = await Promise.all([
+  const [allGoals, journeyCheckIns, rawTracker, meals, tdeeEstimates] = await Promise.all([
     allRows((a,b) => db.from('goals').select(GOAL,{count:'exact'}).eq('user_id',owner).lte('created_at',now.toISOString()).order('id').range(a,b)),
-    allRows((a,b) => db.from('check_ins').select('id,date,weight,updated_at',{count:'exact'}).eq('user_id',owner).not('weight','is',null).gte('date',phaseStart).lte('date',todayStr).order('id').range(a,b)),
+    allRows((a,b) => db.from('check_ins').select('id,date,weight,updated_at',{count:'exact'}).eq('user_id',owner).not('weight','is',null).lte('date',todayStr).order('id').range(a,b)),
     selected ? allRows((a,b) => db.from('tracker_entries').select('id,date,value',{count:'exact'}).eq('user_id',owner).eq('tracker_id',selected.id).gte('date',phaseStart).lte('date',todayStr).order('id').range(a,b)) : Promise.resolve([]),
     allRows((a,b) => db.from('meals').select('id,date,meal_type',{count:'exact'}).eq('user_id',owner).gte('date',start).lte('date',todayStr).order('id').range(a,b)),
     allRows((a,b) => db.from('tdee_estimates').select('id,week_start,created_at,estimated_tdee,prescribed_calories,adjustment_amount,adjustment_applied,skip_reason,avg_calories_eaten,avg_weight_lbs,data_days_count',{count:'exact'}).eq('user_id',owner).lte('week_start',todayStr).lte('created_at',now.toISOString()).order('id').range(a,b)),
   ]);
+  const checkInWeights = journeyCheckIns.filter(row => dayNumber(row.date) !== null && row.date >= phaseStart && row.date <= todayStr && Number.isFinite(Number(row.weight)) && Number(row.weight)>0 && Number(row.weight)<=1000);
   assertCurrentGoalHistory(activeGoal, allGoals, now);
   if (meals.length > 500) throw new Error('source_limit');
   const items = meals.length ? await allRows((a,b) => db.from('meal_items').select('id,meal_id,calories,protein,carbs,fats',{count:'exact'}).in('meal_id',meals.map(m=>m.id)).eq('is_scheduled',false).order('id').range(a,b)) : [];
@@ -95,5 +96,5 @@ export async function fetchPreviewData(db: DB, owner: string, now: Date) {
     throw new Error('context_changed');
   tdeeEstimates.sort((a,b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   // Bounded independent RLS reads, not an atomic or clinically validated snapshot.
-  return {profile,activeGoal,allGoals,checkInWeights,trackerWeights,nutritionRaw,tdeeEstimates,todayStr};
+  return {profile,activeGoal,allGoals,journeyCheckIns,checkInWeights,trackerWeights,nutritionRaw,tdeeEstimates,todayStr};
 }

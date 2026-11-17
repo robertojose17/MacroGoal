@@ -1,8 +1,3 @@
-import { TdeeRules14DiagnosticEntry } from '@/components/TdeeRules14DiagnosticEntry';
-import { TdeeRules14ReviewEntry } from '@/components/TdeeRules14ReviewEntry';
-import { TdeeRulesScreeningEntry } from '@/components/TdeeRulesScreeningEntry';
-import { TdeeDiagnosticFollowupEntry } from '@/components/TdeeDiagnosticFollowupEntry';
-import { TdeeReviewEntry } from '@/components/TdeeReviewEntry';
 import { TdeeDataReadiness } from '@/components/TdeeDataReadiness';
 import { TdeeMacroChoice } from '@/components/TdeeMacroChoice';
 import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
@@ -21,7 +16,6 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/types';
 import { useAcceptedGoalEditor, AcceptedGoalReadSuperseded, type GoalEditorSnapshot } from '@/hooks/useAcceptedGoalEditor';
-import { useDynamicTdeeProgram } from '@/hooks/useDynamicTdeeProgram';
 import { clearOnboardingSession } from '@/utils/onboardingAnalytics';
 import { usePremium } from '@/hooks/usePremium';
 import { cmToFeetInches, kgToLbs, getLossRateDisplayText, feetInchesToCm, lbsToKg, calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
@@ -68,7 +62,7 @@ export default function SettingsScreen() {
   const [goal, setGoal] = useState<any>(null);
   const editor = useAcceptedGoalEditor(false);
   const { refresh: refreshAcceptedEditor, capture: captureAcceptedEditor } = editor;
-  const observation = useDynamicTdeeProgram(editor.snapshot?.profile.id);
+
   const modalSnapshot = useRef<GoalEditorSnapshot | null>(null), restartSnapshot = useRef<GoalEditorSnapshot | null>(null);
   const restartBounds = useRef<JourneyDateBounds | null>(null);
   const restartTimezone = useRef<string | null>(null);
@@ -126,7 +120,7 @@ export default function SettingsScreen() {
   const [avatarUploading, setAvatarUploading] = useState(false);
 
   // Adaptive TDEE state
-  const [showAdjustmentDayModal, setShowAdjustmentDayModal] = useState(false);
+
 
   // Community sharing toggle
   const [autoShare, setAutoShare] = useState(true);
@@ -1325,77 +1319,8 @@ export default function SettingsScreen() {
                     {/* ── Adaptive TDEE Divider ── */}
                     <View style={[styles.adaptiveDivider, { backgroundColor: (isDark ? colors.textSecondaryDark : colors.border) + '30' }]} />
 
-                    {/* ── A. Smart Calorie Adjustment Toggle ── */}
-                    <View style={styles.adaptiveRow}>
-                      <View style={styles.adaptiveRowLeft}>
-                        <View style={[styles.adaptiveIconCircle, { backgroundColor: isDark ? '#1E2D35' : '#EBF4F6' }]}>
-                          <IconSymbol ios_icon_name="sparkles" android_material_icon_name="auto-awesome" size={16} color={colors.primary} />
-                        </View>
-                        <View style={styles.adaptiveTextStack}>
-                          <Text style={[styles.adaptiveLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                            {'TDEE observation'}
-                          </Text>
-                          <Text style={[styles.adaptiveSubtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                            {'Observes data only. It does not change accepted targets or enable recommendations.'}
-                          </Text>
-                        </View>
-                      </View>
-                      <Switch
-                        value={observation.program?.enabled === true}
-                        disabled={observation.loading || !observation.program}
-                        onValueChange={async (val) => {
-                          if (!observation.program) return;
-                          try { await observation.updateSettings(val, observation.program.reviewDay); }
-                          catch (error) { Alert.alert('Observation unavailable', error instanceof Error ? error.message : 'Unable to verify settings'); }
-                        }}
-                        trackColor={{ false: isDark ? colors.borderDark : colors.border, true: colors.primary + '80' }}
-                        thumbColor={observation.program?.enabled === true ? colors.primary : (isDark ? colors.textSecondaryDark : colors.disabled)}
-                      />
-                    </View>
-
-                    {/* ── B. Adjustment Day Selector (only when enabled) ── */}
-                    {observation.program?.enabled === true && (
-                      <TouchableOpacity
-                        style={styles.adaptiveRow}
-                        onPress={() => {
-                          console.log('[Profile] Adjustment Day row pressed');
-                          setShowAdjustmentDayModal(true);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.adaptiveRowLeft}>
-                          <View style={[styles.adaptiveIconCircle, { backgroundColor: isDark ? '#1E2D35' : '#EBF4F6' }]}>
-                            <IconSymbol ios_icon_name="calendar" android_material_icon_name="calendar-today" size={16} color={colors.primary} />
-                          </View>
-                          <Text style={[styles.adaptiveLabel, { color: isDark ? colors.textDark : colors.text }]}>
-                            {(i18n.language.startsWith('es') ? 'Día de revisión de datos' : 'Data review day')}
-                          </Text>
-                        </View>
-                        <View style={styles.adaptiveRowRight}>
-                          <Text style={[styles.adaptiveValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                            {[
-                              t('adaptiveTdee.sunday'),
-                              t('adaptiveTdee.monday'),
-                              t('adaptiveTdee.tuesday'),
-                              t('adaptiveTdee.wednesday'),
-                              t('adaptiveTdee.thursday'),
-                              t('adaptiveTdee.friday'),
-                              t('adaptiveTdee.saturday'),
-                            ][observation.program?.reviewDay ?? 0]}
-                          </Text>
-                          <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="arrow-forward" size={16} color={isDark ? colors.textSecondaryDark : colors.textSecondary} />
-                        </View>
-                      </TouchableOpacity>
-                    )}
-
                     <TdeeDataReadiness userId={editor.snapshot?.profile.id} isDark={isDark} />
                     <TdeeMacroChoice userId={editor.snapshot?.profile.id} isDark={isDark} />
-                    <TdeeRules14DiagnosticEntry ownerId={editor.snapshot?.profile.id} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} />
-                    <TdeeRules14ReviewEntry ownerId={editor.snapshot?.profile.id} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} refreshVerifiedGoal={editor.refresh} />
-                    <TdeeRulesScreeningEntry ownerId={editor.snapshot?.profile.id} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} />
-                    <TdeeDiagnosticFollowupEntry snapshot={editor.snapshot} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} />
-                    <TdeeReviewEntry ownerId={editor.snapshot?.profile.id} isDark={isDark} blocked={editor.loading || editor.busy || editor.pending || saving} refreshVerifiedGoal={editor.refresh} />
-
                     {/* ── C. View Adjustment History ── */}
                     <TouchableOpacity
                       style={styles.adaptiveRow}
@@ -2096,70 +2021,7 @@ export default function SettingsScreen() {
         )
       )}
 
-      {/* ── Adjustment Day Modal ─────────────────────────────────────────────── */}
-      <Modal
-        visible={showAdjustmentDayModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowAdjustmentDayModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowAdjustmentDayModal(false)}
-        >
-          <TouchableOpacity
-            style={[styles.modalContent, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-            activeOpacity={1}
-          >
-            <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              {(i18n.language.startsWith('es') ? 'Día de revisión de datos' : 'Data review day')}
-            </Text>
-            {[
-              t('adaptiveTdee.sunday'),
-              t('adaptiveTdee.monday'),
-              t('adaptiveTdee.tuesday'),
-              t('adaptiveTdee.wednesday'),
-              t('adaptiveTdee.thursday'),
-              t('adaptiveTdee.friday'),
-              t('adaptiveTdee.saturday'),
-            ].map((dayName, index) => {
-              const isSelected = (observation.program?.reviewDay ?? 0) === index;
-              return (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.dayOptionRow,
-                    { borderBottomColor: (isDark ? colors.textSecondaryDark : colors.border) + '30' },
-                    isSelected && { backgroundColor: colors.primary + '15' },
-                  ]}
-                  onPress={async () => {
-                    if (!observation.program) return;
-                    try { await observation.updateSettings(observation.program.enabled, index); setShowAdjustmentDayModal(false); }
-                    catch (error) { Alert.alert('Observation unavailable', error instanceof Error ? error.message : 'Unable to verify settings'); }
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.dayOptionText, { color: isSelected ? colors.primary : (isDark ? colors.textDark : colors.text) }]}>
-                    {dayName}
-                  </Text>
-                  {isSelected && (
-                    <IconSymbol ios_icon_name="checkmark" android_material_icon_name="check" size={16} color={colors.primary} />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-            <TouchableOpacity
-              style={[styles.modalButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background, marginTop: spacing.sm }]}
-              onPress={() => setShowAdjustmentDayModal(false)}
-            >
-              <Text style={[styles.modalButtonText, { color: isDark ? colors.textDark : colors.text }]}>
-                {t('common.cancel')}
-              </Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -2858,3 +2720,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+

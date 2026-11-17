@@ -22,6 +22,7 @@ export function parseObservationContext(value: unknown, owner: string): Observat
       !civil(value.today) || !civil(value.nextReviewDate) || value.reviewDue !== false || value.proposal !== null ||
       !hash(value.fingerprint) || !record(value.safety) || value.safety.enabled !== false || value.safety.eligibility !== 'unverified') fail();
   if (Object.hasOwn(value,'accessValidUntil') && (!Number.isSafeInteger(value.accessValidUntil) || Number(value.accessValidUntil)<=0)) fail();
+  if (Object.hasOwn(value,'analysisMode') && (value.analysisMode !== 'automatic-v1' || value.enabled !== true)) fail();
   const goal = value.currentGoal;
   if (goal !== null) {
     if (!record(goal) || !text(goal.id) || !['daily_calories','protein_g','carbs_g','fats_g','fiber_g'].every(k => finite(goal[k]) && goal[k] >= 0) ||
@@ -34,7 +35,7 @@ export function parseObservedSnapshot(value: unknown, owner: string): ObservedSn
   if (!record(value) || value.version !== 'observed-snapshot-v1' || value.ownerId !== owner || !text(owner) ||
       !timestamp(value.capturedAt) || !hash(value.sourceFingerprint)) fail();
   const context = parseObservationContext(value.context, owner);
-  if (!context.premium || !context.enabled) {
+  if ((!context.premium || !context.enabled) && context.analysisMode !== 'automatic-v1') {
     if (value.counts !== null || value.sources !== null) fail();
     return value as unknown as ObservedSnapshot;
   }

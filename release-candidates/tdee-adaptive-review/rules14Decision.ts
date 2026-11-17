@@ -1,6 +1,6 @@
 import {rules14ProfileSupportCurrent} from './rules14ProfileSupport.ts';
 /** Deterministic product rule with an approximate expenditure estimate, never measured TDEE or a statistical CI. */
-import {diagnoseObservedSnapshotRateReview} from './snapshotReviewContextParser.ts';
+import {diagnoseObservedSnapshotRateReview,diagnoseAutomaticAttentionSnapshot} from './snapshotReviewContextParser.ts';
 import {RATE_TOLERANCE,compareInitialRateToTarget} from './rateAdjustmentDecision.ts';
 export const RULES14_PRODUCT_DEFAULTS=Object.freeze({minIntakeKcal:1500,maxIntakeKcal:5000,proteinMinLossGPerKg:1.4,proteinMinOtherGPerKg:.8,proteinMaxGPerKg:2.0,fatMinFraction:.20,fatMaxFraction:.35,carbsMinG:130,version:'rules14-observed-product-defaults-v2',proposedBy:'assistant-product-design',
  windowDays:14,minWeightDays:8,minObservedIntakeDays:10,maxStepKcal:200,maxStepFraction:0.10,maxNetDeltaKcal:400,
@@ -13,14 +13,15 @@ export type Rules14Policy={version:string;revision:number;digest:string;engine_v
 export type Rules14History={version:'rules14-history-v1';authority:'server-rules14-chain-v1';ownerId:string;capturedAt:number;
  anchorReference:{ownerId:string;version:number;sourceRequestId:string;sourceGoalId:string};baselineAcceptedAt:number;baselineIntakeKcal:number;
  acceptedCount:number;acceptedDeltaKcal:number;lastAcceptedAt:number|null;lastReceiptDigest:string|null;currentGoal:Record<string,any>};
+export type Rules14AttentionHistory=Omit<Rules14History,'version'|'authority'> & {version:'rules14-attention-history-v1';authority:'server-accepted-goal-receipt-v1'};
 const int=(x:unknown):x is number=>typeof x==='number'&&Number.isSafeInteger(x);
 const finite=(x:unknown):x is number=>typeof x==='number'&&Number.isFinite(x);
 const hash=(x:unknown)=>typeof x==='string'&&/^[a-f0-9]{64}$/.test(x);
 const stop=(reason:string,now:number)=>({kind:'hold' as const,actionable:false as const,reason,reevaluateAt:now+7*86400000});
 /** Raw snapshot/history must be read from one trusted own-owner server envelope. */
-export function decideRules14(snapshot:unknown,actor:string,history:Rules14History,p:Rules14Policy,now:number){
+function decideRules14Internal(snapshot:unknown,actor:string,history:Rules14History|Rules14AttentionHistory,p:Rules14Policy,now:number,attentionOnly:boolean){
  if(!int(now)||now<0||now>253401609600000)return stop('invalid_time',0);
- const d=diagnoseObservedSnapshotRateReview(snapshot,actor,now);if(d.kind==='blocked')return stop(d.reason,now);
+ const d=attentionOnly?diagnoseAutomaticAttentionSnapshot(snapshot,actor,now):diagnoseObservedSnapshotRateReview(snapshot,actor,now);if(d.kind==='blocked')return stop(d.reason,now);
  const g=(snapshot as any).currentGoal;
  if(!p||p.engine_version!=='rules14-observed-v2'||p.enabled!==true||!hash(p.digest)||typeof p.version!=='string'||!p.version||
  !Number.isFinite(Date.parse(p.expires_at))||Date.parse(p.expires_at)<=now||p.scope!=='profile-adult-observed-v1'||!int(p.revision)||p.revision<1)return stop('energy_policy_required',now);
@@ -29,8 +30,10 @@ export function decideRules14(snapshot:unknown,actor:string,history:Rules14Histo
  p.max_cumulative_delta_kcal<1||p.increment_kcal<1||p.increment_kcal>p.max_step_kcal||p.min_days_between_acceptances<14||p.min_days_between_acceptances>365||
  p.min_intake_kcal<=0||p.max_intake_kcal>10000||p.min_intake_kcal>p.max_intake_kcal)return stop('policy_invalid',now);
  if(!rules14ProfileSupportCurrent(snapshot,actor,now))return stop('profile_support_required',now);
- if(!history||history.version!=='rules14-history-v1'||history.authority!=='server-rules14-chain-v1'||history.ownerId!==actor||
- history.anchorReference?.ownerId!==actor||!int(history.anchorReference.version)||history.anchorReference.version<1||
+ const receiptOnly=attentionOnly&&history?.version==='rules14-attention-history-v1'&&history.authority==='server-accepted-goal-receipt-v1'&&history.anchorReference?.version===0&&history.acceptedCount===0&&history.acceptedDeltaKcal===0&&history.lastAcceptedAt===null&&history.lastReceiptDigest===null;
+ const storedChain=history?.version==='rules14-history-v1'&&history.authority==='server-rules14-chain-v1'&&int(history.anchorReference?.version)&&history.anchorReference.version>=1;
+ if(!history||(!receiptOnly&&!storedChain)||history.ownerId!==actor||
+ history.anchorReference?.ownerId!==actor||!int(history.anchorReference.version)||
  !int(history.capturedAt)||history.capturedAt>now||now-history.capturedAt>30000||!int(history.baselineAcceptedAt)||history.baselineAcceptedAt>now||history.baselineAcceptedAt<0||
  !int(history.baselineIntakeKcal)||!int(history.acceptedCount)||history.acceptedCount<0||!int(history.acceptedDeltaKcal)||
  history.baselineIntakeKcal+history.acceptedDeltaKcal!==g.daily_calories||Object.keys(g).length!==Object.keys(history.currentGoal??{}).length||Object.keys(g).some(k=>JSON.stringify(g[k])!==JSON.stringify(history.currentGoal?.[k]))||
@@ -93,3 +96,8 @@ export function decideRules14(snapshot:unknown,actor:string,history:Rules14Histo
  qualification:'Deterministic product rule using approximate energy conversion; not a measured TDEE or confidence interval.'};
 }
 
+
+/** Public producer path preserves genuine Premium admission. */
+export function decideRules14(snapshot:unknown,actor:string,history:Rules14History,p:Rules14Policy,now:number){return decideRules14Internal(snapshot,actor,history,p,now,false);}
+/** Discards every computed target. Free attention is not a recommendation capability. */
+export function assessAutomaticRules14Attention(snapshot:unknown,actor:string,history:Rules14History|Rules14AttentionHistory,p:Rules14Policy,now:number){const r=decideRules14Internal(snapshot,actor,history,p,now,true);return r.kind==='rules14_candidate'?{kind:'attention' as const,reason:'review_needed' as const,actionable:false as const}:{kind:'none' as const,reason:r.reason,actionable:false as const};}

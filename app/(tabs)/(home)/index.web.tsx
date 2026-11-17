@@ -1,6 +1,9 @@
 import { getAppLocale } from '@/lib/localization';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { readActiveGoal, type ActiveGoal } from '@/utils/activeGoal';
+import { subscribeGoalChanged } from '@/utils/goalChangeEvents';
+import { createFoodsReadScope, foodsMacroPercentage } from '@/utils/foodsReadScope';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -69,9 +72,10 @@ export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
-  const [goal, setGoal] = useState<any>(null);
+  const [goal, setGoal] = useState<ActiveGoal | null>(null);
+  const readScope = useRef(createFoodsReadScope()).current;
   const [meals, setMeals] = useState<MealData[]>([
     { type: 'breakfast', label: 'Breakfast', items: [], totalCalories: 0 },
     { type: 'lunch', label: 'Lunch', items: [], totalCalories: 0 },
@@ -87,12 +91,16 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
+    const revision = readScope.begin();
+    if (revision === null) return;
     try {
       setLoading(true);
       setError(null);
+      setGoal(null);
 
       const { data: { user }, error: userError } = await supabase.auth.getUser();
 
+      if (!readScope.current(revision)) return;
       if (userError) {
         console.error('[Home Web] Error getting user:', userError);
         setError('localization.screens.homeAuthFailed');
@@ -107,25 +115,10 @@ export default function HomeScreen() {
         return;
       }
 
-      console.log('[Home Web] Loading data for user:', user.id);
-
-      const { data: goalData, error: goalError } = await supabase
-        .from('goals')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (goalError) {
-        console.error('[Home Web] Error loading goal:', goalError);
-        setGoal({ daily_calories: 2000, protein_g: 150, carbs_g: 200, fats_g: 65, fiber_g: 30 });
-      } else if (goalData) {
-        console.log('[Home Web] Goal loaded:', goalData);
-        setGoal(goalData);
-      } else {
-        console.log('[Home Web] No active goal found, using defaults');
-        setGoal({ daily_calories: 2000, protein_g: 150, carbs_g: 200, fats_g: 65, fiber_g: 30 });
-      }
+      if (!readScope.bind(revision, user.id)) return;
+      // Same authenticated accepted-goal reader used by native Foods. No invented targets.
+      const goalData = await readActiveGoal(user.id).catch(() => null);
+      if (!readScope.current(revision, user.id)) return;
 
       const dateString = formatDateForStorage(selectedDate);
       console.log('[Home Web] Loading meals for date:', dateString);
@@ -166,6 +159,11 @@ export default function HomeScreen() {
         `)
         .eq('user_id', user.id)
         .eq('date', dateString);
+
+      const verifiedOwner = await supabase.auth.getUser();
+      if (!readScope.current(revision, user.id)) return;
+      if (verifiedOwner.error || verifiedOwner.data.user?.id !== user.id) throw new Error('account_changed');
+      setGoal(goalData);
 
       if (mealsError) {
         console.error('[Home Web] Error loading meals:', mealsError);
@@ -247,19 +245,47 @@ export default function HomeScreen() {
         setTotalMacros({ protein: totalP, carbs: totalC, fats: totalF, fiber: totalFib });
       }
     } catch (err: any) {
+      if (!readScope.current(revision)) return;
+      setGoal(null);
       console.error('[Home Web] Error in loadData:', err);
       setError('home.unexpectedError');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (readScope.current(revision)) { setLoading(false); setRefreshing(false); }
     }
-  }, [selectedDate, t]);
+  }, [selectedDate, readScope]);
+
+  useEffect(() => {
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearPrivateView = () => {
+      setGoal(null);
+      setMeals(previous => previous.map(meal => ({ ...meal, items: [], totalCalories: 0 })));
+      setTotalCalories(0); setTotalMacros({ protein: 0, carbs: 0, fats: 0, fiber: 0 });
+    };
+    const changed = subscribeGoalChanged(owner => {
+      if (owner && owner !== readScope.owner()) return;
+      readScope.invalidate(); setGoal(null);
+      if (readScope.focused()) void loadData();
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      const next = session?.user.id ?? null;
+      if (next === readScope.owner()) return;
+      readScope.account(next); clearPrivateView();
+      // Defer outside the auth callback; never await another auth request under its lock.
+      if (refreshTimer !== null) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        if (readScope.focused()) void loadData();
+      }, 0);
+    });
+    return () => { changed(); data.subscription.unsubscribe(); if (refreshTimer !== null) clearTimeout(refreshTimer); };
+  }, [loadData, readScope]);
 
   useFocusEffect(
     useCallback(() => {
-      console.log('[Home Web] Screen focused, loading data');
-      loadData();
-    }, [loadData])
+      readScope.focus();
+      void loadData();
+      return () => { readScope.blur(); };
+    }, [loadData, readScope])
   );
 
   const onRefresh = () => {
@@ -402,7 +428,6 @@ export default function HomeScreen() {
     );
   }
 
-  const caloriesRemaining = (goal?.daily_calories || 2000) - totalCalories;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
@@ -469,41 +494,44 @@ export default function HomeScreen() {
           </Text>
 
           <View style={styles.caloriesContent}>
-            <ProgressCircle
+            {goal ? <ProgressCircle
               current={totalCalories}
-              target={goal?.daily_calories || 2000}
+              target={goal.daily_calories}
               size={140}
               strokeWidth={12}
               color={colors.calories}
               label="kcal"
-            />
+            /> : <View accessibilityLiveRegion="polite" style={{ width: 140, gap: 8 }}>
+              <Text style={{ color: isDark ? colors.textDark : colors.text }}>{Math.round(totalCalories)} kcal</Text>
+              <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>{i18n.language.startsWith('es') ? 'Sin objetivo verificado' : 'No verified target'}</Text>
+            </View>}
 
             <View style={styles.macroSummaryCompact}>
               <MacroSummaryRowCompact
                 label={t('common.protein')}
                 eaten={Math.round(totalMacros.protein)}
-                goal={goal?.protein_g || 150}
+                goal={goal?.protein_g ?? null}
                 color={colors.protein}
                 isDark={isDark}
               />
               <MacroSummaryRowCompact
                 label={t('common.carbs')}
                 eaten={Math.round(totalMacros.carbs)}
-                goal={goal?.carbs_g || 200}
+                goal={goal?.carbs_g ?? null}
                 color={colors.carbs}
                 isDark={isDark}
               />
               <MacroSummaryRowCompact
                 label={t('common.fats')}
                 eaten={Math.round(totalMacros.fats)}
-                goal={goal?.fats_g || 65}
+                goal={goal?.fats_g ?? null}
                 color={colors.fats}
                 isDark={isDark}
               />
               <MacroSummaryRowCompact
                 label={t('common.fiber')}
                 eaten={Math.round(totalMacros.fiber)}
-                goal={goal?.fiber_g || 30}
+                goal={goal?.fiber_g ?? null}
                 color={colors.fiber}
                 isDark={isDark}
               />
@@ -608,8 +636,8 @@ export default function HomeScreen() {
 }
 
 function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
-  const percentage = Math.min((eaten / goal) * 100, 100);
-  const percentageStr: `${number}%` = `${percentage}%`;
+  const percentage = foodsMacroPercentage(eaten, goal);
+  const percentageStr: `${number}%` = `${percentage ?? 0}%`;
 
   return (
     <View style={styles.macroSummaryRowCompact}>
@@ -632,7 +660,7 @@ function MacroSummaryRowCompact({ label, eaten, goal, color, isDark }: any) {
           /
         </Text>
         <Text style={[styles.macroSummaryProgressCompact, { color: isDark ? colors.textDark : colors.text }]}>
-          {goal}g
+          {goal === null ? '—' : `${goal}g`}
         </Text>
       </View>
     </View>
@@ -843,3 +871,4 @@ const styles = StyleSheet.create({
     height: 40,
   },
 });
+

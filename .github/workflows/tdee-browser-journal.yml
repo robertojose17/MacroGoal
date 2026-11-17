@@ -1,4 +1,4 @@
-name: Synthetic browser journal checks
+name: TDEE dashboard and browser checks
 on:
   push:
     branches: [main]
@@ -13,6 +13,26 @@ on:
       - 'app/edit-goals.tsx'
       - 'tests/settings-goal-navigation.test.cjs'
       - 'tests/edit-goals-feedback.test.cjs'
+      - 'components/GoalWeightCard.tsx'
+      - 'components/ProgressCard.tsx'
+      - 'components/ObservedActivityCard.tsx'
+      - 'components/Tdee*'
+      - 'app/(tabs)/dashboard.tsx'
+      - 'app/(tabs)/(home)/index.web.tsx'
+      - 'app/settings.*.tsx'
+      - 'hooks/useTdeeDashboardAttention.ts'
+      - 'hooks/useProgressIntelligence.ts'
+      - 'utils/foodsReadScope.ts'
+      - 'utils/automaticBurnExplanation.ts'
+      - 'utils/tdeeDashboardAttention.ts'
+      - 'utils/rules14DashboardPolicy.ts'
+      - 'utils/dynamicTdeeObservation.ts'
+      - 'release-candidates/tdee-adaptive-review/**'
+      - 'supabase/functions/observed-snapshot-release/**'
+      - 'supabase/functions/ai-coach-daily/**'
+      - 'tests/dashboard-*.test.*'
+      - 'tests/automatic-scheduler.test.mjs'
+      - 'tests/foods-web-accepted-goal.test.cjs'
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -47,6 +67,46 @@ jobs:
         run: npm run check
       - name: Goal navigation and verified save feedback
         run: NODE_PATH="$PWD/tests/browser-journal/node_modules" node --test tests/settings-goal-navigation.test.cjs tests/edit-goals-feedback.test.cjs
+      - name: Dashboard, automatic analysis, scheduler and Foods regressions
+        run: >-
+          NODE_PATH="$PWD/tests/browser-journal/node_modules" node --test
+          tests/accepted-intake-rate-anchor-loader-source.test.mjs
+          tests/accepted-intake-rate-anchor.test.mjs
+          tests/automatic-scheduler.test.mjs
+          tests/dashboard-attention-client.test.mjs
+          tests/dashboard-automatic-analysis.test.mjs
+          tests/dashboard-journey.test.cjs
+          tests/dashboard-pending-recovery.test.mjs
+          tests/foods-web-accepted-goal.test.cjs
+          tests/rate-anchor-append-source.test.mjs
+          tests/rate-anchor-bootstrap.test.mjs
+          tests/rate-anchor-erasure-source.test.mjs
+          tests/rate-anchor-persistence-plan.test.mjs
+          tests/rules-screening-controller.test.mjs
+          tests/rules14-activation-on.test.mjs
+          tests/rules14-anchor-integration.test.mjs
+          tests/rules14-anchor-reconciliation.test.mjs
+          tests/rules14-chain-dual-sql-source.test.mjs
+          tests/rules14-chain.test.mjs
+          tests/rules14-diagnostic-release-hide.test.mjs
+          tests/rules14-diagnostic.test.mjs
+          tests/rules14-frozen-history.test.mjs
+          tests/rules14-full.test.mjs
+          tests/rules14-goal-date.test.mjs
+          tests/rules14-hold-http.test.mjs
+          tests/rules14-hold-ui.test.mjs
+          tests/rules14-issuer-identifiers.test.mjs
+          tests/rules14-material-hold.test.mjs
+          tests/rules14-observed-runtime.test.mjs
+          tests/rules14-policy-expiry.test.mjs
+          tests/rules14-release-config.test.mjs
+          tests/rules14-screening-telemetry.test.mjs
+          tests/rules14-selection-asof.test.mjs
+          tests/rules14-ui-controller.test.mjs
+          tests/rules14-ui-verified-commit.test.mjs
+          tests/rules14-v2-issuer-scope-source.test.mjs
+          tests/tdee-access-refresh-unknown-retry.test.mjs
+          tests/tdee-observed-coverage-ui.test.mjs
       - name: Actual repository modules in isolated Chromium
         working-directory: tests/browser-journal
         run: npm test
@@ -60,3 +120,4 @@ jobs:
           # Temporary diagnostic target for this deployment; remove env to make this step a no-op.
           DIAGNOSTIC_DEPLOYMENT_URL: 'https://macro-goal--yev0y2o08u.expo.app/'
         run: node tests/browser-journal/public-deployment-diagnostic.mjs
+

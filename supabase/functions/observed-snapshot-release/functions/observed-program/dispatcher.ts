@@ -8,13 +8,13 @@ export const observationHeaders = {
   'Cache-Control': 'no-store',
 };
 type Handler = (request: Request) => Promise<Response>;
-export function createObservationDispatcher(existing: Handler, load: () => Promise<{handleObservation: Handler}>) {
+export function createObservationDispatcher(existing: Handler, load: () => Promise<{handleObservation: Handler;handleAutomaticObservation?: Handler}>) {
   return async (request: Request): Promise<Response> => {
     const modes = new URL(request.url).searchParams.getAll('mode');
-    if (!modes.includes('observed-program-v1')) return existing(request);
+    if (!modes.includes('observed-program-v1') && !modes.includes('automatic-program-v1')) return existing(request);
     if (modes.length !== 1) return new Response(JSON.stringify({error:'invalid_request'}), {status:400, headers:observationHeaders});
     if (request.method === 'OPTIONS') return new Response('ok', {headers:observationHeaders});
-    try { return await (await load()).handleObservation(request); }
+    try { const runtime=await load();const handler=modes[0]==='automatic-program-v1'?runtime.handleAutomaticObservation:runtime.handleObservation;if(!handler)throw Error('unavailable');return await handler(request); }
     catch { return new Response(JSON.stringify({error:'observation_unavailable'}), {status:503, headers:observationHeaders}); }
   };
 }

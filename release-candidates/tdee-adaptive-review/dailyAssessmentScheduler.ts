@@ -13,6 +13,8 @@ export type AssessmentInput=ScheduleScope&{
  expectedOwnerId:string;now:number;observationEnabled:boolean;
  // Server-derived booleans are admission prerequisites, not purchase/review proof.
  currentAccessVerified:boolean;sourceBindingVerified:boolean;
+ /** Server-owned automatic read-only analysis, never an entitlement or acceptance proof. */
+ automaticAnalysisVerified?:boolean;
  lastAcceptedAt:number|null;hold:UncertainHold|null;
 };
 export type DailyRecord=ScheduleScope&{
@@ -61,7 +63,7 @@ export function planDailyAssessment(input:AssessmentInput,record:DailyRecord|nul
  if(!input||!scopeValid(input)||!stamp(input.now)||!uuid(input.expectedOwnerId)||input.ownerId!==input.expectedOwnerId)return stop('blocked','invalid_owner_or_scope');
  const date=localDate(input.now,input.timezone);if(!date)return stop('blocked','invalid_timezone_or_date');
  if(input.observationEnabled!==true)return stop('skip','observation_disabled');
- if(input.currentAccessVerified!==true||input.sourceBindingVerified!==true)return stop('blocked','current_prerequisites_required');
+ if((input.currentAccessVerified!==true&&input.automaticAnalysisVerified!==true)||input.sourceBindingVerified!==true)return stop('blocked','current_prerequisites_required');
  if(input.lastAcceptedAt!==null&&(!stamp(input.lastAcceptedAt)||input.lastAcceptedAt>input.now))return stop('blocked','invalid_acceptance_time');
  if(input.hold!==null){const h=input.hold;if(!h||typeof h!=='object'||!stamp(h.assessedAt)||!stamp(h.reevaluateAt)||h.assessedAt>input.now||h.reevaluateAt!==h.assessedAt+7*DAY)return stop('blocked','invalid_hold');}
  if(record!==null){

@@ -311,7 +311,7 @@ function confirmedDayLoggedCalories(value:Obj,sources:import('../../supabase/fun
 
 
 /** New observed-only route. Legacy APIs above remain unchanged. */
-export function diagnoseObservedSnapshotRateReview(value:unknown,actor:string,now:number){
+function diagnoseObservedSnapshotRateReviewInternal(value:unknown,actor:string,now:number,automaticAttention:boolean){
  const block=(reason:string)=>({kind:'blocked' as const,actionable:false as const,reason});
  if(!uuid(actor)||!Number.isSafeInteger(now)||!rec(value)||value.version!=='snapshot-review-context-v1'||
  value.actor!==actor||value.actionable!==false||value.evidenceStatus!=='unverified')return block('review_context_invalid');
@@ -319,7 +319,8 @@ export function diagnoseObservedSnapshotRateReview(value:unknown,actor:string,no
  try{observation=parseObservedSnapshot(value.observation,actor);}catch{return block('observation_invalid');}
  const captured=time(observation.capturedAt);
  if(!Number.isFinite(captured)||captured>now||now-captured>30000||value.capturedAt!==observation.capturedAt)return block('source_expired');
- if(!observation.context.premium||!observation.context.enabled||!observation.sources)return block('source_unavailable');
+ if((!observation.context.premium&&!automaticAttention)||!observation.context.enabled||!observation.sources)return block('source_unavailable');
+ if(automaticAttention&&observation.context.analysisMode!=='automatic-v1')return block('automatic_analysis_required');
  if(observation.context.accessValidUntil!==undefined&&observation.context.accessValidUntil<=now)return block('source_expired');
  if(!hasSupportedAdultAge(observation.sources.dateOfBirth,observation.context.today))return block('unsupported_age');
  const g=value.currentGoal,profile=value.profile;
@@ -478,3 +479,8 @@ export function diagnoseSnapshotRateReview(value:unknown,actor:string,now:number
  if(value.readiness.version==='tdee-readiness-v1')return diagnoseLegacySnapshotRateReview(value,actor,now);
  return {kind:'blocked' as const,actionable:false as const,reason:'readiness_contract_unavailable'};
 }
+
+/** Acceptance/issuance callers retain mandatory genuine Premium. */
+export function diagnoseObservedSnapshotRateReview(value:unknown,actor:string,now:number){return diagnoseObservedSnapshotRateReviewInternal(value,actor,now,false);}
+/** Server-only descriptive attention; does not authorize recommendation or acceptance. */
+export function diagnoseAutomaticAttentionSnapshot(value:unknown,actor:string,now:number){return diagnoseObservedSnapshotRateReviewInternal(value,actor,now,true);}

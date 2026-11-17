@@ -1,3 +1,5 @@
+import {createAutomaticDailyWorker} from './automaticDailyWorker.ts';
+import {dashboardAttentionFromSource} from './dashboardAttention.ts';
 import {createInternalRules14Runtime} from './rules14Runtime.ts';
 import {createInternalRateIssuance} from './rateIssuanceRuntime.ts';
 /** Final composition candidate; no runtime activation or credentials provisioned. */
@@ -138,6 +140,42 @@ export function createInternalWorkerRuntime(bootstrap:WorkerRuntimeBootstrap){
     if(response.error)throw Error('service_rpc_failed');if(signal.aborted)throw Error('worker_aborted');return response.data;
    };
    const selector=createInternalSelectorPorts({serviceRpc,now});
+   // Automatic analysis is a separate capability: no Premium proof is fabricated,
+   // and this path never issues proposals, creates baselines or sends notifications.
+   if(bootstrap.recommendationEngine==='rules14-observed-v2'){
+    let workerSignal:AbortSignal|undefined;
+    const automaticSelector=createInternalSelectorPorts({now,serviceRpc:(name,args,signal)=>{
+     const mapped=name==='tdee_internal_select_due_v1'?'tdee_internal_automatic_select_v1':name==='tdee_internal_current_selection_v1'?'tdee_internal_automatic_current_v1':null;
+     if(!mapped)throw Error('automatic_selector_rpc_unknown');return serviceRpc(mapped,args,signal);
+    }});
+    const source=async(owner:string,signal:AbortSignal)=>serviceRpc('tdee_internal_dashboard_attention_source_v1',{p_owner:owner,p_policy:bootstrap.rulesPolicy??null},signal);
+    return await createAutomaticDailyWorker(bootstrap.serviceRoleKey,{
+     ...automaticSelector,now,newClaimId:()=>crypto.randomUUID(),storage:{
+      load:async(scope)=>{
+       if(!workerSignal)throw Error('automatic_worker_not_started');
+       const raw=await serviceRpc('tdee_internal_automatic_state_v1',{p_request:{ownerId:scope.ownerId,contextRevision:scope.contextRevision,timezone:scope.timezone}},workerSignal);
+       return parseSchedulerRpc(raw,scope);
+      },
+      recordComplete:async(plan,revision,claimId,diagnostic,evaluatedAt)=>{
+       if(!workerSignal)throw Error('automatic_worker_not_started');
+       const raw=await serviceRpc('tdee_internal_automatic_record_v1',{p_request:{ownerId:plan.ownerId,contextRevision:plan.contextRevision,timezone:plan.timezone,localDate:plan.localDate,key:plan.key,expectedRevision:revision,claimId,reason:diagnostic.reason,evaluatedAt}},workerSignal);
+       const state=parseSchedulerRpc(raw,plan);
+       if(!state.record||state.record.status!=='completed'||state.record.claimId!==claimId||state.record.key!==plan.key||state.record.revision!==revision+1)throw Error('automatic_completion_unverified');
+      },
+     },
+     selectDueOwners:async(limit,deadline,signal)=>{workerSignal=signal;return automaticSelector.selectDueOwners(limit,deadline,signal);},
+     loadContext:async(owner,signal)=>{const raw=await source(owner,signal) as any;return raw?.snapshot;},
+     evaluate:async(owner,assessedAt,signal)=>{
+      const raw=await source(owner,signal) as any;
+      const premium=raw?.snapshot?.observation?.context?.premium;
+      if(typeof premium!=='boolean')throw Error('automatic_access_unverified');
+      const attention=dashboardAttentionFromSource(raw,owner,premium,now());
+      if(attention.status==='unavailable')throw Error('automatic_attention_unavailable');
+      return {kind:attention.status==='attention'?'attention':'none',reason:attention.reason,actionable:false};
+     },
+    })(request);
+   }
+
    const providerPorts={readCurrentSelection:selector.readCurrentSelection,serviceRpc,getExistingV2Key:bootstrap.getExistingV2Key,request:bootstrap.request,now};
    const refresh=createInternalProviderRefresh(providerPorts),revalidate=createInternalProviderRevalidator(providerPorts);
    const run=createInternalDailyWorker({serviceRoleKey:bootstrap.serviceRoleKey},{...selector,refreshProviderProof:refresh,now,

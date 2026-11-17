@@ -1,3 +1,4 @@
+import { createDashboardAttentionDispatcher } from '../dashboard-attention/dispatcher.ts';
 import { createAdaptiveReviewDispatcher } from '../adaptive-review/dispatcher.ts';
 import { createObservationDispatcher } from '../observed-program/dispatcher.ts';
 import { createObservedProgressDispatcher } from '../observed-progress/dispatcher.ts';
@@ -10,4 +11,5 @@ const v10 = createPreviewDispatcher(legacyHandler, () => import('../preview-prog
 const progress = createProgressDispatcher(v10, () => import('../preview-progress/runtime.ts'));
 const observation = createObservationDispatcher(progress, () => import('../observed-program/runtime.ts'));
 const existing = createObservedProgressDispatcher(observation, () => import('../observed-progress/runtime.ts'));
-Deno.serve(createAdaptiveReviewDispatcher(existing, () => import('../adaptive-review/runtime.ts')));
+const adaptive = createAdaptiveReviewDispatcher(existing, () => import('../adaptive-review/runtime.ts'));
+Deno.serve(createDashboardAttentionDispatcher(adaptive, () => import('../dashboard-attention/runtime.ts')));

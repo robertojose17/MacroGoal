@@ -1,3 +1,4 @@
+import {buildLifecycle} from './lifecycle-build.mjs';
 import ts from 'typescript';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {resolve,dirname,relative} from 'node:path';
@@ -23,6 +24,7 @@ export async function build(){
  await writeFile(resolve(out,'expo-crypto-test-adapter.js'),adapter);manifest.push({path:'TEST-ADAPTER:expo-crypto.randomUUID -> WebCrypto.randomUUID',sha256:createHash('sha256').update(adapter).digest('hex')});
  for(const name of ['tests.js','controller-tests.js','index.html','realm.html'])await writeFile(resolve(out,name),await readFile(resolve(here,name)));
  await writeFile(resolve(out,'blank.html'),'<!doctype html><title>Synthetic journal QA</title>');
+ manifest.push(...await buildLifecycle(root,here,out));
  await writeFile(resolve(out,'source-manifest.json'),JSON.stringify(manifest,null,2));
  return {out,manifest};
 }

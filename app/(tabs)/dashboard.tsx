@@ -20,6 +20,9 @@ import { IconSymbol } from '@/components/IconSymbol';
 import PhotoProgressCard from '@/components/PhotoProgressCard';
 import ConsistencyScore from '@/components/ConsistencyScore';
 import GoalWeightCard from '@/components/GoalWeightCard';
+import ObservedActivityCard from '@/components/ObservedActivityCard';
+import { TdeeDashboardReviewCard } from '@/components/TdeeDashboardReviewCard';
+import { subscribeGoalChanged } from '@/utils/goalChangeEvents';
 import CheckInTilesCard from '@/components/CheckInTilesCard';
 
 import { supabase } from '@/lib/supabase/client';
@@ -329,18 +332,20 @@ export default function DashboardScreen() {
   const [user, setUser] = useState<any>(null);
   const [goal, setGoal] = useState<any>(null);
   const [todaySummary, setTodaySummary] = useState<DailySummary | null>(null);
+  const loadRevision = useRef(0), currentOwner = useRef<string | null>(null), dashboardActive = useRef(false);
 
   const { syncWidget } = useWidget();
   const { isPremium } = usePremium();
 
   const loadTodaySummary = useCallback(async (userId: string, date: string) => {
     try {
-      const { data: mealsData } = await supabase
+      const { data: mealsData, error: mealsError } = await supabase
         .from('meals')
         .select(`meal_items (calories, protein, carbs, fats, fiber)`)
         .eq('user_id', userId)
         .eq('date', date);
 
+      if (mealsError) throw mealsError;
       let totalCals = 0;
       let totalP = 0;
 
@@ -355,53 +360,65 @@ export default function DashboardScreen() {
         });
       }
 
-      setTodaySummary({ date, total_calories: totalCals, total_protein: totalP });
+      return { date, total_calories: totalCals, total_protein: totalP };
     } catch (error) {
       console.error('[Dashboard] Error loading today summary:', error);
+      return null;
     }
   }, []);
 
   const loadData = useCallback(async () => {
+    const revision = ++loadRevision.current;
+    const latest = () => dashboardActive.current && loadRevision.current === revision;
+    if (!dashboardActive.current) return;
+    // Keep the same-owner review card mounted during accepted-goal readback.
+    // Identity changes are cleared synchronously by the auth listener below.
+    const previousOwner = currentOwner.current;
+    if (!previousOwner) { setLoading(true); setUser(null); setGoal(null); setTodaySummary(null); }
     try {
-      setLoading(true);
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) {
-        console.log('[Dashboard] No user found');
-        setLoading(false);
-        return;
-      }
-
-      setUser(authUser);
-
-      const [userRes, goalRes] = await Promise.all([
-        supabase.from('users').select('*').eq('id', authUser.id).maybeSingle(),
-        supabase.from('goals').select('*').eq('user_id', authUser.id).eq('is_active', true).maybeSingle(),
+      const auth = await supabase.auth.getUser();
+      if (!latest()) return;
+      if (auth.error || !auth.data.user) { currentOwner.current = null; setUser(null); setGoal(null); setTodaySummary(null); return; }
+      const actor = auth.data.user.id;
+      if (previousOwner !== actor) { setUser(null); setGoal(null); setTodaySummary(null); setLoading(true); }
+      currentOwner.current = actor;
+      const current = () => latest() && currentOwner.current === actor;
+      const [userRes, goalRes, summary] = await Promise.all([
+        supabase.from('users').select('*').eq('id', actor).maybeSingle(),
+        supabase.from('goals').select('*').eq('user_id', actor).eq('is_active', true).maybeSingle(),
+        loadTodaySummary(actor, toLocalDateString()),
       ]);
-
-      if (userRes.data) {
-        setUser({ ...authUser, ...userRes.data });
-      }
-      if (goalRes.data) {
-        setGoal(goalRes.data);
-      }
-
-      const today = toLocalDateString();
-      await loadTodaySummary(authUser.id, today);
+      const verifiedAuth = await supabase.auth.getUser();
+      if (!current()) return;
+      if (verifiedAuth.error || verifiedAuth.data.user?.id !== actor || userRes.error || goalRes.error || userRes.data?.id !== actor || (goalRes.data && (goalRes.data.user_id !== actor || goalRes.data.is_active !== true))) throw Error('dashboard_context_unverified');
+      setUser({ ...auth.data.user, ...userRes.data });
+      setGoal(goalRes.data ?? null); setTodaySummary(summary);
       syncWidget();
     } catch (error) {
-      console.error('[Dashboard] Error loading data:', error);
+      if (latest()) { setUser(null); setGoal(null); setTodaySummary(null); }
+      console.error('[Dashboard] Unable to verify current account data:', error);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (latest()) { setLoading(false); setRefreshing(false); }
     }
   }, [loadTodaySummary, syncWidget]);
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log('[Dashboard] Screen focused, loading data');
-      loadData();
-    }, [loadData])
-  );
+  useFocusEffect(useCallback(() => {
+    dashboardActive.current = true; void loadData();
+    return () => { dashboardActive.current = false; ++loadRevision.current; };
+  }, [loadData]));
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      const next = session?.user.id ?? null;
+      if (next === currentOwner.current) return;
+      ++loadRevision.current; currentOwner.current = next;
+      setUser(null); setGoal(null); setTodaySummary(null); setLoading(false);
+      if (next && dashboardActive.current) void loadData();
+    });
+    return () => { data.subscription.unsubscribe(); ++loadRevision.current; };
+  }, [loadData]);
+  useEffect(() => subscribeGoalChanged(changedOwner => {
+    if (dashboardActive.current && currentOwner.current && (changedOwner === undefined || changedOwner === currentOwner.current)) void loadData();
+  }), [loadData]);
 
   const onRefresh = useCallback(async () => {
     console.log('[Dashboard] Pull-to-refresh triggered');
@@ -521,6 +538,10 @@ export default function DashboardScreen() {
             />
           </CardErrorBoundary>
         )}
+
+        {/* Additions sit below the complete restored weight section. */}
+        {user && <CardErrorBoundary label="ObservedActivityCard"><ObservedActivityCard userId={user.id} isDark={isDark} /></CardErrorBoundary>}
+        {user && <CardErrorBoundary label="TdeeDashboardReviewCard"><TdeeDashboardReviewCard ownerId={user.id} isDark={isDark} /></CardErrorBoundary>}
 
         {/* ── Check-In Tiles Card ── */}
         {user && (
@@ -698,3 +719,4 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 });
+
