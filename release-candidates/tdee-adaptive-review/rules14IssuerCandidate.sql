@@ -8,15 +8,15 @@ CREATE UNIQUE INDEX rate_proposal_source_scope_unique ON tdee_rules14_private.pr
  (record#>>'{payload,policyBinding,revision}'),(record#>>'{payload,screeningEvidence,requestId}'));
 CREATE FUNCTION tdee_rules14_private.issue_proposal(p_owner uuid,p_record jsonb) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp SET lock_timeout='500ms' AS $fn$
-DECLARE admission jsonb; existing tdee_rules14_private.proposals;h jsonb;id uuid;at_time timestamptz;
+DECLARE admission jsonb; existing tdee_rules14_private.proposals;h jsonb;v_proposal_id uuid;at_time timestamptz;
 BEGIN
  IF p_owner IS NULL OR p_record->>'ownerId' IS DISTINCT FROM p_owner::text OR
  NOT tdee_rules14_private.valid_content(p_record,p_record->>'canonicalContent',p_record->>'digest','digest') THEN
  RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='rate_proposal_invalid';END IF;
  PERFORM 1 FROM public.users WHERE id=p_owner FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='account_unavailable';END IF;
- id:=(p_record->>'id')::uuid;at_time:=clock_timestamp();
- SELECT * INTO existing FROM tdee_rules14_private.proposals p WHERE p.owner_id=p_owner AND p.id=id;
+ v_proposal_id:=(p_record->>'id')::uuid;at_time:=clock_timestamp();
+ SELECT * INTO existing FROM tdee_rules14_private.proposals p WHERE p.owner_id=p_owner AND p.id=v_proposal_id;
  IF FOUND THEN
   IF existing.record IS DISTINCT FROM p_record THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='rate_proposal_id_reused';END IF;
   RETURN jsonb_build_object('status','stored','ownerId',p_owner,'digest',existing.digest,'record',existing.record);
@@ -41,9 +41,9 @@ BEGIN
  IF floor(extract(epoch FROM clock_timestamp())*1000)>=(p_record->>'expiresAt')::bigint THEN
  RETURN jsonb_build_object('status','blocked','reason','proposal_expired','actionable',false);END IF;
  INSERT INTO tdee_rules14_private.proposals(owner_id,id,anchor_version,source_request_id,source_goal_id,digest,canonical_content,record,expires_at_ms)
- VALUES(p_owner,id,(h->>'version')::bigint,(h->>'sourceRequestId')::uuid,(h->>'sourceGoalId')::uuid,p_record->>'digest',p_record->>'canonicalContent',p_record,(p_record->>'expiresAt')::bigint);
+ VALUES(p_owner,v_proposal_id,(h->>'version')::bigint,(h->>'sourceRequestId')::uuid,(h->>'sourceGoalId')::uuid,p_record->>'digest',p_record->>'canonicalContent',p_record,(p_record->>'expiresAt')::bigint);
  INSERT INTO tdee_rules14_private.issuance_journal(owner_id,proposal_id,proposal_digest,recorded_at_ms)
- VALUES(p_owner,id,p_record->>'digest',0); -- BEFORE INSERT assigns actual server time.
+ VALUES(p_owner,v_proposal_id,p_record->>'digest',0); -- BEFORE INSERT assigns actual server time.
  RETURN jsonb_build_object('status','stored','ownerId',p_owner,'digest',p_record->>'digest','record',p_record);
 END $fn$;
 REVOKE ALL ON FUNCTION tdee_rules14_private.issue_proposal(uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
