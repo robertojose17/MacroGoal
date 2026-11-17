@@ -131,18 +131,22 @@ BEGIN
     SELECT u.id,u.timezone,u.date_of_birth,u.journey_start_date,u.updated_at,
       EXISTS(SELECT 1 FROM pg_catalog.pg_timezone_names z WHERE z.name=u.timezone) AS valid_zone
     FROM public.users u WHERE u.id=actor
+  ), access_snapshot AS MATERIALIZED (
+    -- Read the genuine entitlement decision once. Premium and its validity
+    -- marker must describe the same proof; never manufacture a replacement TTL.
+    SELECT entitlement_cache_candidate.tester_access(actor) AS value
   ), context_input AS MATERIALIZED (
-    SELECT p.*,
+    SELECT p.*,a.value AS access_info,
       CASE WHEN p.valid_zone THEN (captured_at AT TIME ZONE p.timezone)::date END AS today,
       coalesce(s.enabled,false) AS enabled, coalesce(s.review_day,0) AS review_day,
       s.started_on, to_jsonb(s) AS settings_record,
-      CASE WHEN coalesce((entitlement_cache_candidate.tester_access(actor)->>'managed')::boolean,false)
-        THEN coalesce((entitlement_cache_candidate.tester_access(actor)->>'allowed')::boolean,false)
+      CASE WHEN coalesce((a.value->>'managed')::boolean,false)
+        THEN coalesce((a.value->>'allowed')::boolean,false)
         ELSE EXISTS(SELECT 1 FROM public.subscriptions sub
         WHERE sub.user_id=actor::text AND sub.status IN ('active','trialing')
         AND sub.entitlement_ids && ARRAY['pro','Macrogoal Pro','macrogoal_pro','premium']::text[]
         AND (sub.expiration_at IS NULL OR sub.expiration_at>captured_at)) END AS premium
-    FROM profile p LEFT JOIN macrogoal_observed_private.settings s ON s.user_id=actor
+    FROM profile p CROSS JOIN access_snapshot a LEFT JOIN macrogoal_observed_private.settings s ON s.user_id=actor
   ), goal_rows AS MATERIALIZED (
     SELECT g.id,g.daily_calories,g.protein_g,g.carbs_g,g.fats_g,g.fiber_g,
       g.macro_preset,g.goal_type,g.loss_rate_lbs_per_week,g.updated_at
@@ -232,7 +236,10 @@ BEGIN
       'context',jsonb_build_object('ownerId',actor,'premium',p.premium,'enabled',p.enabled,
         'reviewDay',p.review_day,'today',p.today,'nextReviewDate',p.due,'reviewDue',false,
         'currentGoal',p.goal,'proposal',NULL,'profile',jsonb_build_object('journey_start_date',p.journey_start_date),
-        'fingerprint',p.context_fingerprint,'safety',jsonb_build_object('enabled',false,'eligibility','unverified')),
+        'fingerprint',p.context_fingerprint,'safety',jsonb_build_object('enabled',false,'eligibility','unverified')) ||
+        CASE WHEN coalesce((p.access_info->>'managed')::boolean,false) AND p.premium
+          THEN jsonb_build_object('accessValidUntil',p.access_info->'validUntil')
+          ELSE '{}'::jsonb END,
       'sourceFingerprint',encode(sha256(convert_to(jsonb_build_object(
         'context',p.context_payload,'profileUpdatedAt',p.updated_at,'goalUpdatedAt',p.goal_updated_at,
         'sources',p.sources,'counts',p.counts)::text,'UTF8')),'hex'),
