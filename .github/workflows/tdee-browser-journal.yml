@@ -12,6 +12,7 @@ on:
       - 'app/settings.tsx'
       - 'app/edit-goals.tsx'
       - 'tests/settings-goal-navigation.test.cjs'
+      - 'tests/edit-goals-feedback.test.cjs'
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -44,8 +45,8 @@ jobs:
       - name: Check harness syntax
         working-directory: tests/browser-journal
         run: npm run check
-      - name: Goal navigation handlers never save on open
-        run: NODE_PATH="$PWD/tests/browser-journal/node_modules" node --test tests/settings-goal-navigation.test.cjs
+      - name: Goal navigation and verified save feedback
+        run: NODE_PATH="$PWD/tests/browser-journal/node_modules" node --test tests/settings-goal-navigation.test.cjs tests/edit-goals-feedback.test.cjs
       - name: Actual repository modules in isolated Chromium
         working-directory: tests/browser-journal
         run: npm test

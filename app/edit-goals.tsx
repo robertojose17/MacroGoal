@@ -25,6 +25,7 @@ export default function EditGoalsScreen() {
   const editor = useAcceptedGoalEditor();
   const { loading, busy: saving, snapshot: loadedSnapshot, isCurrent: actorCurrent } = editor;
   const [formError, setFormError] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   // Coach banner state
   const [lastCoachMacroAction, setLastCoachMacroAction] = useState<Database['public']['Tables']['coach_actions']['Row'] | null>(null);
@@ -51,7 +52,7 @@ export default function EditGoalsScreen() {
 
   useEffect(() => {
     const snapshot = loadedSnapshot;
-    setFormError(''); setIsCoachModified(false); setLastCoachMacroAction(null);
+    setFormError(''); setSaveError(''); setIsCoachModified(false); setLastCoachMacroAction(null);
     if (!snapshot) return;
     const { profile: userData, goal: goalData } = snapshot;
     const activity = userData.activity_level;
@@ -104,6 +105,7 @@ export default function EditGoalsScreen() {
   };
 
   const handleSave = async () => {
+    setSaveError('');
     if (!validateMacros()) {
       Alert.alert(t('editGoals.invalidMacros'), macroError);
       return;
@@ -164,7 +166,9 @@ export default function EditGoalsScreen() {
         },
       });
 
-      // Show success message
+      // run resolves only after the accepted goal has been verified.
+      if (Platform.OS === 'web') { router.back(); return; }
+      // Native keeps its acknowledgement dialog.
       Alert.alert(
         t('editGoals.goalsUpdated'),
         t('editGoals.goalsUpdatedMessage', { calories: targetCalories }),
@@ -177,7 +181,9 @@ export default function EditGoalsScreen() {
       );
     } catch (error: any) {
       console.error('[EditGoals] Error:', error);
-      Alert.alert(t('common.error'), error.message || t('editGoals.failedToSave'));
+      const message = error?.message || t('editGoals.failedToSave');
+      setSaveError(message);
+      if (Platform.OS !== 'web') Alert.alert(t('common.error'), message);
     }
   };
 
@@ -244,6 +250,7 @@ export default function EditGoalsScreen() {
           )}
 
           {!!(editor.error || formError) && <Text accessibilityRole="alert">{editor.error || formError}</Text>}
+          {!!saveError && <Text accessibilityRole="alert" accessibilityLiveRegion="polite">{saveError}</Text>}
           {editor.canRetrySave && <TouchableOpacity disabled={saving} onPress={() => { void editor.run('save').catch(() => {}); }}><Text>Retry the same save</Text></TouchableOpacity>}
           <TouchableOpacity disabled={saving} onPress={() => { void editor.review().catch(() => {}); }}><Text>Review current goals</Text></TouchableOpacity>
           {/* Goal Type */}
