@@ -34,7 +34,7 @@ function calculateMacros(input:{current:SmartTarget;newCalories:number;now:numbe
    !stamp(r.reviewedAt)||!stamp(r.expiresAt)||r.reviewedAt>now||r.expiresAt<=now||r.expiresAt<=r.reviewedAt)return blocked('macro_review_required');
  }else{
   const e=(c as Rules14MacroContext).policyEvidence;
-  if(!e||e.version!=='nutrition-policy-application-v1'||e.eligibility!=='eligible'||e.policyVersion!==b.policyVersion||e.policyDigest!==b.policyDigest||
+  if(!e||!((e.version==='nutrition-policy-application-v1'&&e.eligibility==='eligible'&&!('support' in e))||(e.version==='nutrition-policy-application-v2'&&e.support==='profile-supported'&&!('eligibility' in e)))||e.policyVersion!==b.policyVersion||e.policyDigest!==b.policyDigest||
    e.sourceFingerprint!==b.sourceFingerprint||!text(e.profileBinding)||!text(e.journeyBinding)||!stamp(e.computedAt)||e.computedAt>now||now-e.computedAt>30000||
    !stamp(e.expiresAt)||e.expiresAt<=now||!Number.isSafeInteger(e.ageYears)||e.ageYears<19||e.ageYears>100)return blocked('nutrition_policy_evidence_required');
  }
@@ -92,6 +92,7 @@ function calculateMacros(input:{current:SmartTarget;newCalories:number;now:numbe
 
 /** Separate rules path: trusted deterministic policy evidence, never a fabricated
  * human review or reviewer signature. Existing reviewed API retains its gates. */
-export type Rules14MacroContext=Omit<SmartMacroContext,'review'>&{policyEvidence:{version:'nutrition-policy-application-v1';policyVersion:string;policyDigest:string;sourceFingerprint:string;profileBinding:string;journeyBinding:string;computedAt:number;expiresAt:number;ageYears:number;eligibility:'eligible'|'restricted'|'unknown'}};
+export type Rules14MacroContext=Omit<SmartMacroContext,'review'>&{policyEvidence:{version:'nutrition-policy-application-v1'|'nutrition-policy-application-v2';policyVersion:string;policyDigest:string;sourceFingerprint:string;profileBinding:string;journeyBinding:string;computedAt:number;expiresAt:number;ageYears:number;eligibility?:'eligible'|'restricted'|'unknown';support?:'profile-supported'}};
 export function adjustSmartMacros(input:{current:SmartTarget;newCalories:number;now:number;sourceFingerprint:string;binding?:SmartMacroBinding;context?:SmartMacroContext}){return calculateMacros(input,'review');}
 export function adjustRules14Macros(input:{current:SmartTarget;newCalories:number;now:number;sourceFingerprint:string;binding?:SmartMacroBinding;context?:Rules14MacroContext}){return calculateMacros(input,'rules14');}
+

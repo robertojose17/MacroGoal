@@ -5,10 +5,10 @@ import {createInternalWorkerRuntime,INTERNAL_WORKER_RUNTIME_RELEASE,INTERNAL_RAT
 export async function handleInternalWorker(request:Request):Promise<Response>{
  if(!INTERNAL_WORKER_RUNTIME_RELEASE.enabled)return new Response(JSON.stringify({version:'internal-daily-worker-v1',result:'disabled'}),{status:503,headers:{'content-type':'application/json','cache-control':'no-store'}});
  const binding=readAdaptiveReviewPolicyBinding(key=>Deno.env.get(key));
- if(!binding||binding.engineVersion!=='rules14-v1'||!('revision' in binding)||typeof binding.revision!=='number')return new Response(JSON.stringify({result:'server_policy_required'}),{status:503,headers:{'content-type':'application/json','cache-control':'no-store'}});
+ if(!binding||binding.engineVersion!=='rules14-observed-v2'||!('revision' in binding)||typeof binding.revision!=='number')return new Response(JSON.stringify({result:'server_policy_required'}),{status:503,headers:{'content-type':'application/json','cache-control':'no-store'}});
  const serviceRoleKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
  return createInternalWorkerRuntime({
-  serviceRoleKey,recommendationEngine:'rules14-v1',rulesPolicy:{version:binding.version,revision:binding.revision,digest:binding.digest,engineVersion:'rules14-v1'},ratePolicy:INTERNAL_RATE_POLICY_BINDING,
+  serviceRoleKey,recommendationEngine:'rules14-observed-v2',rulesPolicy:{version:binding.version,revision:binding.revision,digest:binding.digest,engineVersion:'rules14-observed-v2'},ratePolicy:INTERNAL_RATE_POLICY_BINDING,
   createExistingServiceClient(){
    const url=Deno.env.get('SUPABASE_URL');
    if(!url||!serviceRoleKey)throw Error('existing_service_configuration_unavailable');
@@ -18,4 +18,5 @@ export async function handleInternalWorker(request:Request):Promise<Response>{
   request:fetch
  })(request);
 }
+
 

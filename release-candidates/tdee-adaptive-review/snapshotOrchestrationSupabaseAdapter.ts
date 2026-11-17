@@ -166,9 +166,10 @@ export function createSnapshotOrchestrationSupabasePorts(config:SnapshotOrchestr
 /** Immutable OFF orchestrator remains authoritative; no network clients are created here. */
 export function createSnapshotOrchestrationSupabaseRuntime(config:SnapshotOrchestrationSupabaseConfig,binding:ServerPolicyBinding){
  const fixed=structuredClone(binding);
- if(fixed.engineVersion==='rules14-v1')return createRules14SupabaseRuntime(config,fixed as Rules14ServerBinding);
+ if(fixed.engineVersion==='rules14-observed-v2')return createRules14SupabaseRuntime(config,fixed as Rules14ServerBinding);
  if(fixed.engineVersion==='rate-review-14d-v1')return createUserRateIssuanceRuntime(config,fixed);
  return createSnapshotReviewOrchestrator(createSnapshotOrchestrationSupabasePorts(config,fixed),fixed);
 }
+
 
 

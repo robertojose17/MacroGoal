@@ -77,8 +77,12 @@ begin
     if diagnostic is null or diagnostic not in ('uncertain','resolved','preserve') or reason is null or length(reason)>128 then
      raise exception using errcode='22023',message='verified_diagnostic_required'; end if;
     if diagnostic='uncertain' then
-     if reason not in ('coverage_insufficient','target_or_trend_unavailable','within_product_tolerance','rate_uncertainty_unverified','rate_difference_uncertain','complete_days_insufficient','weight_days_insufficient','weight_distribution_insufficient','complete_days_unverified','journey_start_unverified','initial_fourteen_days_not_elapsed','rate_sensitivity_uncertain','rules_screening_required','clinical_eligibility_required','logged_intake_mean_unavailable','intake_sensitivity_uncertain','intake_target_adherence_gap','total_deficit_limit','policy_limit_or_subincrement','protein_reference_unavailable','individual_reference_weight_required') then
+     if reason not in ('coverage_insufficient','target_or_trend_unavailable','within_product_tolerance','rate_uncertainty_unverified','rate_difference_uncertain','complete_days_insufficient','observed_log_days_insufficient','observed_logs_unverified','weight_days_insufficient','weight_distribution_insufficient','complete_days_unverified','journey_start_unverified','initial_fourteen_days_not_elapsed','rate_sensitivity_uncertain','rules_screening_required','clinical_eligibility_required','logged_intake_mean_unavailable','intake_sensitivity_uncertain','intake_target_adherence_gap','total_deficit_limit','policy_limit_or_subincrement','protein_reference_unavailable','individual_reference_weight_required') then
       raise exception using errcode='22023',message='unknown_hold_reason'; end if;
+     if reason in ('observed_log_days_insufficient','observed_logs_unverified') then
+      selected:=tdee_scheduler_private.current_selection(owner);
+      if selected is null or selected->>'engineVersion' is distinct from 'rules14-observed-v2' or selected->>'contextRevision' is distinct from scope or selected->>'timezone' is distinct from zone then raise exception using errcode='40001',message='observed_selection_changed';end if;
+     end if;
      if next_hold is null or (next_hold->>'reevaluateAt')::bigint<=at_ms then
       next_hold:=jsonb_build_object('assessedAt',at_ms,'reevaluateAt',at_ms+604800000); end if;
     elsif diagnostic='resolved' then
@@ -96,7 +100,15 @@ begin
        raise exception using errcode='40001',message='current_selection_changed'; end if;
       if not exists(select 1 from tdee_rules14_private.proposals p join tdee_rules14_private.issuance_journal j on j.owner_id=p.owner_id and j.proposal_id=p.id and j.proposal_digest=p.digest
        where p.owner_id=owner and p.id=claim and p.expires_at_ms>at_ms and j.recorded_at_ms between (r.record->>'claimedAt')::bigint and at_ms
-       and p.record->>'version'='rules14-proposal-record-v1' and p.record#>>'{payload,windowEndExclusive}'=local_day
+       and p.record->>'version'='rules14-proposal-record-v1'
+       and (selected->>'engineVersion' IS DISTINCT FROM 'rules14-observed-v2' OR (
+        p.record#>>'{payload,contract}'='explicit-rules14-acceptance-v2' AND
+        p.record#>>'{payload,engineVersion}'='rules14-observed-v2' AND
+        p.record#>>'{payload,decision,version}'='rules14-decision-v2' AND
+        p.record#>>'{payload,decision,loggedIntake,status}'='observed_logged_days' AND
+        p.record#>>'{payload,decision,loggedIntake,dataBasis}'='observed-logs-v1' AND
+        p.record#>'{payload,decision,loggedIntake,completenessEstablished}'='false'::jsonb))
+       and p.record#>>'{payload,windowEndExclusive}'=local_day
        and p.record#>'{payload,goalSnapshot}'=(select to_jsonb(g) from public.goals g where g.user_id=owner and g.is_active=true)
        and not exists(select 1 from tdee_rate_record_private.proposals oldp where oldp.owner_id=owner and oldp.id=claim)) then
        raise exception using errcode='22023',message='issued_rules14_receipt_required';end if;
@@ -121,5 +133,6 @@ end $fn$;
 revoke all on function public.tdee_scheduler_internal_v1(jsonb) from public,anon,authenticated,service_role;
 grant execute on function public.tdee_scheduler_internal_v1(jsonb) to service_role;
 -- No table grants, no user role, no credentials, no cron, no release activation.
+
 
 

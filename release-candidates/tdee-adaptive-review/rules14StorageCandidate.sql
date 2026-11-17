@@ -80,7 +80,11 @@ CREATE TABLE tdee_rules14_private.proposals (
  CHECK(record->'ownerId' IS NOT DISTINCT FROM to_jsonb(owner_id::text) AND record->'id' IS NOT DISTINCT FROM to_jsonb(id::text)),
  CHECK(record->'expiresAt' IS NOT DISTINCT FROM to_jsonb(expires_at_ms)),
  CHECK(record#>'{payload,anchorReference}' IS NOT DISTINCT FROM jsonb_build_object('ownerId',owner_id,'version',anchor_version,'sourceRequestId',source_request_id,'sourceGoalId',source_goal_id)),
- CHECK(record#>>'{payload,contract}' IS NOT DISTINCT FROM 'explicit-rules14-acceptance-v1'),
+ CHECK((record#>>'{payload,contract}' IS NOT DISTINCT FROM 'explicit-rules14-acceptance-v1') OR
+ (record#>>'{payload,contract}' IS NOT DISTINCT FROM 'explicit-rules14-acceptance-v2' AND
+  record#>>'{payload,engineVersion}' IS NOT DISTINCT FROM 'rules14-observed-v2' AND
+  jsonb_typeof(record#>'{payload,profileSupport}') IS NOT DISTINCT FROM 'object' AND
+  NOT ((record->'payload') ? 'screeningEvidence'))),
  CHECK(record#>'{payload,actionable}' IS NOT DISTINCT FROM 'false'::jsonb AND record#>'{payload,requiresExplicitAcceptance}' IS NOT DISTINCT FROM 'true'::jsonb)
 );
 CREATE TABLE tdee_rules14_private.receipts (
@@ -201,4 +205,5 @@ BEGIN
  RETURN saved.result;
 END $fn$;
 REVOKE ALL ON FUNCTION tdee_rules14_private.read_exact_request(uuid,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+
 

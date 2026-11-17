@@ -10,7 +10,8 @@ test('expired policy at boundary or before denies recommendation with no issuer 
 });
 test('SQL expiry gates are preserved in selection and atomic final acceptance',()=>{
  const read=name=>fs.readFileSync(new URL('../release-candidates/tdee-adaptive-review/'+name,import.meta.url),'utf8');
- const s=read('rules14SelectorCandidate.sql');assert.match(s,/IF NOT EXISTS\(SELECT 1 FROM tdee_rules14_private.policy_versions\) THEN RETURN tdee_rules14_private.legacy_current_selection\(p_owner\);END IF;/);
+ const s=read('rules14SelectorCandidate.sql');assert.match(s,/IF NOT EXISTS\(SELECT 1 FROM tdee_rules14_private.policy_versions\) THEN RETURN NULL;END IF;/);
  assert.match(s,/WHERE decision='enabled' AND expires_at>at_time/);assert.match(s,/IF n<>1 THEN RETURN NULL;END IF;/);
  assert.match(read('rules14AtomicWriterCandidate.sql'),/policy.expires_at<=at_time/);
 });
+

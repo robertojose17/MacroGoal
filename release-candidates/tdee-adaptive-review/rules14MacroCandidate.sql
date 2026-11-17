@@ -51,7 +51,7 @@ BEGIN
  IF NOT tdee_rules14_macro_private.same_binding(b,c->'binding') OR b->'sourceFingerprint' IS DISTINCT FROM i->'sourceFingerprint' THEN reason:='macro_binding_mismatch';EXIT validation;END IF;
  FOREACH k IN ARRAY ARRAY['calories','proteinG','carbsG','fatsG','fiberG'] LOOP
  IF g->k IS DISTINCT FROM c->'current'->k THEN reason:='macro_binding_mismatch';EXIT validation;END IF;END LOOP;
- IF r->>'version' IS DISTINCT FROM 'nutrition-policy-application-v1' OR r->>'eligibility' IS DISTINCT FROM 'eligible'
+ IF NOT coalesce(((r->>'version'='nutrition-policy-application-v1' AND r->>'eligibility'='eligible' AND NOT (r ? 'support')) OR (r->>'version'='nutrition-policy-application-v2' AND r->>'support'='profile-supported' AND NOT (r ? 'eligibility'))),false)
  OR r->'policyVersion' IS DISTINCT FROM b->'policyVersion' OR r->'policyDigest' IS DISTINCT FROM b->'policyDigest' OR r->'sourceFingerprint' IS DISTINCT FROM b->'sourceFingerprint'
  OR NOT tdee_rules14_macro_private.text_ok(r->'profileBinding') OR NOT tdee_rules14_macro_private.text_ok(r->'journeyBinding')
  OR NOT tdee_rules14_macro_private.number_ok(r->'ageYears',19,100,true) OR NOT tdee_rules14_macro_private.number_ok(r->'computedAt',0,8640000000000000,true)
@@ -100,4 +100,5 @@ BEGIN
  RETURN jsonb_build_object('kind','blocked','reason',reason);
 END $f$;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA tdee_rules14_macro_private FROM PUBLIC,anon,authenticated,service_role;
+
 

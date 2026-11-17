@@ -8,7 +8,7 @@ BEGIN
  SELECT * INTO l FROM tdee_scheduler_private.ledger WHERE owner_id=p_owner AND context_revision=p_scope;
  IF NOT FOUND OR l.record->>'claimId' IS DISTINCT FROM p_claim::text OR l.record->>'status' NOT IN ('claimed','uncertain','completed') THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;
  selection:=tdee_scheduler_private.current_selection_as_of(p_owner,clock_timestamp());
- IF selection->>'engineVersion' IS DISTINCT FROM 'rules14-v1' OR selection->>'contextRevision' IS DISTINCT FROM p_scope OR selection->>'timezone' IS DISTINCT FROM l.record->>'timezone' THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;
+ IF selection->>'engineVersion' IS DISTINCT FROM 'rules14-observed-v2' OR selection->>'contextRevision' IS DISTINCT FROM p_scope OR selection->>'timezone' IS DISTINCT FROM l.record->>'timezone' THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;
  -- Never relabel an uncertain offer as baseline calibration.
  IF EXISTS(SELECT 1 FROM tdee_rules14_private.proposals WHERE owner_id=p_owner AND id=p_claim) OR EXISTS(SELECT 1 FROM tdee_rules14_private.issuance_journal WHERE owner_id=p_owner AND proposal_id=p_claim) THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;
  SELECT * INTO h FROM tdee_rate_anchor_private.anchors WHERE owner_id=p_owner ORDER BY version DESC LIMIT 1;

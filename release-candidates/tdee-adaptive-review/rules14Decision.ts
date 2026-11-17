@@ -1,15 +1,15 @@
-import {rules14ScreeningCurrent} from './rules14Screening.ts';
+import {rules14ProfileSupportCurrent} from './rules14ProfileSupport.ts';
 /** Deterministic product rule with an approximate expenditure estimate, never measured TDEE or a statistical CI. */
-import {diagnoseSnapshotRateReview} from './snapshotReviewContextParser.ts';
+import {diagnoseObservedSnapshotRateReview} from './snapshotReviewContextParser.ts';
 import {RATE_TOLERANCE,compareInitialRateToTarget} from './rateAdjustmentDecision.ts';
-export const RULES14_PRODUCT_DEFAULTS=Object.freeze({minIntakeKcal:1500,maxIntakeKcal:5000,proteinMinLossGPerKg:1.4,proteinMinOtherGPerKg:.8,proteinMaxGPerKg:2.0,fatMinFraction:.20,fatMaxFraction:.35,carbsMinG:130,version:'rules14-product-defaults-v1',proposedBy:'assistant-product-design',
- windowDays:14,minWeightDays:8,minCompleteDays:10,maxStepKcal:200,maxStepFraction:0.10,maxNetDeltaKcal:400,
+export const RULES14_PRODUCT_DEFAULTS=Object.freeze({minIntakeKcal:1500,maxIntakeKcal:5000,proteinMinLossGPerKg:1.4,proteinMinOtherGPerKg:.8,proteinMaxGPerKg:2.0,fatMinFraction:.20,fatMaxFraction:.35,carbsMinG:130,version:'rules14-observed-product-defaults-v2',proposedBy:'assistant-product-design',
+ windowDays:14,minWeightDays:8,minObservedIntakeDays:10,maxStepKcal:200,maxStepFraction:0.10,maxNetDeltaKcal:400,
  maxTotalDeficitKcal:500,maxTotalDeficitFraction:0.20,incrementKcal:25,minDaysBetweenAcceptances:14,uncertainReassessmentDays:7,approximateKcalPerKg:7700,
  absoluteToleranceLbPerWeek:0.25,relativeToleranceFraction:0.20,statisticalConfidenceClaim:false} as const);
-export type Rules14Policy={version:string;revision:number;digest:string;engine_version:'rules14-v1';enabled:boolean;expires_at:string;
+export type Rules14Policy={version:string;revision:number;digest:string;engine_version:'rules14-observed-v2';enabled:boolean;expires_at:string;
  max_step_kcal:number;max_step_fraction:number;max_cumulative_delta_kcal:number;increment_kcal:number;min_days_between_acceptances:number;
  /** Explicit reviewed energy limits, never guessed universal intake floors. */
- min_intake_kcal:number;max_intake_kcal:number;scope:'screened-adult-general-v1';protein_min_g_per_kg_loss:number;protein_min_g_per_kg_other:number;protein_max_g_per_kg:number;fat_min_fraction:number;fat_max_fraction:number;carbs_min_g:number;max_total_deficit_kcal:number;max_total_deficit_fraction:number};
+ min_intake_kcal:number;max_intake_kcal:number;scope:'profile-adult-observed-v1';protein_min_g_per_kg_loss:number;protein_min_g_per_kg_other:number;protein_max_g_per_kg:number;fat_min_fraction:number;fat_max_fraction:number;carbs_min_g:number;max_total_deficit_kcal:number;max_total_deficit_fraction:number};
 export type Rules14History={version:'rules14-history-v1';authority:'server-rules14-chain-v1';ownerId:string;capturedAt:number;
  anchorReference:{ownerId:string;version:number;sourceRequestId:string;sourceGoalId:string};baselineAcceptedAt:number;baselineIntakeKcal:number;
  acceptedCount:number;acceptedDeltaKcal:number;lastAcceptedAt:number|null;lastReceiptDigest:string|null;currentGoal:Record<string,any>};
@@ -20,15 +20,15 @@ const stop=(reason:string,now:number)=>({kind:'hold' as const,actionable:false a
 /** Raw snapshot/history must be read from one trusted own-owner server envelope. */
 export function decideRules14(snapshot:unknown,actor:string,history:Rules14History,p:Rules14Policy,now:number){
  if(!int(now)||now<0||now>253401609600000)return stop('invalid_time',0);
- const d=diagnoseSnapshotRateReview(snapshot,actor,now);if(d.kind==='blocked')return stop(d.reason,now);
- const g=(snapshot as any).currentGoal,eligibility=(snapshot as any).readiness?.eligibility;
- if(!p||p.engine_version!=='rules14-v1'||p.enabled!==true||!hash(p.digest)||typeof p.version!=='string'||!p.version||
- !Number.isFinite(Date.parse(p.expires_at))||Date.parse(p.expires_at)<=now||p.scope!=='screened-adult-general-v1'||!int(p.revision)||p.revision<1)return stop('energy_policy_required',now);
+ const d=diagnoseObservedSnapshotRateReview(snapshot,actor,now);if(d.kind==='blocked')return stop(d.reason,now);
+ const g=(snapshot as any).currentGoal;
+ if(!p||p.engine_version!=='rules14-observed-v2'||p.enabled!==true||!hash(p.digest)||typeof p.version!=='string'||!p.version||
+ !Number.isFinite(Date.parse(p.expires_at))||Date.parse(p.expires_at)<=now||p.scope!=='profile-adult-observed-v1'||!int(p.revision)||p.revision<1)return stop('energy_policy_required',now);
  if(![p.max_step_kcal,p.max_cumulative_delta_kcal,p.increment_kcal,p.min_days_between_acceptances,p.min_intake_kcal,p.max_intake_kcal].every(int)||
  p.max_step_kcal<1||p.max_step_kcal>200||!finite(p.max_step_fraction)||p.max_step_fraction<=0||p.max_step_fraction>1||
  p.max_cumulative_delta_kcal<1||p.increment_kcal<1||p.increment_kcal>p.max_step_kcal||p.min_days_between_acceptances<14||p.min_days_between_acceptances>365||
  p.min_intake_kcal<=0||p.max_intake_kcal>10000||p.min_intake_kcal>p.max_intake_kcal)return stop('policy_invalid',now);
- if(!rules14ScreeningCurrent(snapshot,actor,now))return stop('clinical_eligibility_required',now);
+ if(!rules14ProfileSupportCurrent(snapshot,actor,now))return stop('profile_support_required',now);
  if(!history||history.version!=='rules14-history-v1'||history.authority!=='server-rules14-chain-v1'||history.ownerId!==actor||
  history.anchorReference?.ownerId!==actor||!int(history.anchorReference.version)||history.anchorReference.version<1||
  !int(history.capturedAt)||history.capturedAt>now||now-history.capturedAt>30000||!int(history.baselineAcceptedAt)||history.baselineAcceptedAt>now||history.baselineAcceptedAt<0||
@@ -46,9 +46,9 @@ export function decideRules14(snapshot:unknown,actor:string,history:Rules14Histo
  if(sensitivity.status!=='descriptive'||!sensitivity.outsideToleranceAcrossEnvelope||!finite(sensitivity.lowerKgPerWeek)||!finite(sensitivity.upperKgPerWeek))return stop('rate_sensitivity_uncertain',now);
  // Closest descriptive pair-slope edge, NOT a confidence limit. Correlated fluid
  // shifts/logging bias may still mislead this rule; disclose approximation in UI.
- const logs=d.loggedIntake,average=logs.averageLoggedCaloriesOnConfirmedDays;
- if(logs.status!=='explicit_confirmed_days'||!finite(average)||average<=0||average>10000||
-  !int(logs.validCalorieDayCount)||logs.validCalorieDayCount<10||logs.unknownCalorieDayCount!==0||logs.validCalorieDayCount!==logs.confirmedDayCount)return stop('logged_intake_mean_unavailable',now);
+ const logs=d.loggedIntake,average=logs.averageLoggedCaloriesOnObservedDays;
+ if(logs.status!=='observed_logged_days'||!finite(average)||average<=0||average>10000||
+  !int(logs.validCalorieDayCount)||logs.validCalorieDayCount<10||logs.unknownCalorieDayCount!==0||logs.validCalorieDayCount!==logs.observedDayCount)return stop('logged_intake_mean_unavailable',now);
  const current=g.daily_calories,net=history.acceptedDeltaKcal;
  if(!int(current)||current<p.min_intake_kcal||current>p.max_intake_kcal||Math.abs(net)>p.max_cumulative_delta_kcal)return stop('current_target_outside_policy',now);
  const expenditure=average-observed*7700/7,desiredIntake=expenditure+target*7700/7;
@@ -78,17 +78,18 @@ export function decideRules14(snapshot:unknown,actor:string,history:Rules14Histo
  if(sign<0){
   const deficit=expenditure-(current-magnitude),maximum=maximumDeficit;
   if(deficit>maximum+1e-9)return stop('total_deficit_limit',now);
-  deficitEvidence={version:'rules14-deficit-evidence-v1' as const,method:'confirmed-intake-minus-observed-rate-v1' as const,
-   averageLoggedCaloriesOnConfirmedDays:average,confirmedDayCount:logs.confirmedDayCount,observedRateKgPerWeek:observed,
+  deficitEvidence={version:'rules14-deficit-evidence-v2' as const,method:'observed-intake-minus-observed-rate-v2' as const,
+   averageLoggedCaloriesOnObservedDays:average,observedDayCount:logs.observedDayCount,observedRateKgPerWeek:observed,
    estimatedExpenditureKcal:expenditure,totalDeficitKcal:deficit,maxAllowedDeficitKcal:maximum,
    approximateKcalPerKg:7700,measuredExpenditure:false as const,clinicalGuarantee:false as const};
  }
  return {kind:'rules14_candidate' as const,actionable:false as const,requiresExplicitAcceptance:true as const,
- version:'rules14-decision-v1' as const,deficitEvidence,deltaKcal:sign*magnitude,targetCalories:current+sign*magnitude,netDeltaKcal:net+sign*magnitude,
+ version:'rules14-decision-v2' as const,deficitEvidence,deltaKcal:sign*magnitude,targetCalories:current+sign*magnitude,netDeltaKcal:net+sign*magnitude,
  averageWeightKg:d.window.weights.reduce((sum,w)=>sum+w.weightKg,0)/d.window.weights.length,loggedIntake:logs,
  estimatedExpenditureKcal:expenditure,desiredIntakeKcal:desiredIntake,observedRateKgPerWeek:observed,targetRateKgPerWeek:target,sourceFingerprint:d.sourceFingerprint,sourceCapturedAt:Date.parse(d.sourceCapturedAt),
  windowStart:d.window.startDate,windowEndExclusive:d.window.endDateExclusive,coverage:d.initialCoverage,
  sensitivity:{...sensitivity},conversion:{model:'approximate-energy-equivalent-v1' as const,kcalPerKg:7700,statisticalConfidenceClaim:false as const},
- calculation:{method:'confirmed-intake-plus-target-minus-observed-v1' as const,edgeKgPerWeek:edge,unroundedDeltaKcal:raw,arithmeticEpsilonKcal:1e-9,incrementKcal:p.increment_kcal},
+ calculation:{method:'observed-intake-plus-target-minus-observed-v2' as const,edgeKgPerWeek:edge,unroundedDeltaKcal:raw,arithmeticEpsilonKcal:1e-9,incrementKcal:p.increment_kcal},
  qualification:'Deterministic product rule using approximate energy conversion; not a measured TDEE or confidence interval.'};
 }
+

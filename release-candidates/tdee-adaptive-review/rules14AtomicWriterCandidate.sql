@@ -68,11 +68,11 @@ BEGIN
   at_time:=date_trunc('milliseconds',clock_timestamp());at_ms:=floor(extract(epoch FROM at_time)*1000)::bigint;
   IF final_context->'currentGoal' IS DISTINCT FROM to_jsonb(g) OR final_context#>>'{observation,sourceFingerprint}' IS DISTINCT FROM payload->>'sourceFingerprint' OR
    final_context#>>'{readiness,profileBinding}' IS DISTINCT FROM payload->>'profileBinding' OR final_context#>>'{readiness,journeyBinding}' IS DISTINCT FROM payload->>'journeyBinding' OR
-   final_context#>'{readiness,eligibility,current}' IS DISTINCT FROM 'true'::jsonb OR final_context#>'{observation,context,premium}' IS DISTINCT FROM 'true'::jsonb OR
+   final_context#>'{observation,context,premium}' IS DISTINCT FROM 'true'::jsonb OR
    final_context#>'{observation,context,enabled}' IS DISTINCT FROM 'true'::jsonb OR
    jsonb_typeof(final_context#>'{observation,context,accessValidUntil}') IS DISTINCT FROM 'number' OR (final_context#>>'{observation,context,accessValidUntil}')::numeric<=at_ms OR
    final_access->'allowed' IS DISTINCT FROM 'true'::jsonb OR jsonb_typeof(final_access->'validUntil') IS DISTINCT FROM 'number' OR (final_access->>'validUntil')::numeric<=at_ms OR
-   at_ms-source_ms>30000 OR source_ms>at_ms OR p.expires_at_ms<=at_ms OR policy.expires_at<=at_time OR NOT tdee_rules14_private.screening_current(final_context,actor,at_time) OR final_context->'rulesScreening' IS DISTINCT FROM payload->'screeningEvidence' OR
+   at_ms-source_ms>30000 OR source_ms>at_ms OR p.expires_at_ms<=at_ms OR policy.expires_at<=at_time OR NOT tdee_rules14_private.profile_support_current(final_context,actor,at_time) OR final_context->'profileSupport' IS DISTINCT FROM payload->'profileSupport' OR
    at_time<=g.created_at OR at_ms-coalesce((verified_chain->>'lastAcceptedAt')::numeric,(h.anchor->>'acceptedAt')::numeric)<(policy.document->>'min_days_between_acceptances')::numeric*86400000::numeric THEN
    reason:='authority_or_source_expired';commit_obligations_verified:=false;
   ELSE
@@ -93,8 +93,8 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE='40001',MESSAGE='rate_goal_write_changed';END IF;
    unsigned_receipt:=jsonb_build_object('version','rules14-acceptance-receipt-v1','status','committed','canonicalEncoding','pg-jsonb-v1','sequence',accepted_count+1,
     'request',q,'anchorReference',ref,'previousGoalSnapshot',to_jsonb(g),'acceptedGoalSnapshot',to_jsonb(new_goal),'acceptedAt',at_ms,'deltaKcal',delta,'netDeltaKcal',net_delta,
-    'previousReceiptDigest',verified_chain->'lastReceiptDigest','acceptanceEvidence',jsonb_build_object('contract','rules14-as-of-revalidated-v1','sourceFingerprint',payload->>'sourceFingerprint',
-    'sourceCapturedAt',source_ms,'policyRevision',policy.revision,'screeningRequestId',payload#>'{screeningEvidence,requestId}','screeningVersion',payload#>'{screeningEvidence,rowVersion}','policyDigest',policy.digest,
+    'previousReceiptDigest',verified_chain->'lastReceiptDigest','acceptanceEvidence',jsonb_build_object('contract','rules14-observed-acceptance-evidence-v2','sourceFingerprint',payload->>'sourceFingerprint',
+    'sourceCapturedAt',source_ms,'policyRevision',policy.revision,'profileSupport',payload->'profileSupport','policyDigest',policy.digest,
     'profileBinding',payload->>'profileBinding','journeyBinding',payload->>'journeyBinding','acceptanceTimezone',u.timezone));
    receipt_content:=unsigned_receipt::text;receipt_hash:=encode(sha256(convert_to(receipt_content,'UTF8')),'hex');
    receipt_record:=unsigned_receipt||jsonb_build_object('canonicalContent',receipt_content,'receiptDigest',receipt_hash);
@@ -132,6 +132,7 @@ BEGIN
 END $fn$;
 REVOKE ALL ON FUNCTION public.tdee_accept_rules14_proposal_v1(jsonb) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.tdee_accept_rules14_proposal_v1(jsonb) TO authenticated;
+
 
 
 

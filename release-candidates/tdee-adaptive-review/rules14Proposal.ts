@@ -22,12 +22,12 @@ export async function prepareRules14Proposal(source:unknown,actor:string,id:stri
   if(macro.kind!=='candidate')return blocked(macro.reason);
   const expiresAt=Math.min(decision.sourceCapturedAt+30000,Date.parse(p.expires_at),nutrition.context.policyEvidence.expiresAt);
   if(!Number.isSafeInteger(expiresAt)||expiresAt<=now)return blocked('source_expired');
-  const payload={contract:'explicit-rules14-acceptance-v1',engineVersion:'rules14-v1',anchorReference:h.anchorReference,anchorSnapshot:h.anchorSnapshot,
+  const payload={contract:'explicit-rules14-acceptance-v2',engineVersion:'rules14-observed-v2',anchorReference:h.anchorReference,anchorSnapshot:h.anchorSnapshot,
    historyBinding:{acceptedCount:h.acceptedCount,acceptedDeltaKcal:h.acceptedDeltaKcal,lastAcceptedAt:h.lastAcceptedAt,lastReceiptDigest:h.lastReceiptDigest,baselineAcceptedAt:h.baselineAcceptedAt,baselineIntakeKcal:h.baselineIntakeKcal},
    goalSnapshot:s.currentGoal,profileUpdatedAt:s.profile.updatedAt,profileBinding:s.readiness.profileBinding,journeyBinding:s.readiness.journeyBinding,
    sourceFingerprint:decision.sourceFingerprint,sourceCapturedAt:decision.sourceCapturedAt,windowStart:decision.windowStart,windowEndExclusive:decision.windowEndExclusive,
-   policyBinding:{version:p.version,revision:p.revision,digest:p.digest,engineVersion:'rules14-v1'},policySnapshot:p,
-   decision,screeningEvidence:s.rulesScreening,nutritionEvidence:nutrition.context,nutritionReference:nutrition.reference,qualityNotes:nutrition.qualityNotes,
+   policyBinding:{version:p.version,revision:p.revision,digest:p.digest,engineVersion:'rules14-observed-v2'},policySnapshot:p,
+   decision,profileSupport:s.profileSupport,nutritionEvidence:nutrition.context,nutritionReference:nutrition.reference,qualityNotes:nutrition.qualityNotes,
    current:nutrition.request.current,target:macro.target,allocationMode:macro.allocationMode,deltaKcal:decision.deltaKcal,netDeltaKcal:decision.netDeltaKcal,
    preparedAt:now,requiresExplicitAcceptance:true,actionable:false};
   const unsigned={version:'rules14-proposal-record-v1' as const,id,ownerId:actor,expiresAt,payload},canonicalContent=canonicalRateJson(unsigned);
@@ -40,7 +40,7 @@ export async function decodeRules14Record(value:unknown,owner:string,now:number,
  try{
   const r=typeof value==='string'?JSON.parse(value):structuredClone(value);
   if(!r||Object.keys(r).sort().join(',')!=='canonicalContent,digest,expiresAt,id,ownerId,payload,version'||r.version!=='rules14-proposal-record-v1'||!uuid(r.id)||r.ownerId!==owner||!uuid(owner)||!Number.isSafeInteger(now)||!Number.isSafeInteger(r.expiresAt)||r.expiresAt<=now||
-   r.payload?.contract!=='explicit-rules14-acceptance-v1'||r.payload.engineVersion!=='rules14-v1'||r.payload.actionable!==false||r.payload.requiresExplicitAcceptance!==true||typeof r.digest!=='string'||!/^[a-f0-9]{64}$/.test(r.digest)||typeof r.canonicalContent!=='string')return null;
+   !((r.payload?.contract==='explicit-rules14-acceptance-v1'&&r.payload.engineVersion==='rules14-v1')||(r.payload?.contract==='explicit-rules14-acceptance-v2'&&r.payload.engineVersion==='rules14-observed-v2'))||r.payload.actionable!==false||r.payload.requiresExplicitAcceptance!==true||typeof r.digest!=='string'||!/^[a-f0-9]{64}$/.test(r.digest)||typeof r.canonicalContent!=='string')return null;
   const {digest,canonicalContent,...unsigned}=r;
   if(new TextEncoder().encode(canonicalRateJson(r)).byteLength>65536||canonicalContent!==canonicalRateJson(unsigned)||await digestText(canonicalContent)!==digest)return null;
   return r;
@@ -50,3 +50,4 @@ export function rules14AcceptanceRequest(record:Rules14Record,requestId:string){
  if(!record||record.version!=='rules14-proposal-record-v1'||!uuid(requestId))throw Error('rules14_request_invalid');
  return {version:'rules14-acceptance-request-v1',ownerId:record.ownerId,requestId,rateProposalId:record.id,rateProposalDigest:record.digest,anchorReference:structuredClone(record.payload.anchorReference)};
 }
+

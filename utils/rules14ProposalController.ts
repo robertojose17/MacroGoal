@@ -14,10 +14,10 @@ export type Rules14ClientPorts={actor:string;now():number;requestId():string;isC
  onVerified(receipt:Obj,goal:Obj):Promise<void>};
 export type Rules14ClientResult={status:'hold';hold:Rules14Hold}|{status:'unresolved'}|{status:'review_changed';preview:Rules14Preview}|{status:'rejected';reason:string}|{status:'committed';refreshFailed:boolean};
 function validTargets(v:unknown):v is Targets{return obj(v)&&Object.keys(v).sort().join(',')==='calories,carbsG,fatsG,fiberG,proteinG'&&Object.values(v).every(n=>Number.isSafeInteger(n)&&n>=0&&n<=10000);}
-function validatePreview(v:unknown):Rules14Preview{
- if(!obj(v)||Object.keys(v).sort().join(',')!=='allocationMode,current,expiresAt,goalId,goalRevision,policyBinding,target'||!validTargets(v.current)||!validTargets(v.target)||!['manual-percent-nearest-gram-v1','smart-preserve-adequate-protein-v1'].includes(v.allocationMode)||(!obj(v.policyBinding)||Object.keys(v.policyBinding).sort().join(',')!=='digest,engineVersion,revision,version')||!uuid(v.goalId)||typeof v.goalRevision!=='string'||v.goalRevision.length>64||!Number.isFinite(Date.parse(v.goalRevision))||!Number.isSafeInteger(v.expiresAt)||!hash(v.policyBinding.digest)||v.policyBinding.engineVersion!=='rules14-v1'||typeof v.policyBinding.version!=='string'||v.policyBinding.version.length<1||v.policyBinding.version.length>128||!Number.isSafeInteger(v.policyBinding.revision)||v.policyBinding.revision<1)throw Error('rules14_preview_invalid');return structuredClone(v) as Rules14Preview;
+function validatePreview(v:unknown,allowHistorical=false):Rules14Preview{
+ if(!obj(v)||Object.keys(v).sort().join(',')!=='allocationMode,current,expiresAt,goalId,goalRevision,policyBinding,target'||!validTargets(v.current)||!validTargets(v.target)||!['manual-percent-nearest-gram-v1','smart-preserve-adequate-protein-v1'].includes(v.allocationMode)||(!obj(v.policyBinding)||Object.keys(v.policyBinding).sort().join(',')!=='digest,engineVersion,revision,version')||!uuid(v.goalId)||typeof v.goalRevision!=='string'||v.goalRevision.length>64||!Number.isFinite(Date.parse(v.goalRevision))||!Number.isSafeInteger(v.expiresAt)||!hash(v.policyBinding.digest)||!(v.policyBinding.engineVersion==='rules14-observed-v2'||(allowHistorical&&v.policyBinding.engineVersion==='rules14-v1'))||typeof v.policyBinding.version!=='string'||v.policyBinding.version.length<1||v.policyBinding.version.length>128||!Number.isSafeInteger(v.policyBinding.revision)||v.policyBinding.revision<1)throw Error('rules14_preview_invalid');return structuredClone(v) as Rules14Preview;
 }
-function previewOf(r:Rules14Record){return validatePreview({current:r.payload.current,target:r.payload.target,allocationMode:r.payload.allocationMode,policyBinding:r.payload.policyBinding,goalId:r.payload.goalSnapshot?.id,goalRevision:r.payload.goalSnapshot?.updated_at,expiresAt:r.expiresAt});}
+function previewOf(r:Rules14Record,allowHistorical=false){return validatePreview({current:r.payload.current,target:r.payload.target,allocationMode:r.payload.allocationMode,policyBinding:r.payload.policyBinding,goalId:r.payload.goalSnapshot?.id,goalRevision:r.payload.goalSnapshot?.updated_at,expiresAt:r.expiresAt},allowHistorical);}
 export function rules14ConsentBinding(preview:Rules14Preview){const {expiresAt,...binding}=preview;return binding;}
 export async function parseRules14ClientOffer(raw:unknown,actor:string,now:number,digestText:Rules14ClientPorts['digestText']){
  if(!obj(raw)||raw.reason!=='review_available'||raw.mayHaveWritten!==true)throw Error('rules14_offer_unavailable');const r=await decodeRules14Record(raw.proposal,actor,now,digestText);if(!r)throw Error('rules14_offer_unavailable');const preview=previewOf(r);
@@ -26,7 +26,7 @@ export async function parseRules14ClientOffer(raw:unknown,actor:string,now:numbe
 function parsePending(v:unknown,actor:string){
  if(!obj(v)||Object.keys(v).sort().join(',')!=='preview,request'||!obj(v.request))throw Error('rules14_journal_invalid');const q=v.request;
  if(Object.keys(q).sort().join(',')!=='anchorReference,ownerId,rateProposalDigest,rateProposalId,requestId,version'||q.version!=='rules14-acceptance-request-v1'||q.ownerId!==actor||!uuid(q.requestId)||!uuid(q.rateProposalId)||!hash(q.rateProposalDigest)||(!obj(q.anchorReference)||Object.keys(q.anchorReference).sort().join(',')!=='ownerId,sourceGoalId,sourceRequestId,version')||q.anchorReference.ownerId!==actor||!uuid(q.anchorReference.sourceGoalId)||!uuid(q.anchorReference.sourceRequestId)||!Number.isSafeInteger(q.anchorReference.version)||q.anchorReference.version<1)throw Error('rules14_journal_invalid');
- return {request:structuredClone(q) as Rules14Request,preview:validatePreview(v.preview)};
+ return {request:structuredClone(q) as Rules14Request,preview:validatePreview(v.preview,true)};
 }
 /** Isolated rules14 contract. No automatic writes, no fake reviewed/clinical evidence. */
 export function createRules14ProposalController(p:Rules14ClientPorts){
@@ -41,7 +41,7 @@ export function createRules14ProposalController(p:Rules14ClientPorts){
   if(raw.status==='rejected'){if(Object.keys(raw).sort().join(',')!=='reason,request,status,version'||typeof raw.reason!=='string'||!raw.reason||raw.reason.length>128)throw Error('rules14_receipt_unverified');await finish();return {status:'rejected',reason:raw.reason};}
   if(raw.status!=='committed')throw Error('rules14_receipt_unverified');const source=await p.chain();current();const verified=await p.verifyChain(source,p.now());current();
   if(verified.kind!=='rules14_chain_verified'||!obj(source)||source.version!=='rules14-chain-source-v1'||source.ownerId!==p.actor||!Array.isArray(source.rows)||!same(verified.anchorReference,q.anchorReference))throw Error('rules14_chain_unverified');
-  const row=source.rows.find(x=>obj(x)&&same(x.receipt,raw));if(!row||!same(rules14ConsentBinding(previewOf(row.proposal)),rules14ConsentBinding(preview)))throw Error('rules14_saved_targets_mismatch');
+  const row=source.rows.find(x=>obj(x)&&same(x.receipt,raw));if(!row||!same(rules14ConsentBinding(previewOf(row.proposal,true)),rules14ConsentBinding(preview)))throw Error('rules14_saved_targets_mismatch');
   const goal=await p.goal();current();if(!obj(goal)||goal.ownerId!==p.actor||!same(goal.goal,verified.currentGoal)||goal.goal.user_id!==p.actor)throw Error('rules14_goal_unverified');await finish();let refreshFailed=false;try{await p.onVerified(raw,verified.currentGoal);current();}catch{refreshFailed=true;}return {status:'committed',refreshFailed};
  }
  async function finish(){if(!pending)throw Error('rules14_pending');const q=pending.request;await p.journal.resolve(p.actor,q.requestId);current();await p.journal.clear(p.actor,q.requestId);current();pending=null;shown=null;}
@@ -60,3 +60,4 @@ export function createRules14ProposalController(p:Rules14ClientPorts){
  async function checkOrRetry(mode:'accept'|'receipt'){available();if(!recovered||!pending)throw Error('rules14_unavailable');busy=true;try{return await send(mode);}finally{busy=false;}}
  return {recover,review,accept,check:()=>checkOrRetry('receipt'),retry:()=>checkOrRetry('accept'),close:()=>{epoch++;shown=null;},hasPending:()=>!!pending,pendingPreview:()=>pending?.preview??null};
 }
+

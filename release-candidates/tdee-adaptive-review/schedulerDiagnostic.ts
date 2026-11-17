@@ -2,13 +2,15 @@
 export type SchedulerDiagnostic={kind:'uncertain'|'resolved'|'preserve';reason:string};
 const HOLD_REASONS=new Set(['coverage_insufficient','target_or_trend_unavailable','within_product_tolerance','rate_uncertainty_unverified','rate_difference_uncertain']);
 const INITIAL_HOLD_REASONS=new Set([...HOLD_REASONS,'complete_days_insufficient','weight_days_insufficient','weight_distribution_insufficient','complete_days_unverified','journey_start_unverified','initial_fourteen_days_not_elapsed','rate_sensitivity_uncertain']);
+const OBSERVED_HOLD_REASONS=new Set([...HOLD_REASONS,'observed_log_days_insufficient','weight_days_insufficient','weight_distribution_insufficient','observed_logs_unverified','journey_start_unverified','initial_fourteen_days_not_elapsed','rate_sensitivity_uncertain']);
 export type AssessedSnapshot={assessedAt:number;result:unknown};
 /** Unknown, blocked or malformed output NEVER clears the persisted hold.
  * Hold metadata must match the evaluator's exact seven-day contract. */
 export function diagnosticFromSnapshot(result:unknown,assessedAt:number):SchedulerDiagnostic{
  if(!Number.isSafeInteger(assessedAt)||assessedAt<0||assessedAt>253401609600000)return {kind:'preserve',reason:'invalid_assessment_time'};
  if(!result||typeof result!=='object')return {kind:'preserve',reason:'unknown_assessment_result'};
- const r=result as {kind?:unknown;reason?:unknown;reevaluateAt?:unknown;version?:unknown;actionable?:unknown;recommendation?:unknown};
+ const r=result as {kind?:unknown;reason?:unknown;reevaluateAt?:unknown;version?:unknown;actionable?:unknown;recommendation?:unknown;dataBasis?:unknown;completenessEstablished?:unknown};
+ if(r.kind==='hold'&&r.version==='initial-observed-rate-assessment-v2'&&r.dataBasis==='observed-logs-v1'&&r.completenessEstablished===false&&r.actionable===false&&r.recommendation===null&&typeof r.reason==='string'&&OBSERVED_HOLD_REASONS.has(r.reason)&&r.reevaluateAt===assessedAt+604800000) return {kind:'uncertain',reason:r.reason};
  if(r.kind==='hold'&&r.version==='initial-rate-assessment-v1'&&r.actionable===false&&r.recommendation===null&&
  typeof r.reason==='string'&&INITIAL_HOLD_REASONS.has(r.reason)&&r.reevaluateAt===assessedAt+604800000)
   return {kind:'uncertain',reason:r.reason};
@@ -30,3 +32,4 @@ export function diagnosticFromAssessment(assessment:AssessedSnapshot,plannedAt:n
   return {kind:'preserve',reason:'invalid_assessment_time'};
  return diagnosticFromSnapshot(assessment.result,assessment.assessedAt);
 }
+

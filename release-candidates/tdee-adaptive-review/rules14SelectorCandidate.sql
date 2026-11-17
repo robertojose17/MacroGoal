@@ -37,14 +37,14 @@ REVOKE ALL ON FUNCTION tdee_rules14_private.legacy_current_selection(uuid) FROM 
 
 CREATE FUNCTION tdee_scheduler_private.current_selection_as_of(p_owner uuid,p_as_of timestamptz)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $rules_scope$
-DECLARE u public.users;s macrogoal_observed_private.settings;g public.goals;pol tdee_rules14_private.policy_versions;screen tdee_rules14_private.screenings;
+DECLARE u public.users;s macrogoal_observed_private.settings;g public.goals;pol tdee_rules14_private.policy_versions;
  account record;b jsonb;binding jsonb;rev text;n integer;t date;at_time timestamptz:=p_as_of;
 BEGIN
  -- Private explicit real readback time; never permit future authority.
  IF p_as_of IS NULL OR p_as_of>clock_timestamp() THEN RETURN NULL;END IF;
- -- No registered rules policy preserves the old reviewed-engine selection exactly.
+ -- Missing or incompatible policy never falls back to the attested legacy engine.
  -- A revoked/expired/ambiguous rules registration never silently downgrades.
- IF NOT EXISTS(SELECT 1 FROM tdee_rules14_private.policy_versions) THEN RETURN tdee_rules14_private.legacy_current_selection(p_owner);END IF;
+ IF NOT EXISTS(SELECT 1 FROM tdee_rules14_private.policy_versions) THEN RETURN NULL;END IF;
  SELECT count(*) INTO n FROM (SELECT DISTINCT ON(version) version,decision,expires_at FROM tdee_rules14_private.policy_versions ORDER BY version,revision DESC)q WHERE decision='enabled' AND expires_at>at_time;
  IF n<>1 THEN RETURN NULL;END IF;
  SELECT * INTO pol FROM (SELECT DISTINCT ON(version) * FROM tdee_rules14_private.policy_versions ORDER BY version,revision DESC)q WHERE decision='enabled' AND expires_at>at_time;
@@ -55,13 +55,12 @@ BEGIN
  t:=(at_time AT TIME ZONE u.timezone)::date;
  IF u.date_of_birth IS NULL OR NOT isfinite(u.date_of_birth) OR u.date_of_birth>(t-interval '19 years')::date OR u.date_of_birth<=(t-interval '101 years')::date OR u.date_of_birth<=date '1900-01-01' THEN RETURN NULL;END IF;
  b:=tdee_rules14_private.screening_binding(p_owner);
- SELECT * INTO screen FROM tdee_rules14_private.screenings WHERE owner_id=p_owner ORDER BY row_version DESC LIMIT 1;
- IF NOT FOUND OR tdee_rules14_private.screening_envelope(screen,b,at_time)->'current' IS DISTINCT FROM 'true'::jsonb THEN RETURN NULL;END IF;
+ IF pol.document->>'scope' IS DISTINCT FROM 'profile-adult-observed-v1' OR pol.document->>'engine_version' IS DISTINCT FROM 'rules14-observed-v2' THEN RETURN NULL;END IF;
  SELECT count(*) INTO n FROM(SELECT id FROM public.goals WHERE user_id=p_owner AND is_active=true LIMIT 2)q;IF n<>1 THEN RETURN NULL;END IF;
  SELECT * INTO g FROM public.goals WHERE user_id=p_owner AND is_active=true;
- binding:=jsonb_build_object('version',pol.version,'revision',pol.revision,'digest',pol.digest,'engineVersion','rules14-v1');
- rev:=encode(sha256(convert_to(jsonb_build_object('contract','internal-daily-rules14-selection-v1','owner',p_owner,'goal',to_jsonb(g),'profile',b,'settings',to_jsonb(s),'screening',to_jsonb(screen),'policyBinding',binding)::text,'UTF8')),'hex');
- RETURN jsonb_build_object('ownerId',p_owner,'contextRevision',rev,'timezone',u.timezone,'localDate',t,'enrolled',true,'accountActive',true,'engineVersion','rules14-v1','policyBinding',binding);
+ binding:=jsonb_build_object('version',pol.version,'revision',pol.revision,'digest',pol.digest,'engineVersion','rules14-observed-v2');
+ rev:=encode(sha256(convert_to(jsonb_build_object('contract','internal-daily-rules14-selection-v1','owner',p_owner,'goal',to_jsonb(g),'profile',b,'settings',to_jsonb(s),'supportContract','rules14-profile-support-v1','policyBinding',binding)::text,'UTF8')),'hex');
+ RETURN jsonb_build_object('ownerId',p_owner,'contextRevision',rev,'timezone',u.timezone,'localDate',t,'enrolled',true,'accountActive',true,'engineVersion','rules14-observed-v2','policyBinding',binding);
 END $rules_scope$;
 REVOKE ALL ON FUNCTION tdee_scheduler_private.current_selection_as_of(uuid,timestamptz) FROM PUBLIC,anon,authenticated,service_role;
 CREATE OR REPLACE FUNCTION tdee_scheduler_private.current_selection(p_owner uuid)
@@ -112,7 +111,7 @@ BEGIN
    IF (SELECT count(*) FROM tdee_scheduler_private.ledger l WHERE l.owner_id=candidate.user_id AND l.record->>'status' NOT IN ('completed','retryable'))<>1 OR
     NOT EXISTS(SELECT 1 FROM tdee_scheduler_private.ledger l
      WHERE l.owner_id=candidate.user_id AND l.context_revision=selected->>'contextRevision' AND l.record->>'status' IN ('claimed','uncertain') AND
-     ((selected->>'engineVersion'='rules14-v1' AND EXISTS(SELECT 1 FROM tdee_rules14_private.issuance_journal j WHERE j.owner_id=l.owner_id AND j.proposal_id=(l.record->>'claimId')::uuid)) OR
+     ((selected->>'engineVersion'='rules14-observed-v2' AND EXISTS(SELECT 1 FROM tdee_rules14_private.issuance_journal j WHERE j.owner_id=l.owner_id AND j.proposal_id=(l.record->>'claimId')::uuid)) OR
       (selected->>'engineVersion' IS NULL AND EXISTS(SELECT 1 FROM tdee_rate_record_private.issuance_journal j WHERE j.owner_id=l.owner_id AND j.proposal_id=(l.record->>'claimId')::uuid))))
     THEN CONTINUE;END IF;
   END IF;
@@ -136,3 +135,4 @@ EXCEPTION WHEN lock_not_available THEN RETURN jsonb_build_object('status','busy'
 END $select$;
 REVOKE ALL ON FUNCTION public.tdee_internal_select_due_v1(integer,bigint) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.tdee_internal_select_due_v1(integer,bigint) TO service_role;
+

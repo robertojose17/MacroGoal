@@ -63,40 +63,49 @@ export async function verifyRules14AcceptanceChain(value:unknown,now:number,dige
    const {receiptDigest,canonicalContent,...unsigned}=r;if(typeof canonicalContent!=='string'||new TextEncoder().encode(canonicalContent).byteLength>65536||(encoding==='pg-jsonb-v1'?!same(JSON.parse(canonicalContent),unsigned):canonicalContent!==canonicalRateJson(unsigned))||await digestText(canonicalContent)!==receiptDigest)return fail();
    if(!await decodeRules14Record(p,owner,r.acceptedAt,digestText)||p.id!==q.rateProposalId||p.digest!==q.rateProposalDigest)return fail();
    const payload=p.payload,g=r.acceptedGoalSnapshot,old=r.previousGoalSnapshot,policy=payload.policySnapshot,screening=payload.screeningEvidence,evidence=r.acceptanceEvidence;
+   const observedV2=payload.contract==='explicit-rules14-acceptance-v2',support=payload.profileSupport;
+   if(observedV2){
+    if(!obj(support)||Object.keys(support).sort().join(',')!=='ageYears,dateOfBirth,journeyBinding,ownerId,profileBinding,supported,today,version'||support.version!=='rules14-profile-support-v1'||support.ownerId!==owner||support.supported!==true||support.profileBinding!==a.profileBinding||support.journeyBinding!==a.journeyBinding||
+     !same(evidence?.profileSupport,support)||'screeningEvidence' in payload||'screeningRequestId' in evidence||'screeningVersion' in evidence||
+     typeof support.dateOfBirth!=='string'||!/^\d{4}-\d\d-\d\d$/.test(support.dateOfBirth)||!Number.isFinite(time(support.dateOfBirth+'T00:00:00Z'))||
+     support.today!==acceptedGoalDate(r.acceptedAt,evidence.acceptanceTimezone))return fail();
+    const dob=support.dateOfBirth.split('-').map(Number),day=support.today.split('-').map(Number),age=day[0]-dob[0]-(day[1]<dob[1]||(day[1]===dob[1]&&day[2]<dob[2])?1:0);
+    if(!integer(support.ageYears)||support.ageYears!==age||age<19||age>100)return fail();
+   }
    if(!same(payload.anchorReference,ref)||!same(payload.anchorSnapshot,a)||!same(old,prior)||!same(payload.goalSnapshot,prior)||
     !obj(g)||g.user_id!==owner||g.is_active!==true||!uuid(g.id)||goalIds.has(g.id)||
-    !obj(policy)||!obj(screening)||!obj(evidence)||!hash(policy.digest)||payload.profileBinding!==a.profileBinding||payload.journeyBinding!==a.journeyBinding||
+    !obj(policy)||(!observedV2&&!obj(screening))||!obj(evidence)||!hash(policy.digest)||payload.profileBinding!==a.profileBinding||payload.journeyBinding!==a.journeyBinding||
     !integer(payload.preparedAt)||payload.preparedAt>r.acceptedAt||!integer(payload.sourceCapturedAt)||payload.sourceCapturedAt>payload.preparedAt||r.acceptedAt-payload.sourceCapturedAt>30000||p.expiresAt>payload.sourceCapturedAt+30000||
-    evidence.contract!=='rules14-as-of-revalidated-v1'||evidence.sourceFingerprint!==payload.sourceFingerprint||!hash(evidence.sourceFingerprint)||evidence.sourceCapturedAt!==payload.sourceCapturedAt||
+    evidence.contract!==(observedV2?'rules14-observed-acceptance-evidence-v2':'rules14-as-of-revalidated-v1')||evidence.sourceFingerprint!==payload.sourceFingerprint||!hash(evidence.sourceFingerprint)||evidence.sourceCapturedAt!==payload.sourceCapturedAt||
     evidence.profileBinding!==a.profileBinding||evidence.journeyBinding!==a.journeyBinding||evidence.policyDigest!==policy.digest||evidence.policyRevision!==policy.revision||
-    screening.version!=='rules-screening-v1'||screening.copyVersion!=='rules-screening-copy-v1'||screening.ownerId!==owner||screening.current!==true||screening.response!=='eligible'||
+    (!observedV2&&(screening.version!=='rules-screening-v1'||screening.copyVersion!=='rules-screening-copy-v1'||screening.ownerId!==owner||screening.current!==true||screening.response!=='eligible'||
     !uuid(screening.requestId)||!integer(screening.rowVersion)||screening.rowVersion<1||evidence.screeningRequestId!==screening.requestId||evidence.screeningVersion!==screening.rowVersion||
     screening.profileBinding!==a.profileBinding||screening.journeyBinding!==a.journeyBinding||screening.profileUpdatedAt!==payload.profileUpdatedAt||
-    !Number.isFinite(time(screening.acceptedAt))||time(screening.acceptedAt)>r.acceptedAt||!Number.isFinite(time(screening.expiresAt))||time(screening.expiresAt)<=r.acceptedAt||
-    policy.enabled!==true||policy.scope!=='screened-adult-general-v1'||policy.engine_version!=='rules14-v1'||!integer(policy.revision)||policy.revision<1||
+    !Number.isFinite(time(screening.acceptedAt))||time(screening.acceptedAt)>r.acceptedAt||!Number.isFinite(time(screening.expiresAt))||time(screening.expiresAt)<=r.acceptedAt))||
+    policy.enabled!==true||policy.scope!==(observedV2?'profile-adult-observed-v1':'screened-adult-general-v1')||policy.engine_version!==(observedV2?'rules14-observed-v2':'rules14-v1')||!integer(policy.revision)||policy.revision<1||
     payload.policyBinding?.version!==policy.version||payload.policyBinding?.revision!==policy.revision||payload.policyBinding?.digest!==policy.digest||payload.policyBinding?.engineVersion!==policy.engine_version||
     !Number.isFinite(time(policy.expires_at))||time(policy.expires_at)<=r.acceptedAt||
     !same(payload.historyBinding,{acceptedCount:index,acceptedDeltaKcal:net,lastAcceptedAt:index?last:null,lastReceiptDigest:lastDigest,baselineAcceptedAt:a.acceptedAt,baselineIntakeKcal:a.baselineIntakeKcal}))return fail();
    const n=payload.nutritionEvidence,pe=n?.policyEvidence,d=payload.decision;
-   if(!obj(n)||!obj(pe)||pe.version!=='nutrition-policy-application-v1'||pe.policyVersion!==policy.version||pe.policyDigest!==policy.digest||
+   if(!obj(n)||!obj(pe)||pe.version!==(observedV2?'nutrition-policy-application-v2':'nutrition-policy-application-v1')||(observedV2&&(pe.support!=='profile-supported'||'eligibility' in pe||pe.ageYears!==support.ageYears))||pe.policyVersion!==policy.version||pe.policyDigest!==policy.digest||
     pe.profileBinding!==a.profileBinding||pe.journeyBinding!==a.journeyBinding||pe.sourceFingerprint!==payload.sourceFingerprint||
-    pe.expiresAt>Math.min(p.expiresAt,time(screening.expiresAt),time(policy.expires_at))||
-    !obj(d)||d.version!=='rules14-decision-v1'||d.kind!=='rules14_candidate'||d.deltaKcal!==payload.deltaKcal||d.netDeltaKcal!==payload.netDeltaKcal||d.targetCalories!==payload.target?.calories||
+    pe.expiresAt>Math.min(p.expiresAt,observedV2?Infinity:time(screening.expiresAt),time(policy.expires_at))||
+    !obj(d)||d.version!==(observedV2?'rules14-decision-v2':'rules14-decision-v1')||d.kind!=='rules14_candidate'||d.deltaKcal!==payload.deltaKcal||d.netDeltaKcal!==payload.netDeltaKcal||d.targetCalories!==payload.target?.calories||
     d.sourceFingerprint!==payload.sourceFingerprint||d.sourceCapturedAt!==payload.sourceCapturedAt||d.conversion?.kcalPerKg!==7700||d.conversion?.statisticalConfidenceClaim!==false)return fail();
    const nr=payload.nutritionReference,ratio=old.goal_type==='lose'?policy.protein_min_g_per_kg_loss:policy.protein_min_g_per_kg_other;
    if(!obj(nr)||nr.strategy!=='actual-known-non-obese-weight-v1'||!Number.isFinite(nr.weightKg)||nr.weightKg<=0||!Number.isFinite(nr.heightCm)||nr.heightCm<100||nr.heightCm>250||
     nr.bmi!==nr.weightKg/(nr.heightCm/100)**2||nr.bmi<18.5||nr.bmi>=30||!Number.isFinite(ratio)||ratio<=0||policy.protein_max_g_per_kg<ratio||policy.protein_max_g_per_kg>4||policy.fat_min_fraction<.2||policy.fat_max_fraction>.35||policy.carbs_min_g<130||
     !same(n.limits,{proteinMinG:ratio*nr.weightKg,proteinMaxG:policy.protein_max_g_per_kg*nr.weightKg,carbsMinG:policy.carbs_min_g,carbsMaxG:10000,fatsMinG:0,fatsMaxG:10000,fatMinFraction:policy.fat_min_fraction,fatMaxFraction:policy.fat_max_fraction})||
     !same(n.binding,{ownerId:owner,goalId:old.id,goalRevision:old.updated_at,preset:old.macro_preset,sourceFingerprint:payload.sourceFingerprint,policyVersion:policy.version,policyDigest:policy.digest})||!obj(n.customChoice)||!uuid(n.customChoice.consentId)||!integer(n.customChoice.choiceVersion)||n.customChoice.choiceVersion<1)return fail();
-   const logs=d.loggedIntake,sen=d.sensitivity,avg=logs?.averageLoggedCaloriesOnConfirmedDays,observed=d.observedRateKgPerWeek,targetRate=d.targetRateKgPerWeek;
-   if(!obj(logs)||logs.status!=='explicit_confirmed_days'||!Number.isFinite(avg)||avg<=0||avg>10000||!integer(logs.validCalorieDayCount)||logs.validCalorieDayCount<10||logs.unknownCalorieDayCount!==0||logs.confirmedDayCount!==logs.validCalorieDayCount||
+   const logs=d.loggedIntake,sen=d.sensitivity,avg=observedV2?logs?.averageLoggedCaloriesOnObservedDays:logs?.averageLoggedCaloriesOnConfirmedDays,observed=d.observedRateKgPerWeek,targetRate=d.targetRateKgPerWeek;
+   if(!obj(logs)||logs.status!==(observedV2?'observed_logged_days':'explicit_confirmed_days')||(observedV2&&(logs.dataBasis!=='observed-logs-v1'||logs.completenessEstablished!==false||'confirmedDayCount' in logs||'averageLoggedCaloriesOnConfirmedDays' in logs))||!Number.isFinite(avg)||avg<=0||avg>10000||!integer(logs.validCalorieDayCount)||logs.validCalorieDayCount<10||logs.unknownCalorieDayCount!==0||(observedV2?logs.observedDayCount:logs.confirmedDayCount)!==logs.validCalorieDayCount||
     !obj(sen)||sen.status!=='descriptive'||sen.outsideToleranceAcrossEnvelope!==true||![observed,targetRate,sen.lowerKgPerWeek,sen.upperKgPerWeek].every(Number.isFinite)||sen.lowerKgPerWeek>sen.upperKgPerWeek)return fail();
    const expenditure=avg-observed*7700/7,lo=avg-old.daily_calories+(targetRate-sen.upperKgPerWeek)*7700/7,hi=avg-old.daily_calories+(targetRate-sen.lowerKgPerWeek)*7700/7;
    const raw=Math.abs(lo)<Math.abs(hi)?lo:hi,sign=Math.sign(raw),edge=raw===lo?sen.upperKgPerWeek:sen.lowerKgPerWeek;
    const room=sign<0?Math.min(policy.max_total_deficit_kcal,expenditure*policy.max_total_deficit_fraction)-(expenditure-old.daily_calories):Infinity;
    const cap=Math.min(room,Math.abs(raw),200,policy.max_step_kcal,old.daily_calories*policy.max_step_fraction,sign>0?policy.max_cumulative_delta_kcal-net:policy.max_cumulative_delta_kcal+net,sign>0?policy.max_intake_kcal-old.daily_calories:old.daily_calories-policy.min_intake_kcal);
    if(!Number.isFinite(expenditure)||expenditure<=0||expenditure>10000||(lo<=0&&hi>=0)||sign!==Math.sign(targetRate-observed)||d.estimatedExpenditureKcal!==expenditure||d.desiredIntakeKcal!==expenditure+targetRate*7700/7||
-    d.deltaKcal!==sign*Math.floor((cap+1e-9)/policy.increment_kcal)*policy.increment_kcal||!same(d.calculation,{method:'confirmed-intake-plus-target-minus-observed-v1',edgeKgPerWeek:edge,unroundedDeltaKcal:raw,arithmeticEpsilonKcal:1e-9,incrementKcal:policy.increment_kcal}))return fail();
+    d.deltaKcal!==sign*Math.floor((cap+1e-9)/policy.increment_kcal)*policy.increment_kcal||!same(d.calculation,{method:observedV2?'observed-intake-plus-target-minus-observed-v2':'confirmed-intake-plus-target-minus-observed-v1',edgeKgPerWeek:edge,unroundedDeltaKcal:raw,arithmeticEpsilonKcal:1e-9,incrementKcal:policy.increment_kcal}))return fail();
    const macro=adjustRules14Macros({current:payload.current,newCalories:payload.target?.calories,now:r.acceptedAt,sourceFingerprint:payload.sourceFingerprint,binding:n.binding,context:n as Rules14MacroContext});
    if(macro.kind!=='candidate'||!same(macro.target,payload.target)||macro.allocationMode!==payload.allocationMode)return fail();
    for(const field of ['max_step_kcal','max_step_fraction','max_cumulative_delta_kcal','min_days_between_acceptances','increment_kcal','min_intake_kcal','max_intake_kcal'])if(typeof policy[field]!=='number'||!Number.isFinite(policy[field])||policy[field]<=0)return fail();
@@ -105,8 +114,8 @@ export async function verifyRules14AcceptanceChain(value:unknown,now:number,dige
     Math.abs(r.deltaKcal)>old.daily_calories*policy.max_step_fraction||r.deltaKcal%policy.increment_kcal!==0||r.deltaKcal!==payload.deltaKcal||
     r.netDeltaKcal!==net+r.deltaKcal||r.netDeltaKcal!==payload.netDeltaKcal||Math.abs(r.netDeltaKcal)>policy.max_cumulative_delta_kcal)return fail();
    if(r.deltaKcal<0){const de=d.deficitEvidence;
-    if(!obj(de)||de.version!=='rules14-deficit-evidence-v1'||de.method!=='confirmed-intake-minus-observed-rate-v1'||de.measuredExpenditure!==false||de.clinicalGuarantee!==false||
-     de.averageLoggedCaloriesOnConfirmedDays!==avg||de.confirmedDayCount!==logs.confirmedDayCount||de.observedRateKgPerWeek!==observed||de.approximateKcalPerKg!==7700||de.estimatedExpenditureKcal!==expenditure||!Number.isFinite(de.estimatedExpenditureKcal)||de.estimatedExpenditureKcal<=0||de.totalDeficitKcal!==de.estimatedExpenditureKcal-payload.target.calories||
+    if(!obj(de)||de.version!==(observedV2?'rules14-deficit-evidence-v2':'rules14-deficit-evidence-v1')||de.method!==(observedV2?'observed-intake-minus-observed-rate-v2':'confirmed-intake-minus-observed-rate-v1')||de.measuredExpenditure!==false||de.clinicalGuarantee!==false||
+     (observedV2?de.averageLoggedCaloriesOnObservedDays:de.averageLoggedCaloriesOnConfirmedDays)!==avg||(observedV2?de.observedDayCount:de.confirmedDayCount)!==(observedV2?logs.observedDayCount:logs.confirmedDayCount)||de.observedRateKgPerWeek!==observed||de.approximateKcalPerKg!==7700||de.estimatedExpenditureKcal!==expenditure||!Number.isFinite(de.estimatedExpenditureKcal)||de.estimatedExpenditureKcal<=0||de.totalDeficitKcal!==de.estimatedExpenditureKcal-payload.target.calories||
      de.maxAllowedDeficitKcal!==Math.min(policy.max_total_deficit_kcal,de.estimatedExpenditureKcal*policy.max_total_deficit_fraction)||de.totalDeficitKcal>de.maxAllowedDeficitKcal+1e-9)return fail();}
    const target=payload.target;
    if(!obj(target)||g.daily_calories!==old.daily_calories+r.deltaKcal||g.daily_calories!==a.baselineIntakeKcal+r.netDeltaKcal||
@@ -124,4 +133,5 @@ export async function verifyRules14AcceptanceChain(value:unknown,now:number,dige
    lastAcceptedAt:value.rows.length?last:null,lastReceiptDigest:lastDigest,currentGoal:structuredClone(prior),receiptsVerified:true};
  }catch{return fail();}
 }
+
 

@@ -2,7 +2,7 @@ import {RULES14_RELEASE,runRules14WithAnchor} from './rules14Runtime.ts';
 import {ADAPTIVE_RELEASE_STATE} from './proposal.ts';
 import {createSnapshotOrchestrationSupabasePorts,type SnapshotOrchestrationSupabaseConfig} from './snapshotOrchestrationSupabaseAdapter.ts';
 import type {ServerPolicyBinding} from './snapshotReviewOrchestration.ts';
-export type Rules14ServerBinding=ServerPolicyBinding&{revision:number;engineVersion:'rules14-v1'};
+export type Rules14ServerBinding=ServerPolicyBinding&{revision:number;engineVersion:'rules14-observed-v2'};
 /** Explicit source/runtime selection. User never sends source, actor, rules or policy. */
 export function createRules14SupabaseRuntime(config:SnapshotOrchestrationSupabaseConfig,binding:Rules14ServerBinding){
  const fixed=structuredClone(binding),authPorts=createSnapshotOrchestrationSupabasePorts(config,fixed);
@@ -13,7 +13,7 @@ export function createRules14SupabaseRuntime(config:SnapshotOrchestrationSupabas
   if(!request||typeof request!=='object'||Array.isArray(request))return stop('invalid_request');const r=request as Record<string,unknown>;
   if(Object.keys(r).length!==1||typeof r.authorization!=='string'||r.authorization.length>16384||!/^Bearer [^\s]+$/.test(r.authorization))return stop('invalid_request');
   if(!RULES14_RELEASE.enabled||!ADAPTIVE_RELEASE_STATE.recommendationsEnabled)return stop('safety_review_required');
-  if(fixed.engineVersion!=='rules14-v1'||!Number.isSafeInteger(fixed.revision)||fixed.revision<1)return stop('rules14_policy_required');
+  if(fixed.engineVersion!=='rules14-observed-v2'||!Number.isSafeInteger(fixed.revision)||fixed.revision<1)return stop('rules14_policy_required');
   try{
    const token=r.authorization.slice(7),user=await authPorts.verifyAccessToken(token);if(!user)return stop('authentication_required');
    await authPorts.loadOwnContext(token); // Existing legitimate purchase refresh; no expiry extension.
@@ -21,4 +21,5 @@ export function createRules14SupabaseRuntime(config:SnapshotOrchestrationSupabas
   }catch{return stop('source_error');}
  };
 }
+
 

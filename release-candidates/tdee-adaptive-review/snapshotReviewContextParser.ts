@@ -7,7 +7,7 @@ import {verifySnapshotReceiptChain} from './receiptChain.ts';
 import {draftSnapshotAdjustment, type SnapshotAdjustmentInput} from './snapshotAdjustment.ts';
 import type {SmartMacroBinding,SmartMacroContext,SmartTarget} from './smartMacroAdjustment.ts';
 import type {SnapshotBinding} from './snapshotProposalProducer.ts';
-import {diagnoseFourteenDayRate,assessInitialRateCoverage,compareInitialRateToTarget} from './rateAdjustmentDecision.ts';
+import {diagnoseFourteenDayRate,assessInitialObservedRateCoverage,assessInitialRateCoverage,compareInitialRateToTarget} from './rateAdjustmentDecision.ts';
 type Obj=Record<string,unknown>;
 const rec=(v:unknown):v is Obj=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const hash=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
@@ -148,7 +148,7 @@ export function prepareSnapshotMacroContextRequest(value:unknown,actor:string,pr
  * No extra reads, policy fabrication, expenditure-threshold relaxation or writes.
  * Never serialize raw diagnostic weights as a public endpoint response.
  */
-export function diagnoseSnapshotRateReview(value:unknown,actor:string,now:number){
+export function diagnoseLegacySnapshotRateReview(value:unknown,actor:string,now:number){
  const block=(reason:string)=>({kind:'blocked' as const,actionable:false as const,reason});
  if(!uuid(actor)||!Number.isSafeInteger(now)||!rec(value)||value.version!=='snapshot-review-context-v1'||
  value.actor!==actor||value.actionable!==false||value.evidenceStatus!=='unverified')return block('review_context_invalid');
@@ -307,4 +307,174 @@ function confirmedDayLoggedCalories(value:Obj,sources:import('../../supabase/fun
   macroStatus:!marked?'not_in_snapshot' as const:Object.values(macros).every(v=>v!==null)?'logged_values' as const:'unknown_values' as const,
   confirmedDayCount:dates.size,validCalorieDayCount:valid.length,unknownCalorieDayCount:unknownCount,
   averageLoggedCaloriesOnConfirmedDays:average};
+}
+
+
+/** New observed-only route. Legacy APIs above remain unchanged. */
+export function diagnoseObservedSnapshotRateReview(value:unknown,actor:string,now:number){
+ const block=(reason:string)=>({kind:'blocked' as const,actionable:false as const,reason});
+ if(!uuid(actor)||!Number.isSafeInteger(now)||!rec(value)||value.version!=='snapshot-review-context-v1'||
+ value.actor!==actor||value.actionable!==false||value.evidenceStatus!=='unverified')return block('review_context_invalid');
+ let observation;
+ try{observation=parseObservedSnapshot(value.observation,actor);}catch{return block('observation_invalid');}
+ const captured=time(observation.capturedAt);
+ if(!Number.isFinite(captured)||captured>now||now-captured>30000||value.capturedAt!==observation.capturedAt)return block('source_expired');
+ if(!observation.context.premium||!observation.context.enabled||!observation.sources)return block('source_unavailable');
+ if(observation.context.accessValidUntil!==undefined&&observation.context.accessValidUntil<=now)return block('source_expired');
+ if(!hasSupportedAdultAge(observation.sources.dateOfBirth,observation.context.today))return block('unsupported_age');
+ const g=value.currentGoal,profile=value.profile;
+ if(!rec(g)||g.user_id!==actor||g.is_active!==true||!uuid(g.id)||!Number.isFinite(time(g.updated_at))||
+ time(g.updated_at)>captured||!observation.context.currentGoal||g.id!==observation.context.currentGoal.id||
+ !['daily_calories','protein_g','carbs_g','fats_g','fiber_g','goal_type','loss_rate_lbs_per_week','macro_preset'].every(k=>g[k]===(observation.context.currentGoal as unknown as Obj)[k]))return block('goal_binding_mismatch');
+ if(!rec(profile)||profile.id!==actor||profile.dateOfBirth!==observation.sources.dateOfBirth||profile.timezone!==observation.sources.timezone||
+ profile.journeyStartDate!==(observation.sources.journeyStartDate??null)||
+ !Number.isFinite(time(profile.updatedAt))||time(profile.updatedAt)>captured)return block('profile_binding_mismatch');
+ const today=observation.context.today,cutoff=dateForDay(dayNumber(today)!-14);
+ const journey=observation.sources.journeyStartDate;
+ if(journey!=null&&dayNumber(journey)===null)return block('journey_binding_mismatch');
+ const minDate=journey&&journey>cutoff?journey:cutoff;
+ const weights=normalizedDatedWeights(observation.sources,today,minDate);
+ if(weights===null)return block('rate_weight_source_conflict');
+ const diagnostic=diagnoseFourteenDayRate(today,weights.map(w=>({date:w.date,weightKg:w.kg})),g,now);
+ if(diagnostic.kind==='blocked')return diagnostic;
+ const loggingCoverage=diagnosticObservedCoverage(value,actor,today,profile.timezone as string,now);
+ // Initial 14-day coverage is separate from the legacy 21-day expenditure model.
+ // It is not model confidence and does not authorize producer/acceptance writes.
+ const assessedCoverage=assessInitialObservedRateCoverage(diagnostic.window,loggingCoverage);
+ const initialCoverage=journey==null||journey>cutoff
+  ? {...assessedCoverage,coverageSufficient:false,reason:journey==null?'journey_start_unverified':'initial_fourteen_days_not_elapsed'}
+  : assessedCoverage;
+ const paceComparison=compareInitialRateToTarget(diagnostic.observedRateKgPerWeek,diagnostic.targetRateKgPerWeek,initialCoverage.coverageSufficient);
+ const loggedIntake=observedDayLoggedCalories(value,observation.sources,today,loggingCoverage.status);
+ return {...diagnostic,loggingCoverage,initialCoverage,paceComparison,loggedIntake,sourceCapturedAt:observation.capturedAt,sourceFingerprint:observation.sourceFingerprint,
+  goalId:g.id as string,goalRevision:g.updated_at as string};
+}
+
+/**
+ * Only for read_review_context's same-statement server envelope. The SQL reader
+ * recomputes content/journey/timezone hashes for observed logged input.
+ * No separate HTTP/client payload may substitute for that authoritative envelope.
+ * Observed logging is NOT complete intake, nutritional eligibility or model confidence.
+ */
+function diagnosticObservedCoverage(value:Obj,actor:string,today:string,timezone:string,now:number){
+ const unverified=()=>({status:'unverified' as const,windowDays:14,observedIntakeDays:null,
+  unavailableDays:null,completenessEstablished:false as const,dataBasis:'observed-logs-v1' as const});
+ const r=value.readiness;
+ if(!rec(r)||r.version!=='observed-log-coverage-v1'||r.ownerId!==actor||r.dataBasis!=='observed-logs-v1'||
+ r.coverageBasis!=='observed_logs_not_confirmed_complete'||r.completenessEstablished!==false||r.clinicalEligibilityEstablished!==false||r.today!==today||r.timezone!==timezone||
+ !hash(r.profileBinding)||!hash(r.journeyBinding)||!hash(value.readinessFingerprint)||
+ !Number.isFinite(time(r.capturedAt))||time(r.capturedAt)>now||now-time(r.capturedAt)>30000||
+ !Array.isArray(r.days)||r.days.length>29)return unverified();
+ const profile=value.profile;
+ if(!rec(profile)||profile.id!==actor||profile.timezone!==timezone||
+ (profile.journeyStartDate!==null&&dayNumber(profile.journeyStartDate as string)===null))return unverified();
+ const earliest=dateForDay(dayNumber(today)!-29);
+ const start=typeof profile.journeyStartDate==='string'&&profile.journeyStartDate>earliest?profile.journeyStartDate:earliest;
+ const byDate=new Map<string,Obj>();
+ for(const d of r.days){
+  if(!rec(d)||typeof d.date!=='string'||dayNumber(d.date)===null||d.date<start||d.date>=today||
+   !hash(d.contentHash)||typeof d.hasValidLoggedIntake!=='boolean'||byDate.has(d.date))return unverified();
+  byDate.set(d.date,d);
+ }
+ let observedIntakeDays=0,unavailableDays=0;
+ const end=dayNumber(today)!;
+ for(let day=end-14;day<end;day++){
+  const d=byDate.get(dateForDay(day));
+  if(!d||!d.hasValidLoggedIntake)unavailableDays++;
+  else observedIntakeDays++;
+ }
+ return {status:'observed_logged_days' as const,windowDays:14,observedIntakeDays,unavailableDays,
+  completenessEstablished:false as const,dataBasis:'observed-logs-v1' as const};
+}
+
+/**
+ * Versioned INITIAL assessment, separate from parseSnapshotReviewContext legacy21d.
+ * Reads no extra state and never calls draft/issue/persist. No reviewed interval
+ * source exists yet; don't turn a coverage count into a confidence assertion.
+ */
+export function assessFourteenDayObservedSnapshotReview(value:unknown,actor:string,now:number){
+ const d=diagnoseObservedSnapshotRateReview(value,actor,now);
+ if(d.kind==='blocked')return d;
+ const reason=!d.initialCoverage.coverageSufficient?d.initialCoverage.reason:
+  d.paceComparison.status==='comparison'&&!d.paceComparison.outsideProductTolerance?'within_product_tolerance':
+  d.paceComparison.status!=='comparison'?d.paceComparison.reason:
+  !d.sensitivity.outsideToleranceAcrossEnvelope?'rate_sensitivity_uncertain':'rate_uncertainty_unverified';
+ return {version:'initial-observed-rate-assessment-v2' as const,dataBasis:'observed-logs-v1' as const,completenessEstablished:false as const,kind:'hold' as const,actionable:false as const,
+  recommendation:null,reason,reevaluateAt:d.reevaluateAt,
+  coverage:d.initialCoverage,paceComparison:d.paceComparison,sensitivity:d.sensitivity,loggedIntake:d.loggedIntake,
+  sourceCapturedAt:d.sourceCapturedAt,sourceFingerprint:d.sourceFingerprint,
+  goalId:d.goalId,goalRevision:d.goalRevision};
+}
+
+/**
+ * Average of observed logged days ONLY, not imputed14-day intake or TDEE.
+ * The caller already validated the same-statement readiness envelope. SQL is
+ * authority for content hashes; never accept independent client claims.
+ * Legacy snapshot items carry energy only. Versioned macro fields are consumed
+ * without treating default/unknown zero as informed data.
+ */
+function observedDayLoggedCalories(value:Obj,sources:import('../../supabase/functions/observed-snapshot-release/functions/dynamic-tdee/data.ts').DataSources,
+ today:string,readinessStatus:string){
+ const unknown={dataBasis:'observed-logs-v1' as const,completenessEstablished:false as const,status:'unverified' as const,averageLoggedCaloriesOnObservedDays:null,
+  observedDayCount:null,validCalorieDayCount:null,unknownCalorieDayCount:null,
+  proteinG:null,carbsG:null,fatsG:null,fiberG:null,macroStatus:'not_in_snapshot' as const,
+  imputedDays:0,actionable:false as const};
+ if(readinessStatus!=='observed_logged_days'||!rec(value.readiness)||!Array.isArray(value.readiness.days))return unknown;
+ const start=dateForDay(dayNumber(today)!-14);
+ const knownZero=(item:typeof sources.items[number],field:'calories'|'protein'|'carbs'|'fats'|'fiber')=>
+  sources.nutritionEvidenceVersion==='user-entered-v1'&&typeof value.actor==='string'&&
+  explicitlyDeclaredNutrient(item,value.actor,field);
+ const dates=new Set<string>(value.readiness.days.filter(d=>rec(d)&&d.hasValidLoggedIntake===true&&
+  typeof d.date==='string'&&d.date>=start&&d.date<today).map(d=>d.date as string));
+ const meals=new Map(sources.meals.map(m=>[m.id,m]));
+ const sums=new Map<string,{sum:number;count:number;unknown:boolean}>();
+ for(const date of dates)sums.set(date,{sum:0,count:0,unknown:false});
+ for(const item of sources.items){
+  const meal=meals.get(item.meal_id);
+  if(!meal||!dates.has(meal.date))continue;
+  const day=sums.get(meal.date)!;
+  if(item.is_scheduled===true)continue;
+  // Legacy zero stays unknown; only exact current explicit evidence can admit it.
+  if(item.is_scheduled!==false||typeof item.calories!=='number'||!Number.isFinite(item.calories)||(item.calories<0||(item.calories===0&&!knownZero(item,'calories')))){
+   day.unknown=true;continue;
+  }
+  day.sum+=item.calories;day.count++;
+  if(!Number.isFinite(day.sum))day.unknown=true;
+ }
+ const valid=[...sums.values()].filter(d=>!d.unknown&&d.count>0&&d.sum>0);
+ const unknownCount=dates.size-valid.length;
+ // Do not cherry-pick known logged days after one logged day becomes unknown.
+ const total=valid.reduce((sum,d)=>sum+d.sum,0);
+ const average=dates.size>0&&unknownCount===0&&Number.isFinite(total)?total/dates.size:null;
+ const macros:Record<'proteinG'|'carbsG'|'fatsG'|'fiberG',number|null>={proteinG:null,carbsG:null,fatsG:null,fiberG:null};
+ const marked=sources.nutritionFieldsVersion==='logged-macros-v1';
+ if(marked&&dates.size>0){
+  for(const [stored,output] of [['protein','proteinG'],['carbs','carbsG'],['fats','fatsG'],['fiber','fiberG']] as const){
+   let total=0,known=true;
+   const seen=new Set<string>();
+   for(const item of sources.items){
+    const meal=meals.get(item.meal_id);
+    if(!meal||!dates.has(meal.date)||item.is_scheduled===true)continue;
+    const amount=item[stored];
+    // Snapshot version certifies field presence, not zero-value provenance.
+    // Legacy default0/unknown0 stays unknown unless explicitly declared for this revision.
+    if(item.is_scheduled!==false||typeof amount!=='number'||!Number.isFinite(amount)||(amount<0||(amount===0&&!knownZero(item,stored)))){known=false;continue;}
+    total+=amount;seen.add(meal.date);
+   }
+   if(known&&seen.size===dates.size&&Number.isFinite(total))macros[output]=total/dates.size;
+  }
+ }
+ return {...unknown,...macros,status:average===null?'unknown_calories' as const:'observed_logged_days' as const,
+  macroStatus:!marked?'not_in_snapshot' as const:Object.values(macros).every(v=>v!==null)?'logged_values' as const:'unknown_values' as const,
+  observedDayCount:dates.size,validCalorieDayCount:valid.length,unknownCalorieDayCount:unknownCount,
+  averageLoggedCaloriesOnObservedDays:average};
+}
+
+
+/** Version dispatch never upgrades complete-day attestations to observed data. */
+export function diagnoseSnapshotRateReview(value:unknown,actor:string,now:number){
+ if(!rec(value)||!rec(value.readiness))return {kind:'blocked' as const,actionable:false as const,reason:'readiness_contract_unavailable'};
+ if(value.readiness.version==='observed-log-coverage-v1')return diagnoseObservedSnapshotRateReview(value,actor,now);
+ if(value.readiness.version==='tdee-readiness-v1')return diagnoseLegacySnapshotRateReview(value,actor,now);
+ return {kind:'blocked' as const,actionable:false as const,reason:'readiness_contract_unavailable'};
 }

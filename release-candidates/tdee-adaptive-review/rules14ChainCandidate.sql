@@ -58,6 +58,7 @@ CREATE FUNCTION tdee_rules14_chain_private.verify_chain(v jsonb,now_ms bigint) R
 LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,pg_temp SET extra_float_digits=3 AS $$
 DECLARE owner_id text; h jsonb; a jsonb; ref jsonb; prior jsonb; net bigint:=0; last_at bigint; last_digest jsonb:='null';
  row_value jsonb;r jsonb;q jsonb;p jsonb;payload jsonb;g jsonb;old_goal jsonb;policy jsonb;review jsonb;e jsonb;target jsonb;screen jsonb;nutrition jsonb;pe jsonb;allocation jsonb;nr jsonb;logs jsonb;sen jsonb;ratio float8;avg_intake float8;observed float8;target_rate float8;expenditure float8;lo_delta float8;hi_delta float8;raw_delta float8;direction float8;edge_rate float8;room float8;cap float8;
+ observed_v2 boolean;support jsonb;support_dob date;support_today date;support_age integer;
  idx int:=0; req_ids jsonb:='[]';proposal_ids jsonb:='[]';goal_ids jsonb;field text; goal_key text;target_key text;
  mutable text[]:=ARRAY['id','daily_calories','protein_g','carbs_g','fats_g','fiber_g','is_active','last_adaptive_update','created_at','updated_at','base_daily_calories'];
 BEGIN
@@ -95,28 +96,31 @@ BEGIN
   OR q->>'version' IS DISTINCT FROM 'rules14-acceptance-request-v1' OR q->>'ownerId' IS DISTINCT FROM owner_id OR NOT tdee_rules14_chain_private.uuid(q->'requestId') OR NOT tdee_rules14_chain_private.uuid(q->'rateProposalId')
   OR NOT tdee_rules14_chain_private.hash(q->'rateProposalDigest') OR q->'anchorReference' IS DISTINCT FROM ref OR req_ids @> jsonb_build_array(q->'requestId') OR proposal_ids @> jsonb_build_array(q->'rateProposalId')
   OR NOT tdee_rules14_chain_private.content_valid(r,'receiptDigest') THEN RAISE EXCEPTION 'invalid_receipt'; END IF;
+  observed_v2:=coalesce(p#>>'{payload,contract}'='explicit-rules14-acceptance-v2',false);
   IF octet_length(tdee_rules14_chain_private.canonical(p))>65536 OR (SELECT string_agg(key,',' ORDER BY key) FROM jsonb_object_keys(p) key) IS DISTINCT FROM 'canonicalContent,digest,expiresAt,id,ownerId,payload,version'
   OR p->>'version' IS DISTINCT FROM 'rules14-proposal-record-v1' OR p->>'ownerId' IS DISTINCT FROM owner_id OR p->'id' IS DISTINCT FROM q->'rateProposalId' OR p->'digest' IS DISTINCT FROM q->'rateProposalDigest'
   OR NOT tdee_rules14_chain_private.integer(p->'expiresAt') OR (p->>'expiresAt')::bigint<=(r->>'acceptedAt')::bigint
-  OR jsonb_typeof(p->'payload') IS DISTINCT FROM 'object' OR p#>>'{payload,contract}' IS DISTINCT FROM 'explicit-rules14-acceptance-v1'
+  OR jsonb_typeof(p->'payload') IS DISTINCT FROM 'object' OR p#>>'{payload,contract}' IS DISTINCT FROM (CASE WHEN observed_v2 THEN 'explicit-rules14-acceptance-v2' ELSE 'explicit-rules14-acceptance-v1' END)
   OR p#>'{payload,actionable}' IS DISTINCT FROM 'false'::jsonb OR p#>'{payload,requiresExplicitAcceptance}' IS DISTINCT FROM 'true'::jsonb OR NOT tdee_rules14_chain_private.content_valid(p,'digest') THEN RAISE EXCEPTION 'invalid_proposal'; END IF;
   payload:=p->'payload';g:=r->'acceptedGoalSnapshot';old_goal:=r->'previousGoalSnapshot';policy:=payload->'policySnapshot';review:=payload->'decision';e:=r->'acceptanceEvidence';
   IF payload->'anchorReference' IS DISTINCT FROM ref OR payload->'anchorSnapshot' IS DISTINCT FROM a OR old_goal IS DISTINCT FROM prior OR payload->'goalSnapshot' IS DISTINCT FROM prior
   OR jsonb_typeof(g) IS DISTINCT FROM 'object' OR g->>'user_id' IS DISTINCT FROM owner_id OR g->'is_active' IS DISTINCT FROM 'true'::jsonb OR NOT tdee_rules14_chain_private.uuid(g->'id') OR goal_ids @> jsonb_build_array(g->'id')
   OR jsonb_typeof(policy) IS DISTINCT FROM 'object' OR jsonb_typeof(review) IS DISTINCT FROM 'object' OR jsonb_typeof(e) IS DISTINCT FROM 'object'
-  OR NOT tdee_rules14_chain_private.hash(policy->'digest') OR review->>'version' IS DISTINCT FROM 'rules14-decision-v1'
+  OR NOT tdee_rules14_chain_private.hash(policy->'digest') OR review->>'version' IS DISTINCT FROM (CASE WHEN observed_v2 THEN 'rules14-decision-v2' ELSE 'rules14-decision-v1' END)
   OR review->>'kind' IS DISTINCT FROM 'rules14_candidate' OR review->'deltaKcal' IS DISTINCT FROM r->'deltaKcal' OR review->'netDeltaKcal' IS DISTINCT FROM r->'netDeltaKcal'
   OR payload->'profileBinding' IS DISTINCT FROM a->'profileBinding' OR payload->'journeyBinding' IS DISTINCT FROM a->'journeyBinding'
   OR NOT tdee_rules14_chain_private.integer(payload->'preparedAt') OR (payload->>'preparedAt')::bigint>(r->>'acceptedAt')::bigint OR NOT tdee_rules14_chain_private.integer(payload->'sourceCapturedAt')
   OR (payload->>'sourceCapturedAt')::bigint>(payload->>'preparedAt')::bigint OR (r->>'acceptedAt')::bigint-(payload->>'sourceCapturedAt')::bigint>30000
-  OR e->>'contract' IS DISTINCT FROM 'rules14-as-of-revalidated-v1' OR e->'sourceFingerprint' IS DISTINCT FROM payload->'sourceFingerprint' OR NOT tdee_rules14_chain_private.hash(e->'sourceFingerprint')
+  OR e->>'contract' IS DISTINCT FROM (CASE WHEN observed_v2 THEN 'rules14-observed-acceptance-evidence-v2' ELSE 'rules14-as-of-revalidated-v1' END) OR e->'sourceFingerprint' IS DISTINCT FROM payload->'sourceFingerprint' OR NOT tdee_rules14_chain_private.hash(e->'sourceFingerprint')
   OR e->'sourceCapturedAt' IS DISTINCT FROM payload->'sourceCapturedAt' OR e->'profileBinding' IS DISTINCT FROM a->'profileBinding' OR e->'journeyBinding' IS DISTINCT FROM a->'journeyBinding'
   OR e->'policyDigest' IS DISTINCT FROM payload#>'{policyBinding,digest}' OR e->'policyRevision' IS DISTINCT FROM payload#>'{policyBinding,revision}'
-  OR policy->'enabled' IS DISTINCT FROM 'true'::jsonb OR policy->>'scope' IS DISTINCT FROM 'screened-adult-general-v1' OR policy->>'engine_version' IS DISTINCT FROM 'rules14-v1'
+  OR policy->'enabled' IS DISTINCT FROM 'true'::jsonb OR policy->>'scope' IS DISTINCT FROM (CASE WHEN observed_v2 THEN 'profile-adult-observed-v1' ELSE 'screened-adult-general-v1' END) OR policy->>'engine_version' IS DISTINCT FROM (CASE WHEN observed_v2 THEN 'rules14-observed-v2' ELSE 'rules14-v1' END)
+  OR payload->>'engineVersion' IS DISTINCT FROM (CASE WHEN observed_v2 THEN 'rules14-observed-v2' ELSE 'rules14-v1' END)
   OR payload#>'{policyBinding,revision}' IS DISTINCT FROM policy->'revision'
   OR payload#>'{policyBinding,version}' IS DISTINCT FROM policy->'version' OR payload#>'{policyBinding,digest}' IS DISTINCT FROM policy->'digest' OR payload#>'{policyBinding,engineVersion}' IS DISTINCT FROM policy->'engine_version'
   OR coalesce(tdee_rules14_chain_private.instant(policy->'expires_at'),0)<=(r->>'acceptedAt')::bigint THEN RAISE EXCEPTION 'invalid_binding'; END IF;
   screen:=payload->'screeningEvidence';nutrition:=payload->'nutritionEvidence';pe:=nutrition->'policyEvidence';
+  IF NOT observed_v2 THEN
   IF jsonb_typeof(screen) IS DISTINCT FROM 'object' OR screen->>'version' IS DISTINCT FROM 'rules-screening-v1' OR screen->>'copyVersion' IS DISTINCT FROM 'rules-screening-copy-v1'
   OR screen->>'ownerId' IS DISTINCT FROM owner_id OR screen->'current' IS DISTINCT FROM 'true'::jsonb OR screen->>'response' IS DISTINCT FROM 'eligible'
   OR NOT tdee_rules14_chain_private.uuid(screen->'requestId') OR NOT tdee_rules14_chain_private.integer(screen->'rowVersion') OR (screen->>'rowVersion')::bigint<1
@@ -124,13 +128,34 @@ BEGIN
   OR screen->'profileBinding' IS DISTINCT FROM a->'profileBinding' OR screen->'journeyBinding' IS DISTINCT FROM a->'journeyBinding' OR screen->'profileUpdatedAt' IS DISTINCT FROM payload->'profileUpdatedAt'
   OR tdee_rules14_chain_private.instant(screen->'acceptedAt') IS NULL OR tdee_rules14_chain_private.instant(screen->'acceptedAt')>(r->>'acceptedAt')::bigint
   OR coalesce(tdee_rules14_chain_private.instant(screen->'expiresAt'),0)<=(r->>'acceptedAt')::bigint
-  OR (p->>'expiresAt')::bigint>(payload->>'sourceCapturedAt')::bigint+30000
+ THEN RAISE EXCEPTION 'invalid_historical_screening_or_history';END IF;
+  ELSE
+  support:=payload->'profileSupport';
+  IF jsonb_typeof(support) IS DISTINCT FROM 'object' OR
+   (SELECT string_agg(key,',' ORDER BY key) FROM jsonb_object_keys(support) key) IS DISTINCT FROM 'ageYears,dateOfBirth,journeyBinding,ownerId,profileBinding,supported,today,version'
+   OR support->>'version' IS DISTINCT FROM 'rules14-profile-support-v1' OR support->>'ownerId' IS DISTINCT FROM owner_id OR support->'supported' IS DISTINCT FROM 'true'::jsonb
+   OR support->'profileBinding' IS DISTINCT FROM a->'profileBinding' OR support->'journeyBinding' IS DISTINCT FROM a->'journeyBinding'
+   OR e->'profileSupport' IS DISTINCT FROM support OR payload ? 'screeningEvidence' OR e ?| ARRAY['screeningRequestId','screeningVersion']
+   OR payload->>'engineVersion' IS DISTINCT FROM 'rules14-observed-v2'
+   OR jsonb_typeof(support->'dateOfBirth') IS DISTINCT FROM 'string' OR support->>'dateOfBirth' !~ '^\d{4}-\d\d-\d\d$'
+   OR jsonb_typeof(support->'today') IS DISTINCT FROM 'string' OR support->>'today' !~ '^\d{4}-\d\d-\d\d$'
+   OR jsonb_typeof(e->'acceptanceTimezone') IS DISTINCT FROM 'string' OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_timezone_names z WHERE z.name=e->>'acceptanceTimezone')
+   THEN RAISE EXCEPTION 'invalid_historical_profile_support';END IF;
+  support_dob:=(support->>'dateOfBirth')::date;support_today:=(support->>'today')::date;
+  support_age:=extract(year FROM support_today)::integer-extract(year FROM support_dob)::integer-CASE WHEN to_char(support_today,'MM-DD')<to_char(support_dob,'MM-DD') THEN 1 ELSE 0 END;
+  IF to_char(support_dob,'YYYY-MM-DD') IS DISTINCT FROM support->>'dateOfBirth' OR to_char(support_today,'YYYY-MM-DD') IS DISTINCT FROM support->>'today'
+   OR support_today IS DISTINCT FROM (to_timestamp((r->>'acceptedAt')::double precision/1000) AT TIME ZONE (e->>'acceptanceTimezone'))::date
+   OR NOT tdee_rules14_chain_private.integer(support->'ageYears') OR (support->>'ageYears')::integer IS DISTINCT FROM support_age OR support_age NOT BETWEEN 19 AND 100
+   THEN RAISE EXCEPTION 'invalid_historical_profile_support';END IF;
+  END IF;
+  IF (p->>'expiresAt')::bigint>(payload->>'sourceCapturedAt')::bigint+30000
   OR payload->'historyBinding' IS DISTINCT FROM jsonb_build_object('acceptedCount',idx-1,'acceptedDeltaKcal',net,'lastAcceptedAt',CASE WHEN idx>1 THEN last_at ELSE NULL END,'lastReceiptDigest',last_digest,'baselineAcceptedAt',a->'acceptedAt','baselineIntakeKcal',a->'baselineIntakeKcal')
   THEN RAISE EXCEPTION 'invalid_historical_screening_or_history';END IF;
-  IF jsonb_typeof(nutrition) IS DISTINCT FROM 'object' OR jsonb_typeof(pe) IS DISTINCT FROM 'object' OR pe->>'version' IS DISTINCT FROM 'nutrition-policy-application-v1'
+  IF jsonb_typeof(nutrition) IS DISTINCT FROM 'object' OR jsonb_typeof(pe) IS DISTINCT FROM 'object' OR pe->>'version' IS DISTINCT FROM (CASE WHEN observed_v2 THEN 'nutrition-policy-application-v2' ELSE 'nutrition-policy-application-v1' END)
   OR pe->'policyVersion' IS DISTINCT FROM policy->'version' OR pe->'policyDigest' IS DISTINCT FROM policy->'digest' OR pe->'profileBinding' IS DISTINCT FROM a->'profileBinding'
   OR pe->'journeyBinding' IS DISTINCT FROM a->'journeyBinding' OR pe->'sourceFingerprint' IS DISTINCT FROM payload->'sourceFingerprint'
-  OR NOT tdee_rules14_chain_private.integer(pe->'expiresAt') OR (pe->>'expiresAt')::bigint>least((p->>'expiresAt')::bigint,tdee_rules14_chain_private.instant(screen->'expiresAt'),tdee_rules14_chain_private.instant(policy->'expires_at'))
+  OR NOT tdee_rules14_chain_private.integer(pe->'expiresAt') OR (pe->>'expiresAt')::bigint>least((p->>'expiresAt')::bigint,(CASE WHEN observed_v2 THEN (p->>'expiresAt')::bigint ELSE tdee_rules14_chain_private.instant(screen->'expiresAt') END),tdee_rules14_chain_private.instant(policy->'expires_at'))
+  OR (observed_v2 AND (pe->>'support' IS DISTINCT FROM 'profile-supported' OR pe ? 'eligibility' OR pe->'ageYears' IS DISTINCT FROM support->'ageYears'))
   THEN RAISE EXCEPTION 'invalid_historical_nutrition';END IF;
   nr:=payload->'nutritionReference';ratio:=CASE WHEN old_goal->>'goal_type'='lose' THEN (policy->>'protein_min_g_per_kg_loss')::float8 ELSE (policy->>'protein_min_g_per_kg_other')::float8 END;
   IF jsonb_typeof(nr) IS DISTINCT FROM 'object' OR nr->>'strategy' IS DISTINCT FROM 'actual-known-non-obese-weight-v1'
@@ -144,14 +169,15 @@ BEGIN
   OR NOT tdee_rules14_chain_private.uuid(nutrition#>'{customChoice,consentId}') OR NOT tdee_rules14_chain_private.integer(nutrition#>'{customChoice,choiceVersion}') OR (nutrition#>>'{customChoice,choiceVersion}')::bigint<1
   THEN RAISE EXCEPTION 'invalid_historical_reference';END IF;
   logs:=review->'loggedIntake';sen:=review->'sensitivity';
-  IF logs->>'status' IS DISTINCT FROM 'explicit_confirmed_days' OR NOT tdee_rules14_macro_private.number_ok(logs->'averageLoggedCaloriesOnConfirmedDays',0.001,10000)
-  OR NOT tdee_rules14_chain_private.integer(logs->'validCalorieDayCount') OR (logs->>'validCalorieDayCount')::bigint<10 OR logs->'unknownCalorieDayCount' IS DISTINCT FROM '0'::jsonb OR logs->'confirmedDayCount' IS DISTINCT FROM logs->'validCalorieDayCount'
+  IF logs->>'status' IS DISTINCT FROM (CASE WHEN observed_v2 THEN 'observed_logged_days' ELSE 'explicit_confirmed_days' END) OR NOT tdee_rules14_macro_private.number_ok(logs->(CASE WHEN observed_v2 THEN 'averageLoggedCaloriesOnObservedDays' ELSE 'averageLoggedCaloriesOnConfirmedDays' END),0.001,10000)
+  OR NOT tdee_rules14_chain_private.integer(logs->'validCalorieDayCount') OR (logs->>'validCalorieDayCount')::bigint<10 OR logs->'unknownCalorieDayCount' IS DISTINCT FROM '0'::jsonb OR logs->(CASE WHEN observed_v2 THEN 'observedDayCount' ELSE 'confirmedDayCount' END) IS DISTINCT FROM logs->'validCalorieDayCount'
+  OR (observed_v2 AND (logs->>'dataBasis' IS DISTINCT FROM 'observed-logs-v1' OR logs->'completenessEstablished' IS DISTINCT FROM 'false'::jsonb OR logs ?| ARRAY['confirmedDayCount','averageLoggedCaloriesOnConfirmedDays']))
   OR sen->>'status' IS DISTINCT FROM 'descriptive' OR sen->'outsideToleranceAcrossEnvelope' IS DISTINCT FROM 'true'::jsonb
   OR NOT tdee_rules14_macro_private.number_ok(review->'observedRateKgPerWeek',-10000,10000) OR NOT tdee_rules14_macro_private.number_ok(review->'targetRateKgPerWeek',-10000,10000)
   OR NOT tdee_rules14_macro_private.number_ok(sen->'lowerKgPerWeek',-10000,10000) OR NOT tdee_rules14_macro_private.number_ok(sen->'upperKgPerWeek',-10000,10000) OR (sen->>'lowerKgPerWeek')::float8>(sen->>'upperKgPerWeek')::float8
   OR review->'sourceFingerprint' IS DISTINCT FROM payload->'sourceFingerprint' OR review->'sourceCapturedAt' IS DISTINCT FROM payload->'sourceCapturedAt' OR review#>'{conversion,kcalPerKg}' IS DISTINCT FROM '7700'::jsonb OR review#>'{conversion,statisticalConfidenceClaim}' IS DISTINCT FROM 'false'::jsonb OR review->'targetCalories' IS DISTINCT FROM payload#>'{target,calories}'
   THEN RAISE EXCEPTION 'invalid_historical_intake_evidence';END IF;
-  avg_intake:=(logs->>'averageLoggedCaloriesOnConfirmedDays')::float8;observed:=(review->>'observedRateKgPerWeek')::float8;target_rate:=(review->>'targetRateKgPerWeek')::float8;
+  avg_intake:=(logs->>(CASE WHEN observed_v2 THEN 'averageLoggedCaloriesOnObservedDays' ELSE 'averageLoggedCaloriesOnConfirmedDays' END))::float8;observed:=(review->>'observedRateKgPerWeek')::float8;target_rate:=(review->>'targetRateKgPerWeek')::float8;
   expenditure:=avg_intake-observed*7700/7;lo_delta:=avg_intake-(old_goal->>'daily_calories')::float8+(target_rate-(sen->>'upperKgPerWeek')::float8)*7700/7;hi_delta:=avg_intake-(old_goal->>'daily_calories')::float8+(target_rate-(sen->>'lowerKgPerWeek')::float8)*7700/7;
   raw_delta:=CASE WHEN abs(lo_delta)<abs(hi_delta) THEN lo_delta ELSE hi_delta END;direction:=sign(raw_delta);edge_rate:=CASE WHEN raw_delta=lo_delta THEN (sen->>'upperKgPerWeek')::float8 ELSE (sen->>'lowerKgPerWeek')::float8 END;
   room:=CASE WHEN direction<0 THEN least((policy->>'max_total_deficit_kcal')::float8,expenditure*(policy->>'max_total_deficit_fraction')::float8)-(expenditure-(old_goal->>'daily_calories')::float8) ELSE 'Infinity'::float8 END;
@@ -159,7 +185,7 @@ BEGIN
   IF expenditure<=0 OR expenditure>10000 OR (lo_delta<=0 AND hi_delta>=0) OR direction<>sign(target_rate-observed)
   OR review->'estimatedExpenditureKcal' IS DISTINCT FROM to_jsonb(expenditure) OR review->'desiredIntakeKcal' IS DISTINCT FROM to_jsonb(expenditure+target_rate*7700/7)
   OR review->'deltaKcal' IS DISTINCT FROM to_jsonb(direction*floor((cap+1e-9)/(policy->>'increment_kcal')::float8)*(policy->>'increment_kcal')::float8)
-  OR review->'calculation' IS DISTINCT FROM jsonb_build_object('method','confirmed-intake-plus-target-minus-observed-v1','edgeKgPerWeek',edge_rate,'unroundedDeltaKcal',raw_delta,'arithmeticEpsilonKcal',1e-9::float8,'incrementKcal',policy->'increment_kcal')
+  OR review->'calculation' IS DISTINCT FROM jsonb_build_object('method',(CASE WHEN observed_v2 THEN 'observed-intake-plus-target-minus-observed-v2' ELSE 'confirmed-intake-plus-target-minus-observed-v1' END),'edgeKgPerWeek',edge_rate,'unroundedDeltaKcal',raw_delta,'arithmeticEpsilonKcal',1e-9::float8,'incrementKcal',policy->'increment_kcal')
   THEN RAISE EXCEPTION 'invalid_historical_energy_arithmetic';END IF;
   allocation:=tdee_rules14_macro_private.adjust(jsonb_build_object('current',payload->'current','newCalories',payload#>'{target,calories}','now',r->'acceptedAt','sourceFingerprint',payload->'sourceFingerprint','binding',nutrition->'binding','context',nutrition));
   IF allocation->>'kind' IS DISTINCT FROM 'candidate' OR allocation->'target' IS DISTINCT FROM payload->'target' OR allocation->'allocationMode' IS DISTINCT FROM payload->'allocationMode' THEN RAISE EXCEPTION 'invalid_historical_macro_allocation';END IF;
@@ -174,7 +200,7 @@ BEGIN
   OR (r->>'deltaKcal')::bigint%(policy->>'increment_kcal')::bigint<>0 OR r->'deltaKcal' IS DISTINCT FROM payload->'deltaKcal'
   OR r->'netDeltaKcal' IS DISTINCT FROM to_jsonb(net+(r->>'deltaKcal')::bigint) OR r->'netDeltaKcal' IS DISTINCT FROM payload->'netDeltaKcal'
   OR abs((r->>'netDeltaKcal')::numeric)>(policy->>'max_cumulative_delta_kcal')::numeric THEN RAISE EXCEPTION 'invalid_delta'; END IF;
-  IF (r->>'deltaKcal')::bigint<0 AND (review->'deficitEvidence' IS DISTINCT FROM jsonb_build_object('version','rules14-deficit-evidence-v1','method','confirmed-intake-minus-observed-rate-v1','measuredExpenditure',false,'clinicalGuarantee',false,'averageLoggedCaloriesOnConfirmedDays',avg_intake,'confirmedDayCount',logs->'confirmedDayCount','observedRateKgPerWeek',observed,'approximateKcalPerKg',7700,'estimatedExpenditureKcal',expenditure,'totalDeficitKcal',expenditure-(payload#>>'{target,calories}')::float8,'maxAllowedDeficitKcal',least((policy->>'max_total_deficit_kcal')::float8,expenditure*(policy->>'max_total_deficit_fraction')::float8)) OR expenditure-(payload#>>'{target,calories}')::float8>least((policy->>'max_total_deficit_kcal')::float8,expenditure*(policy->>'max_total_deficit_fraction')::float8)+1e-9) THEN RAISE EXCEPTION 'invalid_historical_deficit';END IF;
+  IF (r->>'deltaKcal')::bigint<0 AND (review->'deficitEvidence' IS DISTINCT FROM jsonb_build_object('version',(CASE WHEN observed_v2 THEN 'rules14-deficit-evidence-v2' ELSE 'rules14-deficit-evidence-v1' END),'method',(CASE WHEN observed_v2 THEN 'observed-intake-minus-observed-rate-v2' ELSE 'confirmed-intake-minus-observed-rate-v1' END),'measuredExpenditure',false,'clinicalGuarantee',false,(CASE WHEN observed_v2 THEN 'averageLoggedCaloriesOnObservedDays' ELSE 'averageLoggedCaloriesOnConfirmedDays' END),avg_intake,(CASE WHEN observed_v2 THEN 'observedDayCount' ELSE 'confirmedDayCount' END),logs->(CASE WHEN observed_v2 THEN 'observedDayCount' ELSE 'confirmedDayCount' END),'observedRateKgPerWeek',observed,'approximateKcalPerKg',7700,'estimatedExpenditureKcal',expenditure,'totalDeficitKcal',expenditure-(payload#>>'{target,calories}')::float8,'maxAllowedDeficitKcal',least((policy->>'max_total_deficit_kcal')::float8,expenditure*(policy->>'max_total_deficit_fraction')::float8)) OR expenditure-(payload#>>'{target,calories}')::float8>least((policy->>'max_total_deficit_kcal')::float8,expenditure*(policy->>'max_total_deficit_fraction')::float8)+1e-9) THEN RAISE EXCEPTION 'invalid_historical_deficit';END IF;
   target:=payload->'target';
   IF jsonb_typeof(target) IS DISTINCT FROM 'object' OR (g->>'daily_calories')::numeric IS DISTINCT FROM (old_goal->>'daily_calories')::numeric+(r->>'deltaKcal')::bigint
   OR (g->>'daily_calories')::numeric IS DISTINCT FROM (a->>'baselineIntakeKcal')::numeric+(r->>'netDeltaKcal')::numeric OR (g->>'daily_calories')::numeric<(policy->>'min_intake_kcal')::numeric OR (g->>'daily_calories')::numeric>(policy->>'max_intake_kcal')::numeric
@@ -198,4 +224,5 @@ REVOKE ALL ON ALL FUNCTIONS IN SCHEMA tdee_rules14_chain_private FROM PUBLIC,ano
 CREATE FUNCTION tdee_rules14_private.verify_chain(value jsonb,now_ms bigint) RETURNS jsonb
 LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$ SELECT tdee_rules14_chain_private.verify_chain(value,now_ms) $$;
 REVOKE ALL ON FUNCTION tdee_rules14_private.verify_chain(jsonb,bigint) FROM PUBLIC,anon,authenticated,service_role;
+
 

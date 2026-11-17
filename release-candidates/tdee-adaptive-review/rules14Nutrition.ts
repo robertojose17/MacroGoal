@@ -1,16 +1,16 @@
-import {rules14ScreeningCurrent} from './rules14Screening.ts';
-import {diagnoseSnapshotRateReview,type SnapshotMacroRequest} from './snapshotReviewContextParser.ts';
+import {rules14ProfileSupportCurrent} from './rules14ProfileSupport.ts';
+import {diagnoseObservedSnapshotRateReview,type SnapshotMacroRequest} from './snapshotReviewContextParser.ts';
 import {macroPreferenceEvidence} from './snapshotOrchestrationSupabaseAdapter.ts';
 import type {Rules14Policy} from './rules14Decision.ts';
 import type {Rules14MacroContext} from './smartMacroAdjustment.ts';
 /** Deterministic application of the registered general-adult policy. No claim of
- * individualized clinician review. Restricted/unknown screening or obese/unknown
+ * individualized clinician review. Unsupported profile or obese/unknown
  * reference-weight cases hold instead of inventing body composition/reference. */
 export function applyRules14Nutrition(snapshot:any,actor:string,policy:Rules14Policy,choice:unknown,now:number){
  const blocked=(reason:string)=>({kind:'blocked' as const,reason});
- const d=diagnoseSnapshotRateReview(snapshot,actor,now);if(d.kind==='blocked')return blocked(d.reason);
+ const d=diagnoseObservedSnapshotRateReview(snapshot,actor,now);if(d.kind==='blocked')return blocked(d.reason);
  const g=snapshot.currentGoal,p=snapshot.profile,r=snapshot.readiness;
- if(!rules14ScreeningCurrent(snapshot,actor,now)||policy.scope!=='screened-adult-general-v1')return blocked('clinical_eligibility_required');
+ if(!rules14ProfileSupportCurrent(snapshot,actor,now)||policy.scope!=='profile-adult-observed-v1')return blocked('profile_support_required');
  if(!['balanced','high_protein','low_carb','lean_body','custom'].includes(g.macro_preset))return blocked('macro_preference_unavailable');
  const today=d.window.endDateExclusive,dob=p.dateOfBirth;
  const age=Number(today.slice(0,4))-Number(dob?.slice(0,4))-(today.slice(5)<dob?.slice(5)?1:0);
@@ -27,7 +27,8 @@ export function applyRules14Nutrition(snapshot:any,actor:string,policy:Rules14Po
  const preference=macroPreferenceEvidence(actor,request,choice,now);
  if(preference.preferenceStatus!=='current'||!preference.consent)return blocked('explicit_macro_choice_required');
  const context:Rules14MacroContext={binding:request.binding,current:request.current,customChoice:preference.consent,
- policyEvidence:{version:'nutrition-policy-application-v1',policyVersion:policy.version,policyDigest:policy.digest,sourceFingerprint:d.sourceFingerprint,profileBinding:r.profileBinding,journeyBinding:r.journeyBinding,computedAt:now,expiresAt:Math.min(Date.parse(policy.expires_at),Date.parse(d.sourceCapturedAt)+30000,Date.parse(snapshot.rulesScreening.expiresAt)),ageYears:age,eligibility:'eligible'},
+ policyEvidence:{version:'nutrition-policy-application-v2',policyVersion:policy.version,policyDigest:policy.digest,sourceFingerprint:d.sourceFingerprint,profileBinding:r.profileBinding,journeyBinding:r.journeyBinding,computedAt:now,expiresAt:Math.min(Date.parse(policy.expires_at),Date.parse(d.sourceCapturedAt)+30000),ageYears:age,support:'profile-supported'},
  limits:{proteinMinG:minRatio*weight,proteinMaxG:policy.protein_max_g_per_kg*weight,carbsMinG:policy.carbs_min_g,carbsMaxG:10000,fatsMinG:0,fatsMaxG:10000,fatMinFraction:policy.fat_min_fraction,fatMaxFraction:policy.fat_max_fraction}};
  return {kind:'nutrition_policy_applied' as const,request,context,reference:{strategy:'actual-known-non-obese-weight-v1',weightKg:weight,heightCm:height,bmi,measurementDate:d.window.weights.at(-1)!.date},qualityNotes:['Fat percentage does not establish essential fatty acid adequacy.','Fiber is retained and remains a nutrition-quality indicator.']};
 }
+

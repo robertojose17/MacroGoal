@@ -23,11 +23,11 @@ BEGIN
  IF policy_name IS NULL THEN RETURN NULL;END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended('rules14_policy:'||policy_name,0));
  SELECT * INTO pol FROM tdee_rules14_private.policy_versions WHERE version=policy_name ORDER BY revision DESC LIMIT 1 FOR SHARE;
- IF NOT FOUND OR pol.decision<>'enabled' OR pol.expires_at<=clock_timestamp() OR (p_policy IS NOT NULL AND p_policy<>'null'::jsonb AND p_policy IS DISTINCT FROM jsonb_build_object('version',pol.version,'revision',pol.revision,'digest',pol.digest,'engineVersion','rules14-v1')) THEN RETURN NULL;END IF;
+ IF NOT FOUND OR pol.document->>'engine_version' IS DISTINCT FROM 'rules14-observed-v2' OR pol.document->>'scope' IS DISTINCT FROM 'profile-adult-observed-v1' OR pol.decision<>'enabled' OR pol.expires_at<=clock_timestamp() OR (p_policy IS NOT NULL AND p_policy<>'null'::jsonb AND p_policy IS DISTINCT FROM jsonb_build_object('version',pol.version,'revision',pol.revision,'digest',pol.digest,'engineVersion','rules14-observed-v2')) THEN RETURN NULL;END IF;
  pe:=tdee_rules14_private.policy_envelope(pol);
- c:=tdee_scheduler_private.read_context(p_owner);
+ c:=tdee_rules14_private.read_observed_context_v1(p_owner);
  IF c->>'actor' IS DISTINCT FROM p_owner::text OR c#>>'{profile,id}' IS DISTINCT FROM p_owner::text THEN RETURN NULL;END IF;
- c:=jsonb_set(jsonb_set(jsonb_set(jsonb_set(c,'{policy}',pe),'{profile,heightCm}',coalesce(to_jsonb(u.height),'null'::jsonb)),'{profile,heightUnit}','"cm"'::jsonb),'{rulesScreening}',tdee_rules14_private.read_screening(p_owner));
+ c:=jsonb_set(c,'{policy}',pe);
  at_time:=clock_timestamp();h:=tdee_rules14_private.history(p_owner,at_time);IF h IS NULL THEN RETURN NULL;END IF;
  -- Every current source, including accepted_count>0, binds to the ORIGINAL
  -- immutable manual receipt material evidence. Legacy missing evidence holds.

@@ -6,7 +6,7 @@ import {createInternalSelectorPorts} from './internalSelectorAdapter.ts';
 import {createInternalProviderRefresh,createInternalProviderRevalidator,type ProviderProof} from './internalProviderRefresh.ts';
 import {createSchedulerRpcStorage,parseSchedulerRpc,type InternalServiceRpc} from './schedulerRpcStorage.ts';
 import {planDailyAssessment,revalidateClaimedAssessment,DAILY_SCHEDULER_RELEASE_STATE,type AssessmentInput,type DailyPlan,type DailyRecord,type UncertainHold} from './dailyAssessmentScheduler.ts';
-import {assessFourteenDaySnapshotReview} from './snapshotReviewContextParser.ts';
+import {assessFourteenDaySnapshotReview,assessFourteenDayObservedSnapshotReview} from './snapshotReviewContextParser.ts';
 import {diagnosticFromAssessment,type SchedulerDiagnostic} from './schedulerDiagnostic.ts';
 export const INTERNAL_RATE_POLICY_BINDING:null|{version:string;digest:string;engineVersion:string}=null;
 export const INTERNAL_WORKER_RUNTIME_RELEASE=Object.freeze({enabled:true} as const);
@@ -17,7 +17,7 @@ export interface ExistingServiceClient{rpc(name:string,args:Record<string,unknow
 export type WorkerRuntimeBootstrap={
  /** Already injected existing key, never HTTP input. Never logged or returned. */
  serviceRoleKey?:string;
- recommendationEngine?:'rules14-v1'|'rate-review-14d-v1';
+ recommendationEngine?:'rules14-observed-v2'|'rate-review-14d-v1';
  rulesPolicy?:{version:string;revision:number;digest:string;engineVersion:string}|null;
  /** Exact trusted deployment binding; no fallback/latest policy selection. */
  ratePolicy?:{version:string;digest:string;engineVersion:string}|null;
@@ -35,6 +35,7 @@ export type ReviewStorage={
 export type WorkerAssessmentReviewPorts={
  revalidate(selection:WorkerSelection,proof:ProviderProof,deadline:number,signal:AbortSignal):Promise<ProviderProof>;
  loadContext(ownerId:string,signal:AbortSignal):Promise<unknown>;
+ assessmentMode?:'observed-v2'|'legacy-v1';
  storage:ReviewStorage;now():number;newClaimId():string;
  reconcileIssued?(scope:AssessmentInput,record:DailyRecord):Promise<boolean>;
  issueRateProposal?(ownerId:string,proposalId:string):Promise<{reason:string;proposal:unknown;mayHaveWritten:boolean;baselineStatus?:'stored';engineVersion?:string}>;
@@ -83,13 +84,13 @@ export async function runWorkerAssessmentForReview(ports:WorkerAssessmentReviewP
   const current=revalidateClaimedAssessment({...fresh.input,hold:latest.hold},latest.record,claimId);
   if(current.kind!=='assessment_plan')return 'reconcile';claimed=current;
   // Use the real fourteen-day diagnostic, never the legacy21-day estimator.
-  const assessedAt=clock(ports,deadline,signal),result=assessFourteenDaySnapshotReview(fresh.raw,selection.ownerId,assessedAt);
+  const assessedAt=clock(ports,deadline,signal),result=(ports.assessmentMode==='observed-v2'?assessFourteenDayObservedSnapshotReview:assessFourteenDaySnapshotReview)(fresh.raw,selection.ownerId,assessedAt);
   await ports.revalidate(selection,proof,deadline,signal);
   let diagnostic=diagnosticFromAssessment({assessedAt,result},current.plannedAt,clock(ports,deadline,signal));
   if(ports.issueRateProposal&&(!latest.hold||assessedAt>=latest.hold.reevaluateAt)){
    await ports.revalidate(selection,proof,deadline,signal);clock(ports,deadline,signal);
    const issued=await ports.issueRateProposal(selection.ownerId,claimId);
-   const baselineStored=issued.reason==='calibration_required'&&issued.baselineStatus==='stored'&&issued.engineVersion==='rules14-v1'&&issued.proposal===null;
+   const baselineStored=issued.reason==='calibration_required'&&issued.baselineStatus==='stored'&&issued.engineVersion==='rules14-observed-v2'&&issued.proposal===null;
    if(issued.mayHaveWritten&&issued.reason!=='review_available'&&!baselineStored)throw Error('issuance_outcome_unknown');
    if(baselineStored)diagnostic={kind:'preserve',reason:'calibration_required'};
    if(issued.reason==='review_available'){
@@ -143,14 +144,15 @@ export function createInternalWorkerRuntime(bootstrap:WorkerRuntimeBootstrap){
     async runOwnAssessment(selection,proof,deadline,signal){
      const scopedRpc:InternalServiceRpc={rpc:(name,args)=>client.rpc(name,args).abortSignal(signal)};
      const storage=createSchedulerRpcStorage(scopedRpc);
-     return runWorkerAssessmentForReview({storage,now,reconcileIssued:async(scope,record)=>{
-      return reconcileAssessmentOutcomeForReview(scope,record,bootstrap.recommendationEngine==='rules14-v1',(name,args)=>serviceRpc(name,args,signal));
-     },issueRateProposal:(ownerId,proposalId)=>bootstrap.recommendationEngine==='rules14-v1'?createInternalRules14Runtime({rpc:(name,args)=>serviceRpc(name,args,signal),now,newProposalId:()=>proposalId,expectedPolicy:bootstrap.rulesPolicy??null})(ownerId):createInternalRateIssuance({rpc:(name,args)=>serviceRpc(name,args,signal),now,newProposalId:()=>proposalId,expectedPolicy:bootstrap.ratePolicy!})(ownerId),newClaimId:()=>crypto.randomUUID(),revalidate,
-      loadContext:(ownerId,signal)=>serviceRpc('tdee_internal_context_v1',{p_owner:ownerId},signal)},selection,proof as ProviderProof,deadline,signal);
+     return runWorkerAssessmentForReview({storage,now,assessmentMode:bootstrap.recommendationEngine==='rules14-observed-v2'?'observed-v2':'legacy-v1',reconcileIssued:async(scope,record)=>{
+      return reconcileAssessmentOutcomeForReview(scope,record,bootstrap.recommendationEngine==='rules14-observed-v2',(name,args)=>serviceRpc(name,args,signal));
+     },issueRateProposal:(ownerId,proposalId)=>bootstrap.recommendationEngine==='rules14-observed-v2'?createInternalRules14Runtime({rpc:(name,args)=>serviceRpc(name,args,signal),now,newProposalId:()=>proposalId,expectedPolicy:bootstrap.rulesPolicy??null})(ownerId):createInternalRateIssuance({rpc:(name,args)=>serviceRpc(name,args,signal),now,newProposalId:()=>proposalId,expectedPolicy:bootstrap.ratePolicy!})(ownerId),newClaimId:()=>crypto.randomUUID(),revalidate,
+      loadContext:(ownerId,signal)=>serviceRpc(bootstrap.recommendationEngine==='rules14-observed-v2'?'tdee_internal_observed_context_v1':'tdee_internal_context_v1',{p_owner:ownerId},signal)},selection,proof as ProviderProof,deadline,signal);
     },
    });
    return await run(request);
   }catch{return new Response(JSON.stringify({result:'internal_worker_unavailable'}),{status:503,headers:{'content-type':'application/json','cache-control':'no-store'}});}
  };
 }
+
 

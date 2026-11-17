@@ -28,7 +28,7 @@ BEGIN
   ref:=jsonb_build_object('ownerId',h.owner_id,'version',h.version,'sourceRequestId',h.source_request_id,'sourceGoalId',h.source_goal_id);
   IF NOT FOUND OR candidate#>'{payload,anchorReference}' IS DISTINCT FROM ref OR p.anchor_version IS DISTINCT FROM h.version OR p.source_request_id IS DISTINCT FROM h.source_request_id OR p.source_goal_id IS DISTINCT FROM h.source_goal_id THEN reason:='anchor_head_changed';EXIT admission;END IF;
   payload:=p.record->'payload';target:=payload->'target';macro:=payload->'macroEvidence';
-  IF payload->'anchorReference' IS DISTINCT FROM ref OR payload->'anchorSnapshot' IS DISTINCT FROM h.anchor OR payload->>'contract' IS DISTINCT FROM 'explicit-rules14-acceptance-v1' OR payload->'requiresExplicitAcceptance' IS DISTINCT FROM 'true'::jsonb THEN reason:='proposal_anchor_changed';EXIT admission;END IF;
+  IF payload->'anchorReference' IS DISTINCT FROM ref OR payload->'anchorSnapshot' IS DISTINCT FROM h.anchor OR payload->>'contract' IS DISTINCT FROM 'explicit-rules14-acceptance-v2' OR payload->'requiresExplicitAcceptance' IS DISTINCT FROM 'true'::jsonb THEN reason:='proposal_anchor_changed';EXIT admission;END IF;
   IF (SELECT count(*) FROM public.goals WHERE user_id=actor AND is_active=true)<>1 THEN reason:='goal_unavailable';EXIT admission;END IF;
   SELECT * INTO g FROM public.goals WHERE user_id=actor AND is_active=true FOR UPDATE;
   IF NOT FOUND OR to_jsonb(g) IS DISTINCT FROM payload->'goalSnapshot' THEN reason:='goal_changed';EXIT admission;END IF;
@@ -53,7 +53,7 @@ BEGIN
   rules_source:=tdee_rules14_private.read_source(actor,payload->'policyBinding');
   IF rules_source IS NULL THEN reason:='rules14_source_changed';EXIT admission;END IF;
   c:=rules_source->'snapshot';history:=rules_source->'history';policy_doc:=rules_source->'policy';snapshot:=c->'observation';readiness:=c->'readiness';
-  IF c->'rulesScreening' IS DISTINCT FROM payload->'screeningEvidence' OR NOT tdee_rules14_private.screening_current(c,actor,at_time) THEN reason:='rules_screening_changed';EXIT admission;END IF;
+  IF c->'profileSupport' IS DISTINCT FROM payload->'profileSupport' OR NOT tdee_rules14_private.profile_support_current(c,actor,at_time) THEN reason:='profile_support_changed';EXIT admission;END IF;
   SELECT * INTO policy FROM tdee_rules14_private.policy_versions WHERE version=policy_doc->>'version' ORDER BY revision DESC LIMIT 1 FOR SHARE;
   IF NOT FOUND OR policy_doc IS DISTINCT FROM payload->'policySnapshot' OR c->'currentGoal' IS DISTINCT FROM to_jsonb(g) OR
    c#>>'{profile,updatedAt}' IS DISTINCT FROM payload->>'profileUpdatedAt' OR readiness->>'profileBinding' IS DISTINCT FROM payload->>'profileBinding' OR readiness->>'journeyBinding' IS DISTINCT FROM payload->>'journeyBinding' OR
@@ -67,7 +67,7 @@ BEGIN
    (payload->>'preparedAt')::numeric<>trunc((payload->>'preparedAt')::numeric) OR (payload->>'preparedAt')::numeric NOT BETWEEN source_ms AND at_ms OR
    payload->'actionable' IS DISTINCT FROM 'false'::jsonb THEN reason:='proposal_time_invalid';EXIT admission;END IF;
   observed_decision:=tdee_rules14_private.evaluate_rules(c,history,policy_doc,actor,at_time);decision:=payload->'decision';
-  IF observed_decision->>'kind' IS DISTINCT FROM 'rules14_candidate' OR decision->>'kind' IS DISTINCT FROM 'rules14_candidate' OR decision->>'version' IS DISTINCT FROM 'rules14-decision-v1' THEN reason:='rules14_decision_changed';EXIT admission;END IF;
+  IF observed_decision->>'kind' IS DISTINCT FROM 'rules14_candidate' OR decision->>'kind' IS DISTINCT FROM 'rules14_candidate' OR decision->>'version' IS DISTINCT FROM 'rules14-decision-v2' THEN reason:='rules14_decision_changed';EXIT admission;END IF;
   FOREACH k IN ARRAY ARRAY['deltaKcal','targetCalories','netDeltaKcal','deficitEvidence','observedRateKgPerWeek','targetRateKgPerWeek','windowStart','windowEndExclusive','averageWeightKg','loggedIntake','estimatedExpenditureKcal','desiredIntakeKcal'] LOOP
    IF decision->k IS DISTINCT FROM observed_decision->k THEN reason:='rules14_decision_changed';EXIT admission;END IF;END LOOP;
   IF decision#>'{calculation,edgeKgPerWeek}' IS DISTINCT FROM observed_decision->'edgeKgPerWeek' OR decision#>'{calculation,unroundedDeltaKcal}' IS DISTINCT FROM observed_decision->'unroundedDeltaKcal' OR
@@ -79,7 +79,7 @@ BEGIN
   IF payload->'deltaKcal' IS DISTINCT FROM observed_decision->'deltaKcal' OR payload->'netDeltaKcal' IS DISTINCT FROM observed_decision->'netDeltaKcal' OR target->'calories' IS DISTINCT FROM observed_decision->'targetCalories' THEN reason:='rules14_target_changed';EXIT admission;END IF;
   energy_input:=jsonb_build_object('current',jsonb_build_object('calories',g.daily_calories,'proteinG',g.protein_g,'carbsG',g.carbs_g,'fatsG',g.fats_g,'fiberG',g.fiber_g));
   IF payload->'current' IS DISTINCT FROM energy_input->'current' THEN reason:='proposal_current_changed';EXIT admission;END IF;
-  coverage:=macrogoal_snapshot_review_private.inspect_rate_coverage_v1(c,actor,at_time);
+  coverage:=macrogoal_snapshot_review_private.inspect_observed_rate_coverage_v1(c,actor,at_time);
   today:=(at_time AT TIME ZONE u.timezone)::date;age_years:=date_part('year',age(today,u.date_of_birth))::integer;
   weight:=(coverage#>>'{weights,-1,weightKg}')::double precision;height:=(c#>>'{profile,heightCm}')::double precision;
   IF age_years NOT BETWEEN 19 AND 100 OR weight IS NULL OR height IS NULL OR height NOT BETWEEN 100 AND 250 OR weight<=0 THEN reason:='protein_reference_unavailable';EXIT admission;END IF;
@@ -92,9 +92,9 @@ BEGIN
   reference:=jsonb_build_object('strategy','actual-known-non-obese-weight-v1','weightKg',weight,'heightCm',height,'bmi',bmi,'measurementDate',coverage#>'{weights,-1,date}');
   IF payload->'nutritionReference' IS DISTINCT FROM reference THEN reason:='nutrition_reference_changed';EXIT admission;END IF;
   mb:=jsonb_build_object('ownerId',actor,'goalId',g.id,'goalRevision',g.updated_at,'preset',g.macro_preset,'sourceFingerprint',snapshot->>'sourceFingerprint','policyVersion',policy.version,'policyDigest',policy.digest);
-  expires_ms:=least(source_ms+30000,floor(extract(epoch FROM policy.expires_at)*1000),floor(extract(epoch FROM (c#>>'{rulesScreening,expiresAt}')::timestamptz)*1000));
-  expected_review:=jsonb_build_object('version','nutrition-policy-application-v1','policyVersion',policy.version,'policyDigest',policy.digest,'sourceFingerprint',snapshot->>'sourceFingerprint',
-   'profileBinding',readiness->'profileBinding','journeyBinding',readiness->'journeyBinding','computedAt',payload->'preparedAt','expiresAt',expires_ms,'ageYears',age_years,'eligibility','eligible');
+  expires_ms:=least(source_ms+30000,floor(extract(epoch FROM policy.expires_at)*1000));
+  expected_review:=jsonb_build_object('version','nutrition-policy-application-v2','policyVersion',policy.version,'policyDigest',policy.digest,'sourceFingerprint',snapshot->>'sourceFingerprint',
+   'profileBinding',readiness->'profileBinding','journeyBinding',readiness->'journeyBinding','computedAt',payload->'preparedAt','expiresAt',expires_ms,'ageYears',age_years,'support','profile-supported');
   expected_limits:=jsonb_build_object('proteinMinG',ratio*weight,'proteinMaxG',(policy_doc->>'protein_max_g_per_kg')::double precision*weight,'carbsMinG',policy_doc->'carbs_min_g','carbsMaxG',10000,'fatsMinG',0,'fatsMaxG',10000,'fatMinFraction',policy_doc->'fat_min_fraction','fatMaxFraction',policy_doc->'fat_max_fraction');
   SELECT * INTO mc FROM macrogoal_snapshot_review_private.macro_choices WHERE owner_id=actor AND goal_id=g.id ORDER BY choice_version DESC LIMIT 1 FOR SHARE;
   IF NOT FOUND OR mc.mode IS NULL OR mc.mode NOT IN ('smart','preserve_percent') OR mc.copy_version IS DISTINCT FROM 'macro-choice-v1' OR mc.goal_updated_at IS DISTINCT FROM g.updated_at OR mc.profile_binding IS DISTINCT FROM readiness->>'profileBinding' OR mc.journey_binding IS DISTINCT FROM readiness->>'journeyBinding' OR
