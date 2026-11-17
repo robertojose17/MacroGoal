@@ -10,6 +10,7 @@ export async function runRules14ForReview(actor:string,p:Rules14Ports){
  const stop=(reason:string,mayHaveWritten=false)=>({reason,proposal:null,mayHaveWritten,engineVersion:'rules14-v1' as const});let writing=false;
  try{
   const raw=await p.rpc(RULES14_RPC.source,{p_owner:actor,p_policy:p.expectedPolicy??null}) as any;
+  if(raw?.version==='rules14-source-unavailable-v1'&&raw.ownerId===actor&&raw.reason==='baseline_reconfirmation_required'&&raw.actionable===false&&Object.keys(raw).sort().join(',')==='actionable,ownerId,reason,version')return stop('baseline_reconfirmation_required');
   if(p.expectedPolicy&&(raw?.policy?.version!==p.expectedPolicy.version||raw?.policy?.revision!==p.expectedPolicy.revision||raw?.policy?.digest!==p.expectedPolicy.digest||p.expectedPolicy.engineVersion!=='rules14-v1'))return stop('rules14_policy_changed');
   const r=await prepareRules14Proposal(raw,actor,p.newProposalId(),p.now());
   if(r.kind!=='rules14_record_prepared')return stop(r.reason);
@@ -39,3 +40,4 @@ export async function runRules14WithAnchorForReview(actor:string,p:Rules14Ports)
  return afterAnchor(actor,p,await bootstrapRateAnchorForReview(actor,p));
 }
 export function createInternalRules14Runtime(p:Rules14Ports){return async(owner:string)=>RULES14_RELEASE.enabled?runRules14WithAnchor(owner,p):{reason:'safety_review_required',proposal:null,mayHaveWritten:false};}
+

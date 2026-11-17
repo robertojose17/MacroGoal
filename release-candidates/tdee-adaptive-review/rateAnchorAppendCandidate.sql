@@ -63,13 +63,13 @@ BEGIN
  OR r->>'user_id' IS DISTINCT FROM p_owner::text OR r->>'goal_id' IS DISTINCT FROM g->>'id'
  OR r->'goal_snapshot' IS DISTINCT FROM g OR coalesce(r#>>'{payload,operation}','') NOT IN ('initial_onboarding','manual_goal')
  OR coalesce(r->>'profile_fingerprint','') !~ '^[a-f0-9]{64}$'
- OR r->>'profile_fingerprint' IS DISTINCT FROM s->>'currentProfileFingerprint'
+ OR NOT macrogoal_goal_write_private.material_evidence_current(r,s->'currentMaterialProfile',p_owner)
  OR coalesce(s->>'profileBinding','') !~ '^[a-f0-9]{64}$' OR coalesce(s->>'journeyBinding','') !~ '^[a-f0-9]{64}$' THEN
  RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='accepted_receipt_mismatch'; END IF;
  -- UUID casts are from authoritative database rows, never request strings.
  PERFORM (g->>'id')::uuid,(r->>'request_id')::uuid;
  accepted:=tdee_rate_anchor_private.parse_instant(g->>'created_at');updated:=tdee_rate_anchor_private.parse_instant(g->>'updated_at');
- receipt_at:=tdee_rate_anchor_private.parse_instant(r->>'created_at');profile_at:=tdee_rate_anchor_private.parse_instant(u->>'updated_at');
+ receipt_at:=tdee_rate_anchor_private.parse_instant(r->>'created_at');profile_at:=tdee_rate_anchor_private.parse_instant(r->>'material_profile_updated_at');
  IF accepted IS NULL OR updated IS NULL OR receipt_at IS NULL OR profile_at IS NULL OR
  NOT isfinite(accepted) OR NOT isfinite(updated) OR NOT isfinite(receipt_at) OR NOT isfinite(profile_at)
  OR accepted<'1970-01-01T00:00:00Z'::timestamptz OR date_trunc('milliseconds',accepted)<>date_trunc('milliseconds',updated)
@@ -100,7 +100,7 @@ BEGIN
  'profileBinding',s->'profileBinding','journeyBinding',s->'journeyBinding',
  'journeyStartDate',u->'journey_start_date','journeyRestartCount',u->'journey_restart_count',
  'sourceReceipt',jsonb_build_object('requestId',r->'request_id','operation',r#>'{payload,operation}',
- 'createdAt',r->'created_at','acceptedProfileFingerprint',r->'profile_fingerprint','acceptedProfileUpdatedAt',u->'updated_at'),
+ 'createdAt',r->'created_at','acceptedProfileFingerprint',r->'profile_fingerprint','acceptedProfileUpdatedAt',r->'material_profile_updated_at'),
  'acceptedDeltaKcal',0,'acceptedCount',0,'lastAcceptedAt',NULL,'earliestReviewAt',accepted_ms+1209600000);
  RETURN expected;
 END $derive$;

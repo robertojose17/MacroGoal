@@ -79,11 +79,13 @@ AS $function$
  'currentProfile',jsonb_build_object('id',u.id,'onboarding_completed',u.onboarding_completed,
  'updated_at',u.updated_at,'journey_start_date',u.journey_start_date,'journey_restart_count',u.journey_restart_count,
  'date_of_birth',u.date_of_birth,'timezone',u.timezone),
+ 'currentMaterialProfile',macrogoal_goal_write_private.material_profile_v1(jsonb_populate_record(NULL::public.users,to_jsonb(u))),
  'currentProfileFingerprint',u.full_fingerprint,'journeyBinding',u.jb,
  'profileBinding',encode(sha256(convert_to(jsonb_build_object('owner',p_owner,'dob',u.date_of_birth,'sex',u.sex,
  'journey',u.jb,'timezone',u.timezone)::text,'UTF8')),'hex'),
  'receipt',(SELECT jsonb_build_object('user_id',r.user_id,'request_id',r.request_id,'goal_id',r.goal_id,
  'goal_snapshot',r.goal_snapshot,'profile_fingerprint',r.profile_fingerprint,'created_at',r.created_at,
+ 'material_profile',r.material_profile,'material_profile_updated_at',r.material_profile_updated_at,
  'payload',jsonb_build_object('operation',r.payload->'operation')) FROM latest r)) AS value
  FROM bindings u WHERE (SELECT count(*) FROM goals)=1
  AND EXISTS(SELECT 1 FROM latest)

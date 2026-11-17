@@ -38,6 +38,7 @@ BEGIN
   verified_chain:=tdee_rules14_private.verify_chain(chain,at_ms);
   IF verified_chain->>'kind' IS DISTINCT FROM 'rules14_chain_verified' OR verified_chain->'receiptsVerified' IS DISTINCT FROM 'true'::jsonb OR
    verified_chain->'currentGoal' IS DISTINCT FROM to_jsonb(g) OR verified_chain->'anchorReference' IS DISTINCT FROM ref THEN reason:='rate_chain_unverified';EXIT admission;END IF;
+  IF NOT tdee_rules14_private.anchor_material_current(h.anchor,u) THEN reason:='baseline_reconfirmation_required';EXIT admission;END IF;
   accepted_count:=(verified_chain->>'acceptedCount')::integer;
   IF accepted_count>=1000 THEN reason:='rate_chain_limit';EXIT admission;END IF;
   IF accepted_count=0 THEN
@@ -45,10 +46,9 @@ BEGIN
   source:=tdee_rate_anchor_private.read_source(actor);
   IF source#>>'{existingAnchor,kind}' IS DISTINCT FROM 'rate_anchor_head' OR source#>'{existingAnchor,anchor}' IS DISTINCT FROM h.anchor OR source#>'{existingAnchor,version}' IS DISTINCT FROM to_jsonb(h.version) OR
    source#>>'{existingAnchor,sourceRequestId}' IS DISTINCT FROM h.source_request_id::text OR source#>>'{existingAnchor,sourceGoalId}' IS DISTINCT FROM h.source_goal_id::text THEN reason:='initial_rate_source_changed';EXIT admission;END IF;
-  -- Presence is stripped ONLY inside pure provenance re-derivation for equality.
-  -- This neither resets stored history nor calls append_initial.
-  derived:=tdee_rate_anchor_private.derive_initial(jsonb_set(source,'{existingAnchor}','null'::jsonb),actor,at_time);
-  IF derived IS DISTINCT FROM h.anchor THEN reason:='initial_rate_provenance_changed';EXIT admission;END IF;
+  -- Verify immutable accepted receipt against stored anchor, not today's telemetry.
+  -- Initial append remains strict; no historical receipt/hash/time is rewritten.
+  IF NOT tdee_rules14_private.initial_anchor_receipt_current(source,h.anchor,actor,at_time) THEN reason:='initial_rate_provenance_changed';EXIT admission;END IF;
   END IF;
   rules_source:=tdee_rules14_private.read_source(actor,payload->'policyBinding');
   IF rules_source IS NULL THEN reason:='rules14_source_changed';EXIT admission;END IF;

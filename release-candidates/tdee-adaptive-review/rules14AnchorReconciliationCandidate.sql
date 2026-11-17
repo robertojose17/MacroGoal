@@ -18,10 +18,9 @@ BEGIN
  IF s->>'ownerId' IS DISTINCT FROM p_owner::text OR s->>'version' IS DISTINCT FROM 'accepted-goal-rate-anchor-source-v1' OR s->'actionable' IS DISTINCT FROM 'false'::jsonb OR s->'unavailable'='true'::jsonb OR
  s->'existingAnchor' IS DISTINCT FROM jsonb_build_object('kind','rate_anchor_head','ownerId',p_owner,'version',h.version,'sourceRequestId',h.source_request_id,'sourceGoalId',h.source_goal_id,'anchor',h.anchor) OR
  s#>>'{receipt,request_id}' IS DISTINCT FROM h.source_request_id::text OR s#>>'{currentGoal,id}' IS DISTINCT FROM h.source_goal_id::text THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;
- -- Pure derivation strips presence only, preserving the original accepted receipt,
- -- exact goal/profile/journey binding and current source. No reset or append occurs.
- derived:=tdee_rate_anchor_private.derive_initial(jsonb_set(s,'{existingAnchor}','null'::jsonb),p_owner,clock_timestamp());
- IF derived IS DISTINCT FROM h.anchor THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;
+ -- Historical accepted receipt remains exact; today's telemetry is not provenance.
+ -- Current selection/proof fences and immutable head checks remain unchanged.
+ IF NOT tdee_rules14_private.initial_anchor_receipt_current(s,h.anchor,p_owner,clock_timestamp()) THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;
  access:=tdee_scheduler_private.read_access(p_owner);at_ms:=floor(extract(epoch FROM clock_timestamp())*1000)::bigint;
  IF access->'allowed' IS DISTINCT FROM 'true'::jsonb OR jsonb_typeof(access->'validUntil') IS DISTINCT FROM 'number' OR (access->>'validUntil')::numeric<=at_ms OR
  tdee_scheduler_private.current_selection_as_of(p_owner,clock_timestamp())->>'contextRevision' IS DISTINCT FROM p_scope THEN RETURN jsonb_build_object('status','unverified','actionable',false);END IF;

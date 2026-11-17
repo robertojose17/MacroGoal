@@ -29,6 +29,9 @@ BEGIN
  IF c->>'actor' IS DISTINCT FROM p_owner::text OR c#>>'{profile,id}' IS DISTINCT FROM p_owner::text THEN RETURN NULL;END IF;
  c:=jsonb_set(jsonb_set(jsonb_set(jsonb_set(c,'{policy}',pe),'{profile,heightCm}',coalesce(to_jsonb(u.height),'null'::jsonb)),'{profile,heightUnit}','"cm"'::jsonb),'{rulesScreening}',tdee_rules14_private.read_screening(p_owner));
  at_time:=clock_timestamp();h:=tdee_rules14_private.history(p_owner,at_time);IF h IS NULL THEN RETURN NULL;END IF;
+ -- Every current source, including accepted_count>0, binds to the ORIGINAL
+ -- immutable manual receipt material evidence. Legacy missing evidence holds.
+ IF NOT tdee_rules14_private.anchor_material_current(h->'anchorSnapshot',u) THEN RETURN jsonb_build_object('version','rules14-source-unavailable-v1','ownerId',p_owner,'reason','baseline_reconfirmation_required','actionable',false);END IF;
  g:=c->'currentGoal';IF h->'currentGoal' IS DISTINCT FROM g THEN RETURN NULL;END IF;
  SELECT * INTO choice FROM macrogoal_snapshot_review_private.macro_choices WHERE owner_id=p_owner AND goal_id=(g->>'id')::uuid ORDER BY choice_version DESC LIMIT 1 FOR SHARE;
  ce:=jsonb_build_object('version','macro-choice-state-v1','actionable',false,'ownerId',p_owner,'copyVersion','macro-choice-v1','bindingStatus','available',
@@ -49,3 +52,4 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.tdee_internal_rules14_source_v1(uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.tdee_internal_rules14_source_v1(uuid,jsonb) TO service_role;
+

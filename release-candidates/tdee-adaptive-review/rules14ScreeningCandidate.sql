@@ -38,11 +38,13 @@ BEGIN
  NEW.accepted_at:=clock_timestamp();NEW.expires_at:=NEW.accepted_at+interval '30 days';RETURN NEW;
 END $$;
 CREATE TRIGGER rules14_screening_immutable BEFORE INSERT OR UPDATE OR DELETE ON tdee_rules14_private.screenings FOR EACH ROW EXECUTE FUNCTION tdee_rules14_private.guard_screening();
+-- Saved screening validity follows risk/profile and journey bindings, not unrelated user-row telemetry.
+-- profile_updated_at remains an immutable capture value and insertion concurrency guard.
 CREATE FUNCTION tdee_rules14_private.screening_envelope(r tdee_rules14_private.screenings,b jsonb,at_time timestamptz) RETURNS jsonb
 LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$
  SELECT jsonb_build_object('version','rules-screening-v1','ownerId',(r).owner_id,'copyVersion','rules-screening-copy-v1',
  'profileBinding',(r).profile_binding,'journeyBinding',(r).journey_binding,'profileUpdatedAt',(r).profile_updated_at,
- 'current',coalesce((r).response='eligible' AND (r).expires_at>at_time AND (r).accepted_at<=at_time AND (r).profile_binding=b->>'profileBinding' AND (r).journey_binding=b->>'journeyBinding' AND (r).profile_updated_at=(b->>'profileUpdatedAt')::timestamptz,false),
+ 'current',coalesce((r).profile_binding ~ '^[a-f0-9]{64}$' AND (r).journey_binding ~ '^[a-f0-9]{64}$' AND (r).response='eligible' AND (r).expires_at>at_time AND (r).accepted_at<=at_time AND (r).profile_binding=b->>'profileBinding' AND (r).journey_binding=b->>'journeyBinding',false),
  'response',(r).response,'acceptedAt',(r).accepted_at,'expiresAt',(r).expires_at,'requestId',(r).request_id,'rowVersion',(r).row_version)
 $$;
 CREATE FUNCTION tdee_rules14_private.read_screening(p_owner uuid) RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
@@ -86,8 +88,9 @@ CREATE FUNCTION tdee_rules14_private.screening_current(c jsonb,actor uuid,at_tim
 LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$
 DECLARE s jsonb:=c->'rulesScreening';
 BEGIN
- RETURN coalesce(s->>'version'='rules-screening-v1' AND s->>'copyVersion'='rules-screening-copy-v1' AND s->>'ownerId'=actor::text AND s->>'response'='eligible' AND s->'current'='true'::jsonb AND
- s->'profileBinding'=c#>'{readiness,profileBinding}' AND s->'journeyBinding'=c#>'{readiness,journeyBinding}' AND (s->>'profileUpdatedAt')::timestamptz=(c#>>'{profile,updatedAt}')::timestamptz AND
+ RETURN coalesce((s->>'profileBinding') ~ '^[a-f0-9]{64}$' AND (s->>'journeyBinding') ~ '^[a-f0-9]{64}$' AND s->>'version'='rules-screening-v1' AND s->>'copyVersion'='rules-screening-copy-v1' AND s->>'ownerId'=actor::text AND s->>'response'='eligible' AND s->'current'='true'::jsonb AND
+ s->'profileBinding'=c#>'{readiness,profileBinding}' AND s->'journeyBinding'=c#>'{readiness,journeyBinding}' AND isfinite((s->>'profileUpdatedAt')::timestamptz) AND
  isfinite((s->>'acceptedAt')::timestamptz) AND isfinite((s->>'expiresAt')::timestamptz) AND (s->>'acceptedAt')::timestamptz<=at_time AND (s->>'expiresAt')::timestamptz>at_time,false);
 EXCEPTION WHEN OTHERS THEN RETURN false;END $$;
 REVOKE ALL ON FUNCTION tdee_rules14_private.screening_current(jsonb,uuid,timestamptz) FROM PUBLIC,anon,authenticated,service_role;
+
