@@ -1,6 +1,6 @@
 export async function runLifecycleCases(context,origin,results){
  const assert=(x,m)=>{if(!x)throw Error(m)};
- async function run(name,fn){const page=await context.newPage();try{await page.goto(origin+'/lifecycle.html');await page.waitForFunction(()=>document.title==='LIFECYCLE_READY');await fn(page);results.push({test:name,pass:true});}finally{await page.close();}}
+ async function run(name,fn){const page=await context.newPage();try{await page.goto(origin+'/lifecycle.html');await page.waitForFunction(()=>document.title==='LIFECYCLE_READY');await fn(page);results.push({test:name,pass:true});}catch(error){const diagnostic=await page.evaluate(()=>({probe:document.querySelector('#probe')?.textContent,owner:globalThis.__lifecycle?.env.owner,calls:globalThis.__lifecycle?.env.calls,pending:globalThis.__lifecycle?.env.pendingRequests.length,focused:globalThis.__lifecycle?.env.focused,foreground:globalThis.__lifecycle?.env.foreground})).catch(()=>null);throw new Error(name+' '+JSON.stringify(diagnostic),{cause:error});}finally{await page.close();}}
  await run('real React Rules14 recovery survives Free downgrade/remount; status only then exact Premium retry',async page=>{
   await page.evaluate(()=>{__lifecycle.seed();__lifecycle.review(true,false)});
   await page.getByRole('button',{name:'Check previous request',exact:true}).waitFor();
@@ -26,8 +26,11 @@ export async function runLifecycleCases(context,origin,results){
   await page.evaluate(()=>__lifecycle.focus(false));await page.waitForFunction(()=>JSON.parse(document.querySelector('#probe').textContent).value===null);await page.evaluate(()=>__lifecycle.focus(true));await page.waitForFunction(()=>JSON.parse(document.querySelector('#probe').textContent).value?.status==='attention');
  });
  await run('real React attention hook rejects late foreign owner response after account switch',async page=>{
+  // Fix wall time only; timers and React scheduling remain real. This case tests owner races, not lease expiry.
+  await page.clock.setFixedTime(new Date('2026-11-17T22:00:00Z'));
   await page.evaluate(()=>{__lifecycle.env.defer=true;__lifecycle.probe()});await page.waitForFunction(()=>__lifecycle.env.pendingRequests.length===1);
   await page.evaluate(()=>{__lifecycle.owner('22222222-2222-4222-8222-222222222222');__lifecycle.env.defer=false;__lifecycle.probe()});await page.waitForFunction(()=>JSON.parse(document.querySelector('#probe').textContent).value?.ownerId==='22222222-2222-4222-8222-222222222222');
+  assert(await page.evaluate(()=>__lifecycle.env.calls.fetch)===2,'new owner did not perform exactly one fresh fetch');assert(await page.evaluate(()=>__lifecycle.env.pendingRequests.length)===1,'old request was not retained for late settlement');
   await page.evaluate(()=>__lifecycle.resolve(__lifecycle.result('11111111-1111-4111-8111-111111111111')));await page.waitForTimeout(25);assert(await page.evaluate(()=>JSON.parse(document.querySelector('#probe').textContent).value?.ownerId)==='22222222-2222-4222-8222-222222222222','foreign response leaked');
  });
 }

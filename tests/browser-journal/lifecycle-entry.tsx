@@ -3,7 +3,8 @@ import {TdeeRules14ReviewEntry} from '../../components/TdeeRules14ReviewEntry';
 import {useTdeeDashboardAttention} from '../../hooks/useTdeeDashboardAttention';
 import {env} from './lifecycle-adapters';
 let root:any;const host=document.createElement('div');host.id='lifecycle-root';document.body.append(host);
-const result=(owner=env.owner,premium=true)=>({version:'dashboard-attention-v1',ownerId:owner,capturedAt:new Date(Date.now()).toISOString(),expiresAt:Date.now()+30000,premium,status:'attention',reason:'review_needed',actionable:false,proposal:null});
+// A server envelope has one capture instant; separate clock reads can exceed the strict 30-second lease.
+const result=(owner=env.owner,premium=true)=>{const captured=Date.now();return {version:'dashboard-attention-v1',ownerId:owner,capturedAt:new Date(captured).toISOString(),expiresAt:captured+30000,premium,status:'attention',reason:'review_needed',actionable:false,proposal:null};};
 const response=(value:any)=>new Response(JSON.stringify(value),{status:200,headers:{'Content-Type':'application/json'}});
 (globalThis as any).fetch=async(url:string,options:any)=>{env.calls.fetch=(env.calls.fetch||0)+1;env.lastUrl=url;if(!String(url).startsWith('https://synthetic.invalid/'))throw Error('unexpected transport');if(env.defer)return new Promise(resolve=>env.pendingRequests.push((value:any)=>resolve(response(value))));return response(result());};
 function Probe({owner}:any){const api=useTdeeDashboardAttention(owner);return <pre id="probe">{JSON.stringify({value:api.value,loading:api.loading,error:api.error})}</pre>;}
