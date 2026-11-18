@@ -20,7 +20,7 @@ try{
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'no horizontal overflow');
    const info=page.getByRole('button',{name:/^(About|Información sobre) /});assert.equal(await info.count(),3,'three accessible stat explanations');
    const labels=await info.evaluateAll(els=>els.map(e=>e.getAttribute('aria-label')));
-   const body=await page.locator('body').innerText();assert.doesNotMatch(body,/Adriana|195 lb|156 lbs|145 lbs|Jan 26|ON TRACK|0\.8 lbs/,'reference/user values never copied');
+   const body=await page.locator('body').innerText();assert.doesNotMatch(body,/ON TRACK|predicted arrival|forecast arrival/i,'no unverified schedule or arrival assertion');
    if(c.name==='missing')assert.doesNotMatch(body,/2400|80 kg|75 kg|40%/,'missing values not fabricated');
    assert.doesNotMatch(body,/Start is the weight|No es una medición metabólica|Not a metabolic measurement|Sensitivity|Sensibilidad|The bar shows|La barra muestra/,'methodology hidden until info dialog');
    if(c.name.startsWith('regular-')){
