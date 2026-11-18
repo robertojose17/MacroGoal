@@ -1,11 +1,22 @@
-import React,{useEffect,useState} from 'react';
-import {View,Text,Modal,Pressable,ScrollView,StyleSheet} from 'react-native';
+import React,{useEffect,useLayoutEffect,useState} from 'react';
+import {View,Text,Modal,Pressable,ScrollView,StyleSheet,Platform} from 'react-native';
 import {useTranslation} from 'react-i18next';
 /** Same dismissible stat explanation pattern as ConsistencyScore, with scrollable large-text content. */
 export function DashboardStatInfo({title,explanation,isDark,ownerId}:{title:string;explanation:string;isDark:boolean;ownerId:string}){
  const [openedForOwner,setOpenedForOwner]=useState<string|null>(null),{i18n}=useTranslation(),es=i18n.language.startsWith('es');
  const visible=openedForOwner===ownerId;
  useEffect(()=>setOpenedForOwner(null),[ownerId]);
+ // RN Web activates Modal's Escape listener only after fade-in. Accept Escape from the first committed frame.
+ useLayoutEffect(()=>{
+  if(Platform.OS!=='web'||!visible||typeof document==='undefined')return;
+  let dismissed=false;
+  const escape=(event:KeyboardEvent)=>{
+   if(event.key!=='Escape'||dismissed)return;
+   dismissed=true;event.preventDefault();event.stopPropagation();setOpenedForOwner(null);
+  };
+  document.addEventListener('keydown',escape,true);
+  return()=>document.removeEventListener('keydown',escape,true);
+ },[visible,ownerId]);
  const close=()=>setOpenedForOwner(null),muted=isDark?'#A0A2B8':'#6B7280';
  return <>
   <View style={styles.infoSlot}><Pressable onPress={()=>setOpenedForOwner(ownerId)} accessibilityRole="button" accessibilityLabel={`${es?'Información sobre':'About'} ${title}`} accessibilityState={{expanded:visible}} hitSlop={0} style={styles.info}><Text style={{fontSize:15,color:muted}}>ⓘ</Text></Pressable></View>
