@@ -38,12 +38,33 @@ try{
     const button=page.getByRole('button',{name:labels[i],exact:true});
     const box=await button.boundingBox();assert.ok(box.width>=44&&box.height>=44,'actual web info target >=44px');
     await button.click();const close=page.getByRole('button',{name:c.query.includes('lang=es')?'Cerrar':'Close',exact:true});await close.waitFor();
-    if(i===2){await page.waitForTimeout(350);await page.screenshot({path:`artifacts/${c.name}-burn-info.png`,fullPage:true});} // Settle RNW 300ms fade for pixels only; second-open Escape below stays immediate.
+    if(i===2){
+     await page.waitForTimeout(350); // Settle fade only for copy/pixels; second-open Escape below stays immediate.
+     const dialog=page.getByRole('dialog'),copy=await dialog.innerText(),es=c.query.includes('lang=es');
+     if(c.name==='missing'){
+      assert.match(copy,/An estimate is not ready yet/,'missing fixture explanation');
+      assert.match(copy,/at least 21 days/,'missing fixture coverage requirement');
+      assert.doesNotMatch(copy,/Low-confidence estimate|Model sensitivity|2400/,'no ready result in missing modal');
+     }else{
+      assert.match(copy,es?/Estimación de baja confianza/:/Low-confidence estimate/,'ready fixture explanation');
+      assert.match(copy,es?/No se ha verificado/:/not verified complete/,'ready caveat preserved');
+      assert.doesNotMatch(copy,/do not yet support|no permiten una estimación|An estimate is not ready/,'ready never uses unavailable explanation');
+     }
+     await page.screenshot({path:`artifacts/${c.name}-burn-info.png`,fullPage:true});
+     if(c.name==='large-text-es-dark'){
+      const box=await dialog.evaluate(root=>{const s=[...root.querySelectorAll('*')].find(e=>getComputedStyle(e).overflowY==='auto'&&e.scrollHeight>e.clientHeight+2);if(!s)return null;const r=s.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2,top:s.scrollTop};});
+      assert.ok(box,'large text explanation has a real scrollable viewport');assert.equal(box.top,0);
+      await page.mouse.move(box.x,box.y);await page.mouse.wheel(0,10000);
+      await page.waitForFunction(()=>{const root=document.querySelector('[role=dialog]'),s=root&&[...root.querySelectorAll('*')].find(e=>getComputedStyle(e).overflowY==='auto'&&e.scrollHeight>e.clientHeight+2);return s&&s.scrollTop>0&&s.scrollTop+s.clientHeight>=s.scrollHeight-2;});
+      assert.match(await dialog.innerText(),/No es una medición metabólica ni una meta de ingesta\./,'final caveat retained');
+      await page.screenshot({path:`artifacts/${c.name}-burn-info-scrolled.png`,fullPage:true});
+     }
+    }
     await close.click();await close.waitFor({state:'hidden'});
     await button.click();await close.waitFor();await page.keyboard.press('Escape');await close.waitFor({state:'hidden'});
    }
    await page.getByRole('button',{name:labels[0],exact:true}).click();await page.getByRole('button',{name:c.query.includes('lang=es')?'Cerrar':'Close',exact:true}).waitFor();await page.evaluate(()=>window.changeSyntheticOwner());await page.getByRole('button',{name:c.query.includes('lang=es')?'Cerrar':'Close',exact:true}).waitFor({state:'hidden'});assert.equal(await page.getByRole('button',{name:labels[0],exact:true}).getAttribute('aria-expanded'),'false','owner change clears expanded state');
-   results.push({case:c.name,status:'pass',screenshots:[`${c.name}.png`,`${c.name}-burn-info.png`]});
+   results.push({case:c.name,status:'pass',screenshots:[`${c.name}.png`,`${c.name}-burn-info.png`,...(c.name==='large-text-es-dark'?[`${c.name}-burn-info-scrolled.png`]:[])]});
   }catch(e){await page.screenshot({path:`artifacts/${c.name}-failure.png`,fullPage:true});results.push({case:c.name,status:'fail',error:String(e)});}finally{await context.close();}
  }
 }finally{fs.writeFileSync('artifacts/results.json',JSON.stringify({synthetic:true,render:'actual React Native Web components/styles; data-hook, SVG DOM, gradient adapters; simulated font scaling, not iOS Dynamic Type',results},null,2));console.log(JSON.stringify(results));await browser.close();await new Promise(r=>server.close(r));}
