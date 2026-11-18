@@ -7,20 +7,20 @@ import {supabase} from '@/lib/supabase/client';import {colors} from '@/styles/co
 import {subscribeGoalChanged} from '@/utils/goalChangeEvents';
 import {createRules14ProposalController,RULES14_REVIEW_UI_RELEASE,type Rules14Preview} from '@/utils/rules14ProposalController';
 import {makeRules14ProposalServices} from '@/utils/rules14ProposalServices';
-type Props={ownerId?:string;isDark:boolean;blocked:boolean;attention:boolean;premium:boolean;automaticRecovery?:boolean;setup?:boolean;refreshVerifiedGoal:()=>Promise<{profile:{id:string};goal:{user_id:string}}>};
+type Props={ownerId?:string;isDark:boolean;blocked:boolean;attention:boolean;premium:boolean;automaticRecovery?:boolean;setup?:boolean;onCheckAvailability?:()=>Promise<void>;refreshVerifiedGoal:()=>Promise<{profile:{id:string};goal:{user_id:string}}>};
 type Controller=ReturnType<typeof createRules14ProposalController>;type Preview=Rules14Preview;
 /** Separate rate contract. OFF before mounting hooks, auth, storage, transport or controls. */
 export function TdeeRules14ReviewEntry(props:Props){return RULES14_REVIEW_UI_RELEASE.enabled?<EnabledRules14Review {...props}/>:null;}
-function EnabledRules14Review({ownerId,isDark,blocked,attention,premium,automaticRecovery=false,setup=false,refreshVerifiedGoal}:Props){
+function EnabledRules14Review({ownerId,isDark,blocked,attention,premium,automaticRecovery=false,onCheckAvailability,refreshVerifiedGoal}:Props){
  const {i18n}=useTranslation(),es=i18n.language.startsWith('es'),label=(en:string,sp:string)=>es?sp:en;
- const [hold,setHold]=useState<Rules14Hold|null>(null);
+ const [hold,setHold]=useState<Rules14Hold|null>(null),[renderOwner,setRenderOwner]=useState(ownerId);
  const [preview,setPreview]=useState<Preview|null>(null),[pending,setPending]=useState(false),[busy,setBusy]=useState(false),[visible,setVisible]=useState(false),[message,setMessage]=useState<'none'|'recovery_failed'|'unavailable'|'unresolved'|'rejected'|'committed'|'refresh_failed'|'review_changed'>('none'),[now,setNow]=useState(Date.now());
  const state=useRef({ownerId,blocked,mounted:false,focused:false,foreground:AppState.currentState==='active'}),controller=useRef<Controller|null>(null),generation=useRef(0),flight=useRef<object|null>(null),refresh=useRef(refreshVerifiedGoal);
  state.current.ownerId=ownerId;state.current.blocked=blocked;refresh.current=refreshVerifiedGoal;
  const recoveryRef=useRef<()=>void>(()=>{});
  const close=useCallback(()=>{generation.current++;controller.current?.close();setHold(null);setPreview(null);setVisible(false);},[]);
  useFocusEffect(useCallback(()=>{state.current.focused=true;Promise.resolve().then(()=>recoveryRef.current());return()=>{state.current.focused=false;close();};},[close]));
- useEffect(()=>{state.current.mounted=true;close();setPending(false);setBusy(false);setMessage('none');flight.current=null;const actor=ownerId;
+ useEffect(()=>{state.current.mounted=true;setRenderOwner(ownerId);close();setPending(false);setBusy(false);setMessage('none');flight.current=null;const actor=ownerId;
   const current=()=>!!actor&&state.current.mounted&&state.current.focused&&state.current.foreground&&state.current.ownerId===actor;
   controller.current=actor?createRules14ProposalController(makeRules14ProposalServices(actor,current,()=>refresh.current())):null;
   const {data}=supabase.auth.onAuthStateChange((_event,session)=>{if(session?.user.id!==actor){state.current.focused=false;close();}});
@@ -64,11 +64,14 @@ function EnabledRules14Review({ownerId,isDark,blocked,attention,premium,automati
  const text=isDark?colors.textDark:colors.text,bg=isDark?colors.cardDark:colors.card;
  const button=(title:string,onPress:()=>void,disabled=false)=><TouchableOpacity accessibilityRole="button" accessibilityState={{disabled}} disabled={disabled} onPress={onPress} style={{padding:12,borderWidth:1,borderColor:colors.primary,borderRadius:10,opacity:disabled?.5:1}}><Text style={{color:colors.primary}}>{title}</Text></TouchableOpacity>;
  const messages={none:'',recovery_failed:label('A saved request could not be verified. Check it again before starting another change.','No se pudo verificar una solicitud guardada. Consúltala otra vez antes de iniciar otro cambio.'),unavailable:label('A verified 14-day proposal is not available. No targets were assumed changed.','No hay una propuesta verificada de 14 días disponible. No se da por cambiada ninguna meta.'),unresolved:label('The previous result is unconfirmed. Checking reads only. Retrying sends the same saved request, never a new one. Closing does not cancel a request already sent.','El resultado anterior no está confirmado. Consultar solo lee. Reintentar envía la misma solicitud guardada, nunca una nueva. Cerrar no cancela una solicitud ya enviada.'),rejected:label('This request did not change your targets.','Esta solicitud no cambió tus metas.'),committed:label('The saved targets and current plan were verified.','Las metas guardadas y el plan actual se verificaron.'),review_changed:label('The refreshed proposal changed. Review these new targets and confirm again.','La propuesta actualizada cambió. Revisa estas nuevas metas y confirma de nuevo.'),refresh_failed:label('The change was verified, but the visible plan could not be refreshed. Reload your current targets.','El cambio se verificó, pero no se pudo actualizar el plan visible. Vuelve a cargar tus metas actuales.')};
- if(!attention&&!pending&&message!=='recovery_failed')return null;
+ if(renderOwner!==ownerId)return null;
+ if(!attention&&!pending&&!hold&&message==='none')return null;
  return <View style={{gap:10,paddingVertical:10}}>
-  {attention&&premium&&button(setup?label('Review analysis setup','Revisar configuración del análisis'):label('Review my 14-day targets','Revisar mis metas de 14 días'),()=>{void run('review');},busy||blocked||!ownerId)}
+  {attention&&premium&&button(label('Review my 14-day targets','Revisar mis metas de 14 días'),()=>{void run('review');},busy||blocked||!ownerId)}
   {holdCopy&&<View accessibilityLiveRegion="polite" style={{gap:6}}><Text style={{color:text,fontWeight:'600'}}>{holdCopy.title}</Text><Text style={{color:text}}>{holdCopy.message}</Text><Text style={{color:text}}>{holdCopy.next}</Text><Text style={{color:text}}>{holdCopy.caution}</Text></View>}
-  {(attention||pending||message==='recovery_failed')&&message!=='none'&&<Text accessibilityRole="alert" style={{color:text}}>{messages[message]}</Text>}
+  {message!=='none'&&<Text accessibilityRole="alert" style={{color:text}}>{messages[message]}</Text>}
+  {!attention&&!pending&&(hold||message==='unavailable')&&onCheckAvailability&&button(label('Check availability again','Comprobar disponibilidad otra vez'),()=>{void onCheckAvailability();},busy||blocked)}
+  {!pending&&(hold||message!=='none')&&button(label('Dismiss message','Cerrar mensaje'),()=>{close();setMessage('none');},busy)}
   {message==='recovery_failed'&&button(label('Check saved request','Consultar solicitud guardada'),()=>recoveryRef.current(),busy||blocked)}
   {pending&&!premium&&<Text style={{color:text}}>{label('A previous request still needs verification. You can check its status; Premium access is required before retrying an adjustment.','Una solicitud anterior aún necesita verificarse. Puedes consultar su estado; se requiere Premium antes de reintentar un ajuste.')}</Text>}
   {pending&&!visible&&button(label('Check previous request','Consultar solicitud anterior'),()=>{void run('check');},busy||blocked)}
@@ -88,4 +91,5 @@ function EnabledRules14Review({ownerId,isDark,blocked,attention,premium,automati
   </ScrollView></View></Modal>
  </View>;
 }
+
 

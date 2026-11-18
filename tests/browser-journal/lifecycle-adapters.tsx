@@ -19,7 +19,13 @@ export function makeRules14ProposalServices(actor:string,isCurrent:any,onVerifie
 export function createRules14ProposalController(p:any){
  let pending:any=null,preview:any=null;const key='synthetic-rules14:'+p.actor;
  const stored=()=>JSON.parse(sessionStorage.getItem(key)||'null');
- return {recover:async()=>{env.calls.recover++;pending=stored();return pending?'pending':'idle';},hasPending:()=>!!pending,pendingPreview:()=>pending?.preview??null,close:()=>{preview=null;},
- review:async()=>{env.calls.offer++;preview=env.preview;return preview;},accept:async()=>{env.calls.accept++;return{status:'unresolved'};},
+ return {recover:async()=>{env.calls.recover++;if(env.recoveryError)throw Error('synthetic recovery error');pending=stored();return pending?'pending':'idle';},hasPending:()=>!!pending,pendingPreview:()=>pending?.preview??null,close:()=>{preview=null;},
+ review:async()=>{env.calls.offer++;if(env.offerError)throw Error('synthetic offer error');if(env.offerHold)return env.offerHold;preview=env.preview;return preview;},accept:async()=>{env.calls.accept++;return{status:'unresolved'};},
  check:async()=>{env.calls.receipt++;return{status:'unresolved'};},retry:async()=>{env.calls.retry++;env.lastRetry=stored()?.requestId;return{status:'unresolved'};}};
 }
+
+
+export const useRouter=()=>({push:(p:any)=>{env.calls.route=(env.calls.route||0)+1;env.route=p;}});
+export const premiumEntry=()=>"/synthetic-premium";
+export const PremiumCheckpointInline=({children}:any)=>children("synthetic-flow");
+export const TdeeMacroChoice=()=>null;

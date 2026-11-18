@@ -82,6 +82,7 @@ jobs:
           tests/dashboard-automatic-analysis.test.mjs
           tests/dashboard-journey.test.cjs
           tests/dashboard-visual-contract.test.mjs
+          tests/dashboard-review-action-contract.test.mjs
           tests/dashboard616-refinement.test.mjs
           tests/dashboard-arrival-estimate.test.cjs
           tests/dashboard-pending-recovery.test.mjs
@@ -146,4 +147,5 @@ jobs:
           path: tests/browser-visual/artifacts/
           if-no-files-found: warn
           retention-days: 7
+
 

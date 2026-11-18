@@ -11,5 +11,6 @@ export function parseTdeeDashboardAttention(value:unknown,owner:string,now=Date.
 }
 export function dashboardAttentionView(value:TdeeDashboardAttention|null,now=Date.now()){
  if(!value||now<Date.parse(value.capturedAt)||now>=value.expiresAt)return {attention:false,premium:false,baseline:false};
- return {attention:value.status==='attention'&&value.reason==='review_needed',premium:value.status!=='unavailable'&&value.premium,baseline:value.reason==='baseline_required'||value.reason==='baseline_reconfirmation_required'};
+ return {attention:value.status==='attention'&&value.reason==='review_needed',premium:value.status!=='unavailable'&&value.premium,baseline:false};
 }
+

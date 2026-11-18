@@ -10,7 +10,7 @@ export function dashboardAttentionFromSource(raw:unknown,owner:string,premium:bo
   if(!Number.isSafeInteger(now)||captured>now||now-captured>30000||o.context.analysisMode!=='automatic-v1'||o.context.premium!==premium||s.actor!==owner||s.capturedAt!==o.capturedAt)return result;
   const expiry=Math.min(captured+30000,premium?o.context.accessValidUntil??0:Infinity);if(expiry<=now)return result;
   result.capturedAt=o.capturedAt;result.expiresAt=expiry;
-  if(r.version==='rules14-attention-setup-v1'&&r.actionable===false&&['baseline_required','baseline_reconfirmation_required'].includes(r.reason))return {...result,status:premium?'attention':'none',reason:premium?r.reason:'baseline_required'};
+  if(r.version==='rules14-attention-setup-v1'&&r.actionable===false&&['baseline_required','baseline_reconfirmation_required'].includes(r.reason))return {...result,status:'none',reason:'baseline_required'};
   if(r.version!=='rules14-source-v1'||!r.history||!r.policy)return result;
   const d=assessAutomaticRules14Attention(s,owner,r.history,r.policy,now);
   if(d.kind==='attention')return {...result,status:'attention',reason:'review_needed'};
@@ -20,3 +20,4 @@ export function dashboardAttentionFromSource(raw:unknown,owner:string,premium:bo
   return baseline?{...result,status:'none',reason:'baseline_required'}:noChange?{...result,status:'none',reason:'no_change'}:insufficient?{...result,status:'none',reason:'insufficient_data'}:result;
  }catch{return result;}
 }
+
