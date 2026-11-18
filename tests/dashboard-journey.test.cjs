@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
 const root=path.resolve(__dirname,'..');
-function load(p){const filename=path.join(root,p),m=new Module(filename,module);m.filename=filename;m.paths=module.paths;m._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,filename);return m.exports;}
+function load(p){const filename=path.join(root,p),m=new Module(filename,module);m.filename=filename;m.paths=module.paths;m.require=id=>id.startsWith('.')?load(path.relative(root,path.resolve(path.dirname(filename),id)+(path.extname(id)?'':'.ts'))):require(id);m._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,filename);return m.exports;}
 const {deriveDashboardJourney:derive,parseDashboardJourney:parse}=load('release-candidates/tdee-adaptive-review/dashboardJourney.ts');
 const base={journeyStartDate:'2026-10-01',today:'2026-11-17',goalWeightKg:70};
 const rows=Array.from({length:9},(_,i)=>({date:`2026-11-${String(1+i*2).padStart(2,'0')}`,weight:80-i*.2}));
@@ -13,7 +13,7 @@ test('conflicting same-day values fail closed instead of choosing row order',()=
 test('trend unavailable when most recent weight is stale; current stays visible',()=>{const d=derive({...base,today:'2026-11-25',checkIns:rows});assert.equal(d.currentWeightKg,78.4);assert.equal(d.trend.status,'insufficient');});
 test('parser rejects unsupported, malformed, nonfinite and false estimated results',()=>{const d=derive({...base,checkIns:rows});for(const v of [null,{}, {...d,version:'other'}, {...d,currentWeightKg:Infinity},{...d,trend:{...d.trend,count:2}},{...d,points:[{date:'invalid',kg:80}]}])assert.equal(parse(v),null);});
 test('one outlier does not turn an otherwise consistent trend into plateau',()=>{const d=derive({...base,checkIns:rows.map((r,i)=>i===4?{...r,weight:83}:r)});assert.ok(Math.abs(d.trend.kgPerWeek+.7)<1e-10);});
-test('restored dashboard card keeps chart, progress, ETA and trend slots with no invented values',()=>{const s=fs.readFileSync(path.join(root,'components/GoalWeightCard.tsx'),'utf8');for(const token of ['WeightProgressMiniChart','styles.progressSection','styles.estSection','goalWeightCard.estArrival','no verified projection','explanation={details}'])assert.ok(s.includes(token),token);assert.ok(!s.includes('maintenanceCalories: 2000'));assert.ok(!s.includes('propCurrent ??'));});
+test('restored dashboard card keeps chart, progress, ETA without duplicate speed with no invented values',()=>{const s=fs.readFileSync(path.join(root,'components/GoalWeightCard.tsx'),'utf8');for(const token of ['WeightProgressMiniChart','styles.progressSection','styles.estSection','goalWeightCard.estArrival','conditional estimate','explanation={details}'])assert.ok(s.includes(token),token);assert.ok(!s.includes('maintenanceCalories: 2000'));assert.ok(!s.includes('propCurrent ??'));});
 test('full ProgressCard retains four cards, chart, carousel, and tooltips',()=>{const s=fs.readFileSync(path.join(root,'components/ProgressCard.tsx'),'utf8');for(const token of ['statProgress','statMomentum','statTimeline','statTarget','<Svg','pagingEnabled','<Modal'])assert.ok(s.includes(token));});
 test('new observations contain no duplicate weight entry and burn is secondary',()=>{const s=fs.readFileSync(path.join(root,'components/ObservedActivityCard.tsx'),'utf8');assert.ok(s.indexOf('Weight trend')<s.indexOf('Daily Burn'));assert.ok(!/check-in-form|Log weight|Registrar peso/.test(s));});
 function weightUnits(){const file=path.join(root,'utils/weightUnits.ts');const m=new Module(file,module);m._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,file);return m.exports;}
@@ -29,6 +29,8 @@ function renderComponent(name,unit,rate,observed={estimate:null,program:null,loa
  if(id==='@/hooks/useWeightDisplayUnit')return {useWeightDisplayUnit:()=>unit};if(id==='@/utils/weightUnits')return weightUnits();
  if(id==='@/styles/commonStyles')return {colors:{}};if(id==='./ProgressCard')return {WeightProgressMiniChart:'WeightProgressMiniChart'};
  if(id==='@/hooks/useDynamicTdee')return {useDynamicTdee:()=>observed};
+ if(id==='@/utils/dashboardBurnStatus')return load('utils/dashboardBurnStatus.ts');
+ if(id==='@/utils/dashboardArrivalEstimate')return load('utils/dashboardArrivalEstimate.ts');
  if(id==='@/utils/automaticBurnExplanation')return load('utils/automaticBurnExplanation.ts');
  if(id==='@/utils/tdeePresentation')return {observationStatus:()=> 'collecting',observationStatusText:()=> 'Collecting'};
  throw Error('Unexpected module '+id);
@@ -69,3 +71,4 @@ test('real info modal web Escape listener handles fade-in once and cleans up on 
  const f=fixture('web','owner-A','owner-A');assert.equal(expanded(f.tree),true);assert.equal(expanded(fixture('web',null,'owner-A').tree),false);assert.equal(expanded(fixture('web','owner-A','owner-B').tree),false);assert.equal(f.added.length,1);assert.equal(f.added[0].name,'keydown');assert.equal(f.added[0].capture,true);let prevented=0,stopped=0;const event=key=>({key,preventDefault:()=>prevented++,stopPropagation:()=>stopped++});f.listeners.get('keydown')(event('Enter'));assert.equal(f.changes.length,0);f.listeners.get('keydown')(event('Escape'));f.listeners.get('keydown')(event('Escape'));assert.deepEqual(f.changes,[null]);assert.equal(prevented,1);assert.equal(stopped,1);f.cleanup();assert.equal(f.listeners.size,0);assert.equal(f.removed[0].fn,f.added[0].fn);assert.equal(f.removed[0].capture,true);
  for(const args of [['web',null,'owner-A'],['web','owner-A','owner-B'],['ios','owner-A','owner-A'],['android','owner-A','owner-A']]){const inactive=fixture(...args);assert.equal(inactive.added.length,0);assert.equal(inactive.cleanup,undefined);}
 });
+

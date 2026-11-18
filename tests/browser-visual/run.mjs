@@ -13,14 +13,16 @@ try{
  for(const c of [{name:'regular-kg-light',width:390,query:'unit=kg'},{name:'regular-lb-dark',width:390,query:'unit=lb&dark=1'},{name:'narrow-es',width:320,query:'unit=kg&lang=es'},{name:'large-text-es-dark',width:390,query:'unit=lb&lang=es&dark=1&scale=1.6'},{name:'missing',width:390,query:'empty=1'}]){
   const context=await browser.newContext({viewport:{width:c.width,height:844},deviceScaleFactor:2});
   await context.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
-  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const page=await context.newPage(),errors=[];await page.clock.setFixedTime(new Date('2026-11-18T12:00:00Z'));page.on('pageerror',e=>errors.push(e.message));
   try{
    await page.goto(origin+'/?'+c.query);await page.waitForSelector('button,[role=button]');await page.waitForTimeout(300);
    assert.deepEqual(errors,[],'no runtime errors');
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'no horizontal overflow');
    const info=page.getByRole('button',{name:/^(About|Información sobre) /});assert.equal(await info.count(),3,'three accessible stat explanations');
    const labels=await info.evaluateAll(els=>els.map(e=>e.getAttribute('aria-label')));
-   const body=await page.locator('body').innerText();assert.doesNotMatch(body,/ON TRACK|predicted arrival|forecast arrival/i,'no unverified schedule or arrival assertion');
+   const body=await page.locator('body').innerText();assert.doesNotMatch(body,/Loss speed|Gain speed|Ritmo de pérdida|Ritmo de aumento/,'no duplicate absolute speed');
+   const observed=await page.getByTestId('visual-observed').locator(':scope > div').boundingBox(),checkins=await page.getByTestId('synthetic-checkins').boundingBox();assert.ok(checkins.y-(observed.y+observed.height)>=11.5,'at least12px actual gap before synthetic adjacent check-ins');
+   const goalText=await page.getByTestId('visual-goal').innerText();const expectedArrival=await page.evaluate(es=>new Date('2026-12-11T12:00:00').toLocaleDateString(es?'es':'en',{month:'short',day:'numeric',year:'numeric'}),c.query.includes('lang=es'));if(c.name==='missing')assert.ok(!goalText.includes(expectedArrival));else assert.ok(goalText.includes(expectedArrival),'supported conditional arrival from actual helper');assert.doesNotMatch(body,/ON TRACK|predicted arrival|forecast arrival/i,'no unverified schedule or arrival assertion');
    if(c.name==='missing')assert.doesNotMatch(body,/2400|80 kg|75 kg|40%/,'missing values not fabricated');
    assert.doesNotMatch(body,/Start is the weight|No es una medición metabólica|Not a metabolic measurement|Sensitivity|Sensibilidad|The bar shows|La barra muestra/,'methodology hidden until info dialog');
    if(c.name.startsWith('regular-')){
@@ -70,3 +72,4 @@ try{
 }finally{fs.writeFileSync('artifacts/results.json',JSON.stringify({synthetic:true,render:'actual React Native Web components/styles; data-hook, SVG DOM, gradient adapters; simulated font scaling, not iOS Dynamic Type',results},null,2));console.log(JSON.stringify(results));await browser.close();await new Promise(r=>server.close(r));}
 
 const failures=results.filter(r=>r.status==='fail');if(failures.length)throw new AggregateError(failures.map(r=>new Error(r.case+': '+r.error)),failures.length+' visual cases failed; see artifacts/results.json');
+

@@ -33,6 +33,9 @@ on:
       - 'supabase/functions/observed-snapshot-release/**'
       - 'supabase/functions/ai-coach-daily/**'
       - 'tests/dashboard-*.test.*'
+      - 'tests/dashboard616-refinement.test.mjs'
+      - 'utils/dashboardArrivalEstimate.ts'
+      - 'utils/dashboardBurnStatus.ts'
       - 'tests/automatic-scheduler.test.mjs'
       - 'tests/foods-web-accepted-goal.test.cjs'
   workflow_dispatch: {}
@@ -79,6 +82,8 @@ jobs:
           tests/dashboard-automatic-analysis.test.mjs
           tests/dashboard-journey.test.cjs
           tests/dashboard-visual-contract.test.mjs
+          tests/dashboard616-refinement.test.mjs
+          tests/dashboard-arrival-estimate.test.cjs
           tests/dashboard-pending-recovery.test.mjs
           tests/foods-web-accepted-goal.test.cjs
           tests/rate-anchor-append-source.test.mjs
@@ -141,3 +146,4 @@ jobs:
           path: tests/browser-visual/artifacts/
           if-no-files-found: warn
           retention-days: 7
+

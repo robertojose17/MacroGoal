@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import {rea
 const read=name=>readFileSync(new URL('../components/'+name,import.meta.url),'utf8');
 const goal=read('GoalWeightCard.tsx'),observed=read('ObservedActivityCard.tsx'),chart=read('ProgressCard.tsx'),info=read('DashboardStatInfo.tsx');
 test('Goal card retains observed start/goal and missing values, not profile fallback or fabricated on-track/ETA',()=>{
- assert.match(goal,/start=d\?\.startWeightKg,current=d\?\.currentWeightKg,goal=d\?\.goalWeightKg/);assert.match(goal,/v==null\|\|!unit\?'--'/);assert.doesNotMatch(goal,/ON TRACK|On track|new Date\(/);assert.match(goal,/styles\.estDate,\{color:muted\}\]}>--/);
+ assert.match(goal,/start=d\?\.startWeightKg,current=d\?\.currentWeightKg,goal=d\?\.goalWeightKg/);assert.match(goal,/v==null\|\|!unit\?'--'/);assert.doesNotMatch(goal,/ON TRACK|On track|Loss speed|Gain speed/);assert.match(goal,/dashboardArrivalEstimate\(d,localCalendarDate\(new Date\(\)\)\)/);assert.match(goal,/arrivalText/);
  const body=goal.slice(goal.indexOf(' return <View'));assert.doesNotMatch(body,/Last recorded|No weight was recorded|No verified projection|Start → Goal/);assert.match(goal,/currentWeightDate/);assert.match(goal,/explanation=\{details\}/);
 });
 test('Compact trend and burn keep limitations and real coverage behind information controls',()=>{
@@ -16,3 +16,4 @@ test('Information modal supports explicit/back/backdrop dismissal, large text sc
  assert.match(info,/onRequestClose=\{close\}/);assert.match(info,/style=\{styles\.backdrop\} onPress=\{close\}/);assert.match(info,/event\.stopPropagation\(\)/);assert.match(info,/<ScrollView>/);assert.match(info,/visible=openedForOwner===ownerId/);assert.match(info,/useEffect\(\(\)=>setOpenedForOwner\(null\),\[ownerId\]\)/);assert.match(info,/accessibilityLabel=\{es\?'Cerrar':'Close'\}/);assert.match(info,/width:44,height:44/);
  for(const source of [goal,observed])assert.match(source,/width<360\|\|fontScale>1\.2/);
 });
+

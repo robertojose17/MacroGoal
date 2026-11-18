@@ -8,6 +8,7 @@ import {useWeightDisplayUnit} from '@/hooks/useWeightDisplayUnit';
 import {displaySignedRateKg} from '@/utils/weightUnits';
 import {WeightProgressMiniChart} from './ProgressCard';
 import {DashboardStatInfo} from './DashboardStatInfo';
+import {dashboardArrivalEstimate,localCalendarDate} from '@/utils/dashboardArrivalEstimate';
 const PRIMARY='#5B9AA8',CHART_HEIGHT=120;
 interface GoalWeightCardProps{userId:string;isDark:boolean;currentWeightKg?:number|null;goalWeightKg?:number|null;startWeightKg?:number|null}
 /** Restored original card layout. Profile fallback props intentionally do not invent observations. */
@@ -21,17 +22,16 @@ export default function GoalWeightCard({userId,isDark}:GoalWeightCardProps){
  const fraction=range!==null&&range!==0&&current!=null?Math.max(0,Math.min(1,(current-start!)/range)):null;
  const percent=fraction===null?null:Math.round(fraction*100),remaining=current!=null&&goal!=null?Math.abs(current-goal):null;
  const reached=current!=null&&goal!=null&&(current===goal||fraction===1);
- const trend=d?.trend.status==='estimated'?d.trend.kgPerWeek:null;
- const rate=trend==null||!unit?'--':`${Math.abs(displaySignedRateKg(trend,unit)).toFixed(1)} ${unit}/${es?'sem':'week'}`;
- const rateLabel=trend==null||trend<0?(es?'Ritmo de pérdida':'Loss speed'):trend>0?(es?'Ritmo de aumento':'Gain speed'):(es?'Tendencia':'Trend');
- const details=[es?'El primer peso corresponde a la fecha de inicio del recorrido; no se sustituye por el peso actual.':'Start is the weight recorded on your journey start date; it is not replaced with your current weight.',`${es?'Actual':'Current'}: ${format(current)} ${unit??''}${d?.currentWeightDate?' · '+d.currentWeightDate:''}`,!d?.points.length?(es?'La gráfica necesita pesajes registrados.':'The chart needs recorded weigh-ins.'):'',start==null?(es?'No hay un peso registrado en la fecha de inicio.':'No weight was recorded on the journey start date.'):'',es?'La barra muestra el progreso registrado hacia tu objetivo. No verifica si vas al ritmo previsto.':'The bar shows recorded progress toward your goal. It does not verify whether you are on schedule.',es?'Llegada: no hay una proyección verificada. El ritmo es una estimación de pesajes distribuidos en al menos 14 días. La línea turquesa une pesajes registrados; la referencia horizontal verde es tu objetivo guardado, no una predicción.':'Arrival: no verified projection is available. Speed is estimated from weigh-ins spread over at least 14 days. The teal chart line connects recorded weights; the green horizontal reference is your saved goal, not a forecast.'].filter(Boolean).join('\n\n');
+ const arrival=dashboardArrivalEstimate(d,localCalendarDate(new Date()));
+ const arrivalText=arrival.status==='estimated'?new Date(arrival.date+'T12:00:00').toLocaleDateString(es?'es':'en',{month:'short',day:'numeric',year:'numeric'}):arrival.status==='reached'?(es?'Objetivo alcanzado':'Goal reached'):'--';
+ const details=[es?'El primer peso corresponde a la fecha de inicio del recorrido; no se sustituye por el peso actual.':'Start is the weight recorded on your journey start date; it is not replaced with your current weight.',`${es?'Actual':'Current'}: ${format(current)} ${unit??''}${d?.currentWeightDate?' · '+d.currentWeightDate:''}`,!d?.points.length?(es?'La gráfica necesita pesajes registrados.':'The chart needs recorded weigh-ins.'):'',start==null?(es?'No hay un peso registrado en la fecha de inicio.':'No weight was recorded on the journey start date.'):'',es?'La barra muestra el progreso registrado hacia tu objetivo. No verifica si vas al ritmo previsto.':'The bar shows recorded progress toward your goal. It does not verify whether you are on schedule.',es?'Llegada: estimación condicional si continúa el ritmo observado, no una promesa ni una meta de ingesta. Requiere pesajes recientes suficientes y una tendencia hacia el objetivo. Se omiten fechas pasadas y horizontes mayores a 365 días; ese límite es de presentación, no clínico. La línea turquesa une pesajes registrados; la referencia horizontal verde es tu objetivo guardado, no una predicción.':'Arrival is a conditional estimate if the observed pace continues, not a promise or an intake target. It requires enough recent weigh-ins and a trend toward the goal. Past dates and horizons over 365 days are omitted; this is a presentation limit, not a clinical rule. The teal chart line connects recorded weights; the green horizontal reference is your saved goal, not a forecast.'].filter(Boolean).join('\n\n');
  return <View style={[styles.card,{backgroundColor:bg,borderColor:border}]}>
   <View style={styles.headerRow}><View style={styles.titleRow}><Text style={[styles.title,{color:text}]}>{t('goalWeightCard.title')}</Text><DashboardStatInfo title={t('goalWeightCard.title')} explanation={details} isDark={isDark} ownerId={userId}/></View><View style={[styles.badge,{backgroundColor:reached?'rgba(80,180,120,0.12)':'rgba(91,154,168,0.10)'}]}><Text style={[styles.badgeText,{color:reached?'#3E9965':PRIMARY}]}>{reached?(es?'✓ OBJETIVO':'✓ GOAL REACHED'):percent===null?'—':(es?'PROGRESO':'PROGRESS')}</Text></View></View>
   {loading?<ActivityIndicator color={PRIMARY}/>:<View style={[styles.bodyRow,{marginBottom:4},stacked&&{flexDirection:'column',gap:14}]}>
    <View style={[styles.leftColumn,stacked&&{flex:0,paddingRight:0}]}>
     <View style={styles.weightHorizontalRow}><Text style={[styles.weightInlineValue,{color:text}]}>{format(start)} {unit??''}</Text><Text style={[styles.weightArrow,{color:muted}]}> → </Text><Text style={[styles.weightInlineValue,{color:PRIMARY}]}>{format(goal)} {unit??''}</Text></View>
     <View style={styles.progressSection}><View style={styles.barRow}><View style={[styles.track,{backgroundColor:track,flex:1}]}>{percent!==null&&<><LinearGradient colors={['#5B9AA8','#7BC8D4']} start={{x:0,y:0}} end={{x:1,y:0}} style={[styles.fill,{width:`${percent}%`}]}/><View style={[styles.progressDot,{left:`${percent}%`,borderColor:bg}]}/></>}</View><Text style={styles.pctText}>{percent===null?'--':`${percent}%`}</Text></View><Text style={[styles.lbsToGo,{color:muted}]}>{reached?t('goalWeightCard.goalReached'):remaining===null||!unit?'--':`${format(remaining)} ${unit} ${es?'para el objetivo':'to goal'}`}</Text></View>
-    <View style={styles.estSection}><View style={styles.estCell}><Text style={[styles.estLabel,{color:muted}]}>{t('goalWeightCard.estArrival')}</Text><Text style={[styles.estDate,{color:muted}]}>--</Text></View><View style={[styles.estDivider,{backgroundColor:muted}]}/><View style={styles.estCell}><Text style={[styles.estLabel,{color:muted}]}>{rateLabel}</Text><Text style={[styles.estDate,{color:text}]}>{rate}</Text></View></View>
+    <View style={styles.estSection}><View style={styles.estCell}><Text style={[styles.estLabel,{color:muted}]}>{t('goalWeightCard.estArrival')}</Text><Text style={[styles.estDate,{color:arrival.status==='estimated'?text:muted}]}>{arrivalText}</Text></View></View>
    </View><View style={[styles.chartColumn,stacked&&{flex:0,width:'100%'}]}><WeightProgressMiniChart userId={userId} isDark={isDark} height={CHART_HEIGHT} state={state} displayUnit={unit}/></View>
   </View>}
  </View>;
@@ -149,12 +149,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  estDivider: {
-    width: 1,
-    alignSelf: 'stretch',
-    marginHorizontal: 8,
-    opacity: 0.2,
-  },
   estLabel: {
     fontSize: 9,
     fontWeight: '600',
@@ -198,5 +192,6 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
 });
+
 
 
