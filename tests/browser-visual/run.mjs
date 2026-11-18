@@ -38,12 +38,14 @@ try{
     const button=page.getByRole('button',{name:labels[i],exact:true});
     const box=await button.boundingBox();assert.ok(box.width>=44&&box.height>=44,'actual web info target >=44px');
     await button.click();const close=page.getByRole('button',{name:c.query.includes('lang=es')?'Cerrar':'Close',exact:true});await close.waitFor();
-    if(i===2)await page.screenshot({path:`artifacts/${c.name}-burn-info.png`,fullPage:true});
+    if(i===2){await page.waitForTimeout(350);await page.screenshot({path:`artifacts/${c.name}-burn-info.png`,fullPage:true});} // Settle RNW 300ms fade for pixels only; second-open Escape below stays immediate.
     await close.click();await close.waitFor({state:'hidden'});
     await button.click();await close.waitFor();await page.keyboard.press('Escape');await close.waitFor({state:'hidden'});
    }
    await page.getByRole('button',{name:labels[0],exact:true}).click();await page.getByRole('button',{name:c.query.includes('lang=es')?'Cerrar':'Close',exact:true}).waitFor();await page.evaluate(()=>window.changeSyntheticOwner());await page.getByRole('button',{name:c.query.includes('lang=es')?'Cerrar':'Close',exact:true}).waitFor({state:'hidden'});assert.equal(await page.getByRole('button',{name:labels[0],exact:true}).getAttribute('aria-expanded'),'false','owner change clears expanded state');
    results.push({case:c.name,status:'pass',screenshots:[`${c.name}.png`,`${c.name}-burn-info.png`]});
-  }catch(e){await page.screenshot({path:`artifacts/${c.name}-failure.png`,fullPage:true});results.push({case:c.name,status:'fail',error:String(e)});throw e;}finally{await context.close();}
+  }catch(e){await page.screenshot({path:`artifacts/${c.name}-failure.png`,fullPage:true});results.push({case:c.name,status:'fail',error:String(e)});}finally{await context.close();}
  }
 }finally{fs.writeFileSync('artifacts/results.json',JSON.stringify({synthetic:true,render:'actual React Native Web components/styles; data-hook, SVG DOM, gradient adapters; simulated font scaling, not iOS Dynamic Type',results},null,2));console.log(JSON.stringify(results));await browser.close();await new Promise(r=>server.close(r));}
+
+const failures=results.filter(r=>r.status==='fail');if(failures.length)throw new AggregateError(failures.map(r=>new Error(r.case+': '+r.error)),failures.length+' visual cases failed; see artifacts/results.json');

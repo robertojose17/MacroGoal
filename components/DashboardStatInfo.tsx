@@ -19,7 +19,7 @@ export function DashboardStatInfo({title,explanation,isDark,ownerId}:{title:stri
  },[visible,ownerId]);
  const close=()=>setOpenedForOwner(null),muted=isDark?'#A0A2B8':'#6B7280';
  return <>
-  <View style={styles.infoSlot}><Pressable onPress={()=>setOpenedForOwner(ownerId)} accessibilityRole="button" accessibilityLabel={`${es?'Información sobre':'About'} ${title}`} accessibilityState={{expanded:visible}} hitSlop={0} style={styles.info}><Text style={{fontSize:15,color:muted}}>ⓘ</Text></Pressable></View>
+  <View style={styles.infoSlot}><Pressable onPress={()=>setOpenedForOwner(ownerId)} accessibilityRole="button" accessibilityLabel={`${es?'Información sobre':'About'} ${title}`} accessibilityState={{expanded:visible}} aria-expanded={visible} hitSlop={0} style={styles.info}><Text style={{fontSize:15,color:muted}}>ⓘ</Text></Pressable></View>
   <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
    <Pressable style={styles.backdrop} onPress={close} accessibilityRole="button" accessibilityLabel={es?'Cerrar información':'Dismiss information'}>
     <Pressable onPress={event=>event.stopPropagation()} accessibilityViewIsModal style={[styles.panel,{backgroundColor:isDark?'#1C1C1E':'#FFFFFF'}]}>
