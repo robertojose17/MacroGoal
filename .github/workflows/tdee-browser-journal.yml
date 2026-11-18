@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/tdee-browser-journal.yml'
       - 'tests/browser-journal/**'
+      - 'tests/browser-visual/**'
+      - 'components/DashboardStatInfo.tsx'
       - 'utils/*Journal*.ts'
       - 'utils/browserEncryptedJournalStorage.ts'
       - 'hooks/useAcceptedGoalEditor.ts'
@@ -76,6 +78,7 @@ jobs:
           tests/dashboard-attention-client.test.mjs
           tests/dashboard-automatic-analysis.test.mjs
           tests/dashboard-journey.test.cjs
+          tests/dashboard-visual-contract.test.mjs
           tests/dashboard-pending-recovery.test.mjs
           tests/foods-web-accepted-goal.test.cjs
           tests/rate-anchor-append-source.test.mjs
@@ -121,3 +124,18 @@ jobs:
           DIAGNOSTIC_DEPLOYMENT_URL: 'https://macro-goal--yev0y2o08u.expo.app/'
         run: node tests/browser-journal/public-deployment-diagnostic.mjs
 
+
+      - name: Install locked visual rendering tooling
+        working-directory: tests/browser-visual
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Actual styled React Native Web visual checks
+        working-directory: tests/browser-visual
+        run: npm run check && npm test
+      - name: Upload synthetic visual evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 verified official tag
+        with:
+          name: dashboard-visual-${{ github.sha }}
+          path: tests/browser-visual/artifacts/
+          if-no-files-found: warn
+          retention-days: 7

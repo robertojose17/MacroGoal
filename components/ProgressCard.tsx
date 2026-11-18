@@ -11,20 +11,21 @@ const day=(d:string)=>Date.parse(d+'T00:00:00Z')/86400000;
 function WeightChart({data,unit,isDark,height=220,mini=false}:{data:DashboardJourney|null|undefined;unit:WeightUnit|null;isDark:boolean;height?:number;mini?:boolean}){
  const [width,setWidth]=useState(280),{i18n}=useTranslation(),es=i18n.language.startsWith('es'),color=isDark?'#E5E7EB':'#475569';
  const points=data?.points??[],goal=data?.goalWeightKg;
- if(!unit||points.length===0)return <View style={{minHeight:height,justifyContent:'center'}}><Text style={{color,fontSize:12}}>{es?'Sin pesajes verificados para graficar':'No verified weigh-ins to chart'}</Text></View>;
+ if(!unit||points.length===0)return <View style={{minHeight:height,justifyContent:'center'}}><Text style={{color,fontSize:12}}>{mini?'--':es?'Sin pesajes verificados para graficar':'No verified weigh-ins to chart'}</Text></View>;
  const vals=points.map(p=>displaySignedRateKg(p.kg,unit)),g=goal==null?null:displaySignedRateKg(goal,unit),all=g===null?vals:[...vals,g],min=Math.min(...all),max=Math.max(...all),pad=Math.max((max-min)*.12,.5),lo=min-pad,hi=max+pad;
- const left=mini?28:42,right=10,top=10,bottom=26,w=Math.max(80,width),cw=Math.max(30,w-left-right),ch=height-top-bottom,first=day(points[0].date),last=day(points.at(-1)!.date),span=Math.max(1,last-first);
+ const left=mini?3:42,right=mini?28:10,top=10,bottom=26,w=Math.max(80,width),cw=Math.max(30,w-left-right),ch=height-top-bottom,first=day(points[0].date),last=day(points.at(-1)!.date),span=Math.max(1,last-first);
  const x=(date:string)=>left+(day(date)-first)/span*cw,y=(value:number)=>top+(hi-value)/(hi-lo)*ch;
  const path=points.map((p,i)=>`${i?'L':'M'}${x(p.date)},${y(vals[i])}`).join(' ');
  return <View onLayout={e=>setWidth(e.nativeEvent.layout.width)} accessibilityLabel={es?'Gráfica de pesajes registrados y peso objetivo':'Recorded weigh-ins and goal-weight chart'}>
   <Svg width="100%" height={height} viewBox={`0 0 ${w} ${height}`}>
-   {[0,.5,1].map(t=>{const v=hi-(hi-lo)*t;return <React.Fragment key={t}><Line x1={left} y1={y(v)} x2={w-right} y2={y(v)} stroke={isDark?'#374151':'#E5E7EB'} strokeWidth={1}/><SvgText x={left-4} y={y(v)+3} textAnchor="end" fontSize={mini?8:10} fill={color}>{v.toFixed(1)}</SvgText></React.Fragment>;})}
-   {g!==null&&<Line x1={left} x2={w-right} y1={y(g)} y2={y(g)} stroke="#5B9AA8" strokeDasharray="4 4" strokeWidth={1.5}/>}
-   <Path d={path} stroke="#F59E0B" strokeWidth={2} fill="none"/>
-   {points.map((p,i)=><Circle key={p.date} cx={x(p.date)} cy={y(vals[i])} r={mini?2:3} fill="#F59E0B"/>)}
-   <SvgText x={left} y={height-7} fontSize={9} fill={color}>{points[0].date.slice(5)}</SvgText><SvgText x={w-right} y={height-7} textAnchor="end" fontSize={9} fill={color}>{points.at(-1)!.date.slice(5)}</SvgText>
+   {(mini?[0,1/3,2/3,1]:[0,.5,1]).map(t=>{const v=hi-(hi-lo)*t;return <React.Fragment key={t}><Line x1={left} y1={y(v)} x2={w-right} y2={y(v)} stroke={isDark?'#374151':'#E5E7EB'} strokeWidth={1} strokeDasharray={mini?'3 3':undefined}/><SvgText x={mini?w-right+4:left-4} y={y(v)+3} textAnchor={mini?'start':'end'} fontSize={mini?8:10} fill={color}>{v.toFixed(1)}</SvgText></React.Fragment>;})}
+   {g!==null&&<Line x1={left} x2={w-right} y1={y(g)} y2={y(g)} stroke={mini?'#53B77B':'#5B9AA8'} strokeDasharray="4 4" strokeWidth={1.5}/>}
+   {mini&&points.length>1&&<Path d={`${path} L${x(points.at(-1)!.date)},${top+ch} L${x(points[0].date)},${top+ch} Z`} fill={isDark?'rgba(91,154,168,0.12)':'rgba(83,183,123,0.12)'} stroke="none"/>}
+   {(!mini||points.length>1)&&<Path d={path} stroke={mini?'#5B9AA8':'#F59E0B'} strokeWidth={mini?1.6:2} fill="none"/>}
+   {points.map((p,i)=><Circle key={p.date} cx={x(p.date)} cy={y(vals[i])} r={mini?2.8:3} fill={mini?'#FA8860':'#F59E0B'} stroke={mini?(isDark?'#1C1C1E':'#F7F8FA'):undefined} strokeWidth={mini?1:0}/>)}
+   <SvgText x={left} y={height-7} fontSize={9} fill={color}>{points[0].date.slice(5)}</SvgText>{(!mini||points.length>1)&&<SvgText x={w-right} y={height-7} textAnchor="end" fontSize={9} fill={color}>{points.at(-1)!.date.slice(5)}</SvgText>}
   </Svg>
-  <Text style={{color,fontSize:mini?9:11}}>{unit} · {es?'Registrado':'Recorded'} ● {g===null?'':` · ${es?'Objetivo':'Goal'} ┄`}</Text>
+  {!mini&&<Text style={{color,fontSize:11}}>{unit} · {es?'Registrado':'Recorded'} ● {g===null?'':` · ${es?'Objetivo':'Goal'} ┄`}</Text>}
  </View>;
 }
 export function ObservedWeightSummary({state,isDark,displayUnit}:{state:ProgressState|null;isDark:boolean;displayUnit:WeightUnit|null}){
@@ -59,3 +60,4 @@ export default function ProgressCard({userId,isDark,layout='carousel'}:ProgressC
  </View>;
 }
 const styles=StyleSheet.create({card:{borderRadius:20,padding:16,gap:16},title:{fontSize:18,fontWeight:'700'},summary:{flexDirection:'row',justifyContent:'space-between',gap:8},value:{fontSize:19,fontWeight:'700',marginVertical:6},grid:{flexDirection:'row',flexWrap:'wrap',gap:10},stat:{flexBasis:'47%',flexGrow:1,minWidth:120,minHeight:115,borderRadius:14,padding:12},overlay:{flex:1,backgroundColor:'rgba(0,0,0,.45)',justifyContent:'center',padding:28},detail:{borderRadius:20,padding:22,gap:12}});
+
