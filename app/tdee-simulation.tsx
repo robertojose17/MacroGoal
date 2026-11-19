@@ -39,7 +39,7 @@ export default function TdeeSimulationRoute(){
  return <View style={{flex:1,padding:24,justifyContent:'center',gap:16,backgroundColor:isDark?colors.backgroundDark:colors.background}}>
   <Text accessibilityRole="header" style={{color:text,fontSize:22,fontWeight:'700'}}>{es?'SIMULACIÓN · Datos ficticios':'SIMULATION · Fictional data'}</Text>
   {!envelope&&<Text style={{color:text}}>{status==='loading'?(es?'Verificando acceso temporal…':'Verifying temporary access…'):(es?'Esta simulación no está disponible para esta sesión. Tus datos reales no cambiaron.':'This simulation is unavailable for this session. Your real data is unchanged.')}</Text>}
-  <TouchableOpacity accessibilityRole="button" onPress={()=>router.replace('/(tabs)/dashboard')} style={{padding:12}}><Text style={{color:colors.primary}}>{es?'Abrir la aplicación real':'Open the real app'}</Text></TouchableOpacity>
+  <TouchableOpacity accessibilityRole="button" onPress={()=>{exit();if(Platform.OS==='web'){globalThis.location.replace('/');}else{router.replace('/(tabs)/dashboard');}}} style={{padding:12}}><Text style={{color:colors.primary}}>{es?'Abrir la aplicación real':'Open the real app'}</Text></TouchableOpacity>
   {envelope&&identity.current&&<TdeeSessionSimulation envelope={envelope} ownerId={identity.current.ownerId} sessionId={identity.current.sessionId} isDark={isDark} language={i18n.language} onExit={exit}/>}
  </View>;
 }
