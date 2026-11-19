@@ -23,7 +23,8 @@ export function TdeeSessionSimulation({envelope,ownerId,sessionId,isDark,languag
  const button=(title:string,a:SimulationAction)=><TouchableOpacity accessibilityRole="button" onPress={()=>action(a)} style={{minHeight:44,padding:12,borderWidth:1,borderColor:colors.primary,borderRadius:10}}><Text style={{color:colors.primary,fontWeight:'600'}}>{title}</Text></TouchableOpacity>;
  return <Modal visible transparent animationType="none" onRequestClose={exit}><View style={{flex:1,justifyContent:'center',padding:16,backgroundColor:'rgba(0,0,0,.55)'}}><View style={{backgroundColor:bg,borderRadius:16,maxHeight:'95%',padding:16,gap:12}}>
   <View accessibilityRole="alert" style={{padding:12,backgroundColor:isDark?'#493919':'#fff0cb',borderRadius:10}}><Text style={{color:isDark?'#fff0cb':'#493919',fontWeight:'700'}}>{label('SIMULATION · Fictional data','SIMULACIÓN · Datos ficticios')}</Text><Text style={{color:isDark?'#fff0cb':'#493919'}}>{label('Nothing here changes your real targets or food diary. Reloading or leaving clears the simulated changes.','Nada aquí modifica tus metas ni tu diario reales. Recargar o salir borra los cambios simulados.')}</Text></View>
-  <ScrollView contentContainerStyle={{gap:12}} accessibilityViewIsModal>
+  <ScrollView key={state.reviewOpen?'review':'overview'} contentContainerStyle={{gap:12}} accessibilityViewIsModal>
+   {!state.reviewOpen&&<>
    <View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{button(label('Dashboard','Resumen'),'dashboard')}{button(label('Foods','Comidas'),'foods')}</View>
    <Text accessibilityRole="header" style={{fontSize:22,fontWeight:'700',color:text}}>{state.tab==='dashboard'?label('Fictional Dashboard','Resumen ficticio'):label('Fictional Foods targets','Metas ficticias de Comidas')}</Text>
    <View style={{padding:16,borderWidth:1,borderColor:colors.primary,borderRadius:12,gap:8}}>
@@ -34,7 +35,8 @@ export function TdeeSessionSimulation({envelope,ownerId,sessionId,isDark,languag
      <MacroBar label={label('Fat','Grasa')} current={state.envelope.scenario.todayIntake.fatsG} target={targets.fatsG} color={colors.primary}/>
      <MacroBar label={label('Fiber','Fibra')} current={state.envelope.scenario.todayIntake.fiberG} target={targets.fiberG} color={colors.primary}/>
     </>}<Text style={{color:text}}>{state.accepted?label('Simulated adjustment applied to both views. Your account is unchanged.','Ajuste simulado aplicado a ambas vistas. Tu cuenta no cambió.'):label('Original fictional targets.','Metas ficticias originales.')}</Text></View>
-   {!state.reviewOpen&&button(label('Review simulated recommendation','Revisar recomendación simulada'),'review')}
+   {button(label('Review simulated recommendation','Revisar recomendación simulada'),'review')}
+   </>}
    {state.reviewOpen&&<View style={{gap:12,padding:16,borderWidth:1,borderColor:colors.primary,borderRadius:12}}>
     <Text accessibilityRole="header" style={{color:text,fontSize:20}}>{label('Review fictional daily targets','Revisa las metas diarias ficticias')}</Text>
     <Text style={{color:text}}>{label('14-day example: stable weight, a loss goal and 2,000 logged calories per day. These are not your account records.','Ejemplo de 14 días: peso estable, objetivo de pérdida y 2,000 calorías registradas al día. No son registros de tu cuenta.')}</Text>

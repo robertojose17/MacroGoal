@@ -23,7 +23,7 @@ window.fetch=async(url,init)=>{window.requests.push({url,method:init?.method||'G
 const stubs={
 'react-native':`export * from 'react-native-web';`,
 'expo-router':`import{exit}from'${cwd}/synthetic';export const useRouter=()=>({replace:exit});`,
-'react-i18next':`export const useTranslation=()=>({i18n:{language:new URLSearchParams(location.search).get('lang')||'en'},t:k=>k});`,
+'react-i18next':`export const useTranslation=()=>({i18n:{language:new URLSearchParams(location.search).get('lang')||'en'},t:(k,options={})=>{if(k!=='localization.shared.remainingAmount')throw Error('Unmocked translation '+k);const amount=options.amount??'',unit=options.unit??'';return new URLSearchParams(location.search).get('lang')==='es'?'Quedan '+amount+unit:amount+unit+' remaining'}});`,
 '@/lib/supabase/client':`export{supabase}from'${cwd}/synthetic';export const SUPABASE_PROJECT_URL='https://synthetic.invalid',supabasePublicKey='synthetic-public-placeholder';`,
 '@/lib/localization':`export const getAppLocale=()=>new URLSearchParams(location.search).get('lang')||'en';`,
 '@/hooks/useColorScheme':`export const useColorScheme=()=>new URLSearchParams(location.search).has('dark')?'dark':'light';`,

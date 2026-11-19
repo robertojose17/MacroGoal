@@ -16,12 +16,15 @@ try{
   await p.getByText(es?'60% de la meta calórica ficticia':'60% of fictional calorie target',{exact:true}).waitFor();
   await p.screenshot({path:`artifacts/${es?'es':'en'}-dashboard.png`,fullPage:true});
   await click('Review simulated recommendation','Revisar recomendación simulada');
-  await p.getByText(/2000 → 1800/).waitFor();await p.screenshot({path:`artifacts/${es?'es':'en'}-recommendation.png`,fullPage:true});
+  await p.getByText(/2000 → 1800/).waitFor();
+  for(const comparison of ['2000 → 1800','150 → 150','215 → 165','60 → 60','30 → 30']){const target=p.getByText(comparison,{exact:false});await target.waitFor();const box=await target.boundingBox();assert.ok(box&&box.y>=0&&box.y+box.height<=844,'comparison visible without scrolling: '+comparison);}
+  const accept=p.getByRole('button',{name:es?'Aceptar solo en la simulación':'Accept in simulation only',exact:true});await accept.waitFor();const acceptBox=await accept.boundingBox();assert.ok(acceptBox&&acceptBox.y>=0&&acceptBox.y+acceptBox.height<=844,'accept visible without scrolling');
+  await p.screenshot({path:`artifacts/${es?'es':'en'}-recommendation.png`,fullPage:true});
   await click('Reject simulated recommendation','Rechazar recomendación simulada');
   await p.getByText(/^60% /).waitFor();
   await click('Review simulated recommendation','Revisar recomendación simulada');await click('Accept in simulation only','Aceptar solo en la simulación');await p.getByText(/^67% /).waitFor();
   for(let i=0;i<3;i++){await click('Foods','Comidas');const body=await p.locator('body').innerText();assert.match(body.replace(/,/g,''),/1800/);assert.match(body.replace(/,/g,''),/1200/);assert.match(body,/165/);await click('Dashboard','Resumen');await p.getByText(/^67% /).waitFor();}
-  await click('Foods','Comidas');await p.screenshot({path:`artifacts/${es?'es':'en'}-accepted-foods.png`,fullPage:true});await click('Reset simulation','Reiniciar simulación');await p.getByText(/^60% /).waitFor();
+  await click('Foods','Comidas');await p.getByText(es?'Quedan 600kcal':'600kcal remaining',{exact:true}).waitFor();assert.doesNotMatch(await p.locator('body').innerText(),/localization\.shared\./);await p.screenshot({path:`artifacts/${es?'es':'en'}-accepted-foods.png`,fullPage:true});await click('Reset simulation','Reiniciar simulación');await p.getByText(/^60% /).waitFor();
   await click('Exit simulation','Salir de la simulación');await p.getByText(/This simulation is unavailable|Esta simulación no está disponible/).waitFor();assert.equal(await p.evaluate(()=>window.exits),0);assert.equal(await p.getByText(/^60% /).count(),0);
  });
  for(const kind of ['logout','switch'])await scenario('late-response-'+kind,'late=1',async p=>{await p.waitForFunction(()=>window.requests.length===1);await p.evaluate(k=>window.changeAuth(k),kind);await p.evaluate(()=>window.releaseResponse());await p.getByText(/This simulation is unavailable/).waitFor();assert.equal(await p.getByText(/^60% /).count(),0);});

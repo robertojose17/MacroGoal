@@ -1,6 +1,6 @@
 import {rules14ProfileSupportCurrent} from './rules14ProfileSupport.ts';
 import {diagnoseObservedSnapshotRateReview,type SnapshotMacroRequest} from './snapshotReviewContextParser.ts';
-import {macroPreferenceEvidence} from './snapshotOrchestrationSupabaseAdapter.ts';
+import {macroPreferenceEvidence} from './macroPreferenceEvidence.ts';
 import type {Rules14Policy} from './rules14Decision.ts';
 import type {Rules14MacroContext} from './smartMacroAdjustment.ts';
 /** Deterministic application of the registered general-adult policy. No claim of
