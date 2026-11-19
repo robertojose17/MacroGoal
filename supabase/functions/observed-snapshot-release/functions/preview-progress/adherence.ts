@@ -26,14 +26,16 @@ export function computeAdherence(
 
   if (loggingReliability === 'insufficient') return nullResult;
 
+  // Completed local calendar dates only: [today - N, today). Today's diary is unfinished.
+  // Civil dates use UTC arithmetic so host timezone/DST cannot change the window.
   const today = new Date(todayStr + 'T00:00:00Z');
   const windowStart = new Date(today);
-  windowStart.setDate(today.getDate() - windowDays);
+  windowStart.setUTCDate(today.getUTCDate() - windowDays);
   const windowStartStr = windowStart.toISOString().split('T')[0];
 
   const nutritionByDate = new Map<string, DailyNutrition>();
   for (const d of dailyNutrition) {
-    if (d.date >= windowStartStr && d.date <= todayStr) {
+    if (d.date >= windowStartStr && d.date < todayStr) {
       nutritionByDate.set(d.date, d);
     }
   }
@@ -81,4 +83,5 @@ export function computeAdherence(
       : null,
   };
 }
+
 

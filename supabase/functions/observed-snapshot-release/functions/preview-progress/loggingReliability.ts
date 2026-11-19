@@ -54,14 +54,16 @@ export function computeLoggingReliability(
 ): LoggingReliabilityResult {
   const flags: DataQualityFlag[] = [];
 
+  // Completed local calendar dates only: [today - N, today). Today's diary is unfinished.
+  // Civil dates use UTC arithmetic so host timezone/DST cannot change the window.
   const today = new Date(todayStr + 'T00:00:00Z');
-  const sevenDaysAgo = new Date(today); sevenDaysAgo.setDate(today.getDate() - 7);
-  const fourteenDaysAgo = new Date(today); fourteenDaysAgo.setDate(today.getDate() - 14);
+  const sevenDaysAgo = new Date(today); sevenDaysAgo.setUTCDate(today.getUTCDate() - 7);
+  const fourteenDaysAgo = new Date(today); fourteenDaysAgo.setUTCDate(today.getUTCDate() - 14);
   const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
   const fourteenDaysAgoStr = fourteenDaysAgo.toISOString().split('T')[0];
 
-  const last7 = dailyNutrition.filter(d => d.date >= sevenDaysAgoStr && d.date <= todayStr);
-  const last14 = dailyNutrition.filter(d => d.date >= fourteenDaysAgoStr && d.date <= todayStr);
+  const last7 = dailyNutrition.filter(d => d.date >= sevenDaysAgoStr && d.date < todayStr);
+  const last14 = dailyNutrition.filter(d => d.date >= fourteenDaysAgoStr && d.date < todayStr);
 
   const loggedDaysLast7 = last7.length;
   const loggedDaysLast14 = last14.length;
@@ -110,4 +112,5 @@ export function computeLoggingReliability(
     dataQualityFlags: flags,
   };
 }
+
 
