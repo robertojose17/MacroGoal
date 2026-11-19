@@ -1,3 +1,4 @@
+import {TdeeTargetComparison} from './TdeeTargetComparison';
 import {rules14DashboardActionAllowed} from '@/utils/rules14DashboardPolicy';
 import {rules14HoldCopy,type Rules14Hold} from '@/utils/rules14Hold';
 import React,{useCallback,useEffect,useRef,useState} from 'react';
@@ -78,7 +79,7 @@ function EnabledRules14Review({ownerId,isDark,blocked,attention,premium,automati
   <Modal transparent visible={visible&&!!preview} onRequestClose={close} animationType="fade"><View style={{flex:1,justifyContent:'center',padding:20,backgroundColor:'rgba(0,0,0,.45)'}}><ScrollView accessibilityViewIsModal style={{backgroundColor:bg,borderRadius:16,padding:20,maxHeight:'85%'}} contentContainerStyle={{gap:12}}>
    <Text style={{color:text,fontSize:20}}>{premium?label('Review your daily targets','Revisa tus metas diarias'):label('Previous request status','Estado de la solicitud anterior')}</Text>
    {premium&&<Text style={{color:text}}>{label('Current → New','Actuales → Nuevas')}</Text>}
-   {premium&&preview&&(['calories','proteinG','carbsG','fatsG','fiberG'] as const).map((key,index)=><Text key={key} style={{color:text}}>{[label('Calories','Calorías'),label('Protein','Proteína'),label('Carbs','Carbohidratos'),label('Fat','Grasa'),label('Fiber','Fibra')][index]}: {preview.current[key]} → {preview.target[key]} {index===0?'kcal':'g'}</Text>)}
+   {premium&&preview&&<TdeeTargetComparison current={preview.current} target={preview.target} text={text} es={es}/>}
    {premium&&preview&&<Text style={{color:text}}>{preview.allocationMode==='manual-percent-nearest-gram-v1'?label('Macro allocation: your manual split','Distribución de macros: tu proporción manual'):label('Macro allocation: Smart','Distribución de macros: Smart')}</Text>}
    {message!=='none'&&<Text accessibilityRole="alert" style={{color:text}}>{messages[message]}</Text>}
    {premium&&<Text style={{color:text}}>{label('Estimate based on your 14-day logs; it is not a direct measurement of your energy expenditure.','Estimación basada en tus registros de 14 días; no es una medición directa de tu gasto energético.')}</Text>}
@@ -91,5 +92,6 @@ function EnabledRules14Review({ownerId,isDark,blocked,attention,premium,automati
   </ScrollView></View></Modal>
  </View>;
 }
+
 
 

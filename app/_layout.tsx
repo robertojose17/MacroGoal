@@ -6,7 +6,7 @@ import { languageReady } from '@/lib/i18n';
 import { startLanguagePreferenceSync } from '@/lib/languagePreferenceSync';
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useState } from "react";
-import { Stack, router } from "expo-router";
+import { Stack, router, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import {
   AppState,
@@ -70,7 +70,21 @@ try {
   // Already hidden or not available — ignore
 }
 
+/** The isolated web demo must not mount real-app startup writers or navigation. */
 export default function RootLayout() {
+  const pathname = usePathname();
+  if (Platform.OS === 'web' && pathname === '/tdee-simulation') {
+    return <IsolatedSimulationLayout />;
+  }
+  return <NormalRootLayout />;
+}
+
+function IsolatedSimulationLayout() {
+  useEffect(() => { void SplashScreen.hideAsync().catch(() => {}); }, []);
+  return <SafeAreaProvider><Stack screenOptions={{ headerShown: false }} /></SafeAreaProvider>;
+}
+
+function NormalRootLayout() {
   const { t, i18n } = useTranslation();
   const [languageHydrated, setLanguageHydrated] = useState(false);
   useEffect(() => {
@@ -744,3 +758,4 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>{content}</GestureHandlerRootView>
   ) : content;
 }
+

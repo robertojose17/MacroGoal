@@ -39,6 +39,13 @@ on:
       - 'tests/automatic-scheduler.test.mjs'
       - 'tests/foods-web-accepted-goal.test.cjs'
       - 'tests/progress-completed-windows.test.cjs'
+      - 'app/tdee-simulation.tsx'
+      - 'app/_layout.tsx'
+      - 'utils/tdeeSessionSimulation.ts'
+      - 'utils/tdeeSimulationSession.ts'
+      - 'supabase/functions/tdee-session-simulation/**'
+      - 'tests/*session-simulation*'
+      - 'tests/browser-simulation/**'
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -89,6 +96,8 @@ jobs:
           tests/dashboard-pending-recovery.test.mjs
           tests/foods-web-accepted-goal.test.cjs
           tests/progress-completed-windows.test.cjs
+          tests/tdee-session-simulation.test.cjs
+          tests/session-simulation-backend.test.mjs
           tests/rate-anchor-append-source.test.mjs
           tests/rate-anchor-bootstrap.test.mjs
           tests/rate-anchor-erasure-source.test.mjs
@@ -149,3 +158,17 @@ jobs:
           path: tests/browser-visual/artifacts/
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Isolated authenticated simulation lifecycle and visual checks
+        if: ${{ !cancelled() }}
+        working-directory: tests/browser-simulation
+        run: ln -s ../browser-visual/node_modules node_modules && npm run check && npm test
+      - name: Upload fictional simulation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: simulation-visual-${{ github.sha }}
+          path: tests/browser-simulation/artifacts/
+          if-no-files-found: warn
+          retention-days: 7
+

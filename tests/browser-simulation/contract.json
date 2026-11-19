@@ -1,0 +1,39 @@
+{
+  "version": "tdee-session-simulation-v1",
+  "ownerId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "sessionId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  "expiresAt": 1800000030000,
+  "scenario": {
+    "current": {
+      "calories": 2000,
+      "proteinG": 150,
+      "carbsG": 215,
+      "fatsG": 60,
+      "fiberG": 30
+    },
+    "recommended": {
+      "calories": 1800,
+      "proteinG": 150,
+      "carbsG": 165,
+      "fatsG": 60,
+      "fiberG": 30
+    },
+    "todayIntake": {
+      "calories": 1200,
+      "proteinG": 90,
+      "carbsG": 120,
+      "fatsG": 40,
+      "fiberG": 18
+    },
+    "inputs": {
+      "fictional": true,
+      "engine": "rules14-observed-v2",
+      "windowDays": 14,
+      "startWeightKg": 80,
+      "currentWeightKg": 80,
+      "averageLoggedCalories": 2000,
+      "targetLossLbPerWeek": 0.5
+    },
+    "deltaCalories": -200
+  }
+}

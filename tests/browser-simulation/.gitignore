@@ -1,0 +1,6 @@
+node_modules/
+app.js
+harness.jsx
+synthetic.js
+index.html
+artifacts/
