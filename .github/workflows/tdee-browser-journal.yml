@@ -99,6 +99,7 @@ jobs:
           tests/progress-completed-windows.test.cjs
           tests/tdee-session-simulation.test.cjs
           tests/session-simulation-backend.test.mjs
+          tests/session-simulation-gateway.test.mjs
           tests/session-simulation-import-boundary.test.mjs
           tests/macro-preference-extraction-regression.test.mjs
           tests/rate-anchor-append-source.test.mjs

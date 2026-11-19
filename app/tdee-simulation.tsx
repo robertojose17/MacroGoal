@@ -28,7 +28,7 @@ export default function TdeeSimulationRoute(){
    const session=data.session,sessionId=simulationSessionId(session.access_token);if(!sessionId)throw Error('unavailable');
    identity.current={ownerId:session.user.id,sessionId};
    const verified=await supabase.auth.getUser(session.access_token);if(verified.error||verified.data.user?.id!==session.user.id||!current())throw Error('unavailable');
-   const response=await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/tdee-session-simulation`,{method:'GET',headers:{Authorization:`Bearer ${session.access_token}`,apikey:supabasePublicKey},cache:'no-store',signal:abort.signal});
+   const response=await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/progress-intelligence/session-simulation`,{method:'GET',headers:{Authorization:`Bearer ${session.access_token}`,apikey:supabasePublicKey},cache:'no-store',signal:abort.signal});
    if(!response.ok)throw Error('unavailable');const raw=await response.json();if(!current())return;
    const latest=await supabase.auth.getSession();if(!current()||latest.error||latest.data.session?.user.id!==session.user.id||simulationSessionId(latest.data.session.access_token)!==sessionId)throw Error('unavailable');
    setEnvelope(parseSimulationEnvelope(raw,session.user.id,sessionId,Date.now()));

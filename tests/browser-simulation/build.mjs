@@ -18,7 +18,7 @@ export function exit(){window.exits++;}
 export const supabase={auth:{onAuthStateChange:cb=>{listener=cb;return{data:{subscription:{unsubscribe(){listener=()=>{}}}}}},getSession:async()=>({data:{session},error:null}),getUser:async()=>({data:{user:session?.user},error:null})}};
 window.changeAuth=kind=>{session=kind==='logout'?null:{...session,user:{id:'cccccccc-cccc-4ccc-8ccc-cccccccccccc'}};listener(kind,session);};
 window.releaseResponse=()=>release?.();
-window.fetch=async(url,init)=>{window.requests.push({url,method:init?.method||'GET'});if(url!=='https://synthetic.invalid/functions/v1/tdee-session-simulation'||init?.method!=='GET')throw Error('Forbidden transport');if(query.has('late'))await new Promise(r=>{release=r});return{ok:true,json:async()=>structuredClone(fixture)}};
+window.fetch=async(url,init)=>{window.requests.push({url,method:init?.method||'GET'});if(url!=='https://synthetic.invalid/functions/v1/progress-intelligence/session-simulation'||init?.method!=='GET')throw Error('Forbidden transport');if(query.has('late'))await new Promise(r=>{release=r});return{ok:true,json:async()=>structuredClone(fixture)}};
 `);
 const stubs={
 'react-native':`export * from 'react-native-web';`,

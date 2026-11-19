@@ -1,3 +1,4 @@
+import {createSessionSimulationDispatcher} from '../session-simulation/dispatcher.ts';
 import { createDashboardAttentionDispatcher } from '../dashboard-attention/dispatcher.ts';
 import { createAdaptiveReviewDispatcher } from '../adaptive-review/dispatcher.ts';
 import { createObservationDispatcher } from '../observed-program/dispatcher.ts';
@@ -12,4 +13,5 @@ const progress = createProgressDispatcher(v10, () => import('../preview-progress
 const observation = createObservationDispatcher(progress, () => import('../observed-program/runtime.ts'));
 const existing = createObservedProgressDispatcher(observation, () => import('../observed-progress/runtime.ts'));
 const adaptive = createAdaptiveReviewDispatcher(existing, () => import('../adaptive-review/runtime.ts'));
-Deno.serve(createDashboardAttentionDispatcher(adaptive, () => import('../dashboard-attention/runtime.ts')));
+const dashboard = createDashboardAttentionDispatcher(adaptive, () => import('../dashboard-attention/runtime.ts'));
+Deno.serve(createSessionSimulationDispatcher(dashboard, () => import('../../../tdee-session-simulation/runtime.ts')));
