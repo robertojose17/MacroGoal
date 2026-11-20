@@ -28,7 +28,12 @@ function fixture(options = {}) {
     };
     return chain;
   } };
-  const auth = { auth: { getUser: async () => ({ data: { user: options.unauthorized ? null : { id: 'fixture-user' } }, error: null }) } };
+  const authTokens = [];
+  const auth = { auth: { getUser: async token => {
+    authTokens.push(token);
+    if (options.authThrows) throw Error('fixture auth outage');
+    return { data: { user: options.unauthorized ? null : { id: 'fixture-user', is_anonymous: options.anonymous ?? false } }, error: options.authError ?? null };
+  } } };
   const sandbox = {
     serve: value => { handler = value; },
     createClient: (_url, key) => key === 'service' ? admin : auth,
@@ -38,7 +43,7 @@ function fixture(options = {}) {
   };
   const input = source.replace(/^import .*;\n/gm, '') + '\nthis.helpers = { classifyProvider, classifyMirror };';
   vm.runInNewContext(ts.transpileModule(input, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, sandbox);
-  return { helpers: sandbox.helpers, filters, get writes() { return writes; }, get payload() { return updatePayload; }, run: (method = 'POST') => handler(new Request('https://fixture.invalid', { method })) };
+  return { helpers: sandbox.helpers, filters, authTokens, get writes() { return writes; }, get payload() { return updatePayload; }, run: (method = 'POST', authorization = 'Bearer fixture-access-token') => handler(new Request('https://fixture.invalid', { method, headers: authorization ? { Authorization: authorization } : {} })) };
 }
 for (const alias of ['Macrogoal Pro', 'Premium', 'premium', 'macrogoal_pro', 'pro']) {
   test('recognizes active alias ' + alias, async () => {
@@ -119,4 +124,22 @@ test('schema-faithful profile writes preserve the is_premium HTTP contract', asy
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { is_premium: true, user_type: 'premium' });
   assert.deepEqual(Object.keys(f.payload).sort(), ['updated_at', 'user_type']);
+});
+
+test('passes the request token explicitly and rejects missing/malformed bearer without writing', async () => {
+  const f = fixture({ provider: body({ pro: { expires_date: future } }) });
+  for (const authorization of ['', 'Basic malformed', 'Bearer token with spaces', 'Bearer first, Bearer second']) {
+    assert.equal((await f.run('POST', authorization)).status, 401);
+  }
+  assert.deepEqual(f.authTokens, []);
+  assert.equal(f.writes, 0);
+  assert.equal((await f.run()).status, 200);
+  assert.deepEqual(f.authTokens, ['fixture-access-token']);
+});
+test('invalid or anonymous identity cannot write; auth outage is retryable without writing', async () => {
+  for (const [options, status] of [[{ authError: { status: 401 } }, 401], [{ anonymous: true }, 401], [{ authError: { status: 503 } }, 503], [{ authThrows: true }, 503]]) {
+    const f = fixture(options);
+    assert.equal((await f.run()).status, status);
+    assert.equal(f.writes, 0);
+  }
 });

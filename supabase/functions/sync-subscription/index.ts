@@ -73,18 +73,28 @@ serve(async (req) => {
   const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const rcApiKey = Deno.env.get('REVENUECAT_API_KEY') ?? '';
 
-  const authHeader = req.headers.get('Authorization') ?? '';
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
+  const authReply = (status: 401 | 503) => new Response(JSON.stringify({
+    error: status === 401 ? 'Unauthorized' : 'Subscription verification unavailable',
+  }), {
+    status, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });
-  const admin = createClient(supabaseUrl, svcKey);
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (!user || authError) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+  const token = req.headers.get('Authorization')?.match(/^Bearer ([^\s,]+)$/i)?.[1];
+  if (!token) return authReply(401);
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  let user;
+  try {
+    const { data, error: authError } = await supabase.auth.getUser(token);
+    if (authError && (authError.status == null || authError.status === 429 || authError.status >= 500)) {
+      return authReply(503);
+    }
+    if (authError || !data?.user?.id || data.user.is_anonymous === true) return authReply(401);
+    user = data.user;
+  } catch {
+    return authReply(503);
   }
+  const admin = createClient(supabaseUrl, svcKey);
 
   try {
     const unavailable = () => new Response(
