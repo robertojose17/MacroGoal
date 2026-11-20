@@ -1,3 +1,4 @@
+import { readV2Active } from './v2-positive.ts';
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
@@ -71,7 +72,8 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const svcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const rcApiKey = Deno.env.get('REVENUECAT_API_KEY') ?? '';
+  const rcApiKey = Deno.env.get('REVENUECAT_API_KEY')?.trim() ?? '';
+  const rcApiKeyV2 = Deno.env.get('REVENUECAT_API_KEY_V2')?.trim() ?? '';
 
   const authReply = (status: 401 | 503) => new Response(JSON.stringify({
     error: status === 401 ? 'Unauthorized' : 'Subscription verification unavailable',
@@ -144,12 +146,22 @@ serve(async (req) => {
       }
     }
 
+    // The configured v2 key can prove current production access if the v1 key
+    // is absent. Never revoke or infer free from v2, an outage, or an empty result.
+    if (!rcApiKey && rcApiKeyV2 && mirrorState !== 'active' && await readV2Active(user.id, rcApiKeyV2)) {
+      providerState = 'active';
+    }
+
     let is_premium: boolean;
     if (providerState === 'active' || mirrorState === 'active') {
       is_premium = true;
     } else if (providerState === 'inactive' && mirrorState === 'inactive') {
       is_premium = false;
     } else {
+      console.warn('[sync-premium] Access unverified', {
+        provider: rcApiKey ? 'v1' : rcApiKeyV2 ? 'v2' : 'not_configured',
+        mirror: mirrorState,
+      });
       return unavailable();
     }
 
