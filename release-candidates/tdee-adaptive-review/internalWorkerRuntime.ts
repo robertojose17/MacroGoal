@@ -146,7 +146,16 @@ export function createInternalWorkerRuntime(bootstrap:WorkerRuntimeBootstrap){
     let workerSignal:AbortSignal|undefined;
     const automaticSelector=createInternalSelectorPorts({now,serviceRpc:(name,args,signal)=>{
      const mapped=name==='tdee_internal_select_due_v1'?'tdee_internal_automatic_select_v1':name==='tdee_internal_current_selection_v1'?'tdee_internal_automatic_current_v1':null;
-     if(!mapped)throw Error('automatic_selector_rpc_unknown');return serviceRpc(mapped,args,signal);
+     if(!mapped)throw Error('automatic_selector_rpc_unknown');
+     // The database uses its entire scan budget for sparse owner batches.
+     // Leave time to return and validate the response before the selector's
+     // local deadline; this does not change enrollment or context rules.
+     if(name==='tdee_internal_select_due_v1'){
+      const cutoff=Number(args.p_deadline_ms)-650;
+      if(!Number.isSafeInteger(cutoff)||cutoff<=now())throw Error('automatic_selector_budget');
+      return serviceRpc(mapped,{...args,p_deadline_ms:cutoff},signal);
+     }
+     return serviceRpc(mapped,args,signal);
     }});
     const source=async(owner:string,signal:AbortSignal)=>serviceRpc('tdee_internal_dashboard_attention_source_v1',{p_owner:owner,p_policy:bootstrap.rulesPolicy??null},signal);
     return await createAutomaticDailyWorker(bootstrap.serviceRoleKey,{
