@@ -241,11 +241,18 @@ export async function handleSearch(req: Request): Promise<Response> {
       });
     },
     usda: async (normalized,signal) => {
-      const url = 'https://api.nal.usda.gov/fdc/v1/foods/search?query=' + encodeURIComponent(normalizeQuery(normalized)) + '&pageSize=30&api_key=DEMO_KEY';
-      const response = await fetch(url,{ signal });
+      const apiKey = Deno.env.get('USDA_SEARCH_API_KEY')?.trim();
+      if (!apiKey) throw new Error('USDA_SEARCH_KEY_MISSING');
+      const url = new URL('https://api.nal.usda.gov/fdc/v1/foods/search');
+      url.searchParams.set('query', normalizeQuery(normalized));
+      url.searchParams.set('pageSize', '30');
+      const response = await fetch(url, {
+        signal, redirect: 'error', headers: { 'X-Api-Key': apiKey },
+      });
       if (!response.ok) throw new ProviderHttpError('USDA_UNAVAILABLE',response.status);
       const body = await response.json();
       if (!Array.isArray(body.foods)) throw new Error('USDA_INVALID_RESPONSE');
+      console.info('[search-foods] USDA search succeeded', { count: body.foods.length });
       nutritionBatch.add('usda',body.foods);
       return body.foods.map(mapUsdaToOff).filter((p: Record<string,unknown> | null): p is Record<string,unknown> => p !== null);
     },
