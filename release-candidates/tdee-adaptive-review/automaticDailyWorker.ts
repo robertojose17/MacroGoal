@@ -3,6 +3,8 @@ import {planDailyAssessment,type AssessmentInput,type DailyPlan,type DailyRecord
 import type {SchedulerDiagnostic} from './schedulerDiagnostic.ts';
 
 type Signal=AbortSignal;
+// Keep a two-second margin under the production scheduler's 10s HTTP timeout.
+const AUTOMATIC_DAILY_RUN_MS=8000;
 export type AutomaticAttention={kind:'attention'|'none';reason:string;actionable:false};
 export interface AutomaticDailyPorts {
  selectDueOwners(limit:number,deadline:number,signal:Signal):Promise<WorkerSelection[]>;
@@ -33,22 +35,24 @@ export function automaticAssessmentInput(raw:unknown,s:WorkerSelection,now:numbe
 /** No target/anchor/proposal writes or notifications. Only existing daily ledger CAS. */
 export async function runAutomaticAssessment(p:AutomaticDailyPorts,s:WorkerSelection,deadline:number,signal:Signal):Promise<'completed'|'skipped'|'reconcile'>{
  const time=()=>{const n=p.now();if(!Number.isSafeInteger(n)||n<0||n>=deadline||signal.aborted)throw Error('worker_deadline');return n;};
- const context=async()=>{time();await p.readCurrentSelection(s,signal);const raw=await p.loadContext(s.ownerId,signal);await p.readCurrentSelection(s,signal);return automaticAssessmentInput(raw,s,time());};
+ let stage='selection';
+ const context=async()=>{stage='selection';time();await p.readCurrentSelection(s,signal);stage='context';const raw=await p.loadContext(s.ownerId,signal);stage='selection_recheck';await p.readCurrentSelection(s,signal);return automaticAssessmentInput(raw,s,time());};
  try {
-  const input=await context(),state=await p.storage.load(input),candidate=planDailyAssessment({...input,hold:state.hold},state.record);
+  const input=await context();stage='ledger_read';const state=await p.storage.load(input),candidate=planDailyAssessment({...input,hold:state.hold},state.record);
   if(candidate.kind!=='assessment_plan')return candidate.kind==='reconcile'?'reconcile':'skipped';
   // Read-only evaluation precedes persistence. A crash cannot leave a new claim.
-  const evaluatedAt=time(),result=await p.evaluate(s.ownerId,evaluatedAt,signal);
+  stage='evaluation';const evaluatedAt=time(),result=await p.evaluate(s.ownerId,evaluatedAt,signal);
   if(!result||!['attention','none'].includes(result.kind)||result.actionable!==false||typeof result.reason!=='string'||result.reason.length>100)throw Error('invalid_analysis');
-  const fresh=await context(),latest=await p.storage.load(fresh),current=planDailyAssessment({...fresh,hold:latest.hold},latest.record);
+  const fresh=await context();stage='ledger_recheck';const latest=await p.storage.load(fresh),current=planDailyAssessment({...fresh,hold:latest.hold},latest.record);
   if(current.kind!=='assessment_plan')return current.kind==='reconcile'?'reconcile':'skipped';
   if(current.key!==candidate.key||(latest.record?.revision??0)!==(state.record?.revision??0))return 'reconcile';
-  await p.readCurrentSelection(s,signal);time();
+  stage='final_selection';await p.readCurrentSelection(s,signal);time();
+  stage='ledger_complete';
   // Service RPC claims and completes under one transaction using the existing CAS.
   // Failure rolls back both; unknown transport is reconciled by the next read only.
   await p.storage.recordComplete(current,latest.record?.revision??0,p.newClaimId(),{kind:'preserve',reason:result.kind==='attention'?'automatic_attention_ready':result.reason},evaluatedAt);
   return 'completed';
- }catch{return 'reconcile';}
+ }catch{console.warn('[tdee-auto-worker] assessment deferred',{stage,deadline_exceeded:signal.aborted||p.now()>=deadline});return 'reconcile';}
 }
 
 async function readEnvelope(request:Request){
@@ -63,7 +67,7 @@ export function createAutomaticDailyWorker(key:string|undefined,p:AutomaticDaily
  if(!await isInternalWorkerAuthorized(request.headers.get('authorization'),key))return reply(401,'unauthorized');
  try{if(!validWorkerEnvelope(await readEnvelope(request)))return reply(400,'invalid_request');}catch{return reply(400,'invalid_request');}
  const start=p.now();if(!Number.isSafeInteger(start)||start<0)return reply(503,'clock_unavailable');
- const deadline=start+5000,abort=new AbortController(),timer=setTimeout(()=>abort.abort(),5000),counts={completed:0,skipped:0,reconcile:0};let previous=start;
+ const deadline=start+AUTOMATIC_DAILY_RUN_MS,abort=new AbortController(),timer=setTimeout(()=>abort.abort(),AUTOMATIC_DAILY_RUN_MS),counts={completed:0,skipped:0,reconcile:0};let previous=start;
  try{
   const owners=await p.selectDueOwners(25,deadline,abort.signal);if(!validateWorkerSelection(owners))return reply(503,'invalid_server_selection');
   for(const owner of owners){const now=p.now();if(now<previous||now>=deadline||abort.signal.aborted)return reply(503,'budget_exhausted',counts);previous=now;counts[await runAutomaticAssessment(p,owner,deadline,abort.signal)]++;}
