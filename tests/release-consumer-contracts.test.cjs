@@ -4,17 +4,15 @@ const root=path.join(__dirname,'..');
 function source(file){return ts.createSourceFile(file,fs.readFileSync(path.join(root,file),'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);}
 function find(tree,predicate){let found;function visit(node){if(found)return;if(predicate(node)){found=node;return;}ts.forEachChild(node,visit);}visit(tree);return found;}
 function evaluate(text,context){return vm.runInNewContext(ts.transpileModule(text,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,context);}
-const card=source('components/xp/SevenDayChallenge/ChallengeDashboardCard.tsx');const dayFunction=find(card,n=>ts.isFunctionDeclaration(n)&&n.name.text==='challengeDayDate');const dateForDay=evaluate(dayFunction.getText(card)+'; challengeDayDate;',{Date});
-test('challenge civil steps cross month/year and leap dates independently of local DST',()=>{
- assert.equal(dateForDay('2026-12-29',7),'2027-01-04');assert.equal(dateForDay('2024-02-27',3),'2024-02-29');assert.equal(dateForDay('2026-03-07',3),'2026-03-09');assert.equal(dateForDay('2026-11-01',1),'2026-11-01');
-});
-test('invalid start or step never produces a completion date',()=>{
- for(const start of ['2026-02-30','2026-13-01','bad','2026-1-01','2026-01-01T00:00:00Z'])assert.equal(dateForDay(start,1),null);
- for(const d of [0,8,1.5,NaN])assert.equal(dateForDay('2026-11-13',d),null);
-});
-test('actual card checks civil dates for nodes and both connector endpoints',()=>{
- const text=card.getFullText();assert.match(text,/completed_days\.includes\(date\)/);assert.match(text,/isCompletedDay && nextDate !== null && challenge\.completed_days\.includes\(nextDate\)/);assert.doesNotMatch(text,/completed_days\.includes\(d(?:\s*\+\s*1)?\)/);
- const completed=['2026-12-30','2026-12-31'];assert.equal(completed.includes(dateForDay('2026-12-29',1)),false);assert.equal(completed.includes(dateForDay('2026-12-29',2)),true);assert.equal(completed.includes(dateForDay('2026-12-29',3)),true);
+test('dashboard check-in count uses standalone unchanged copy and no retired challenge',()=>{
+ const card=source('components/CheckInTilesCard.tsx').getFullText();
+ assert.match(card,/localization\.checkins\.doneCount/);
+ assert.doesNotMatch(card,/xp\.doneCount|SevenDayChallenge/);
+ for(const [locale,expected] of [['en','{{count}} of 5 done'],['es','{{count}} de 5 hechos']]){
+  const translations=JSON.parse(fs.readFileSync(path.join(root,'locales',locale+'.json'),'utf8'));
+  assert.equal(translations.localization.checkins.doneCount,expected);
+  assert.equal(Object.hasOwn(translations,'sevenDayChallenge'),false);
+ }
 });
 const detail=source('app/social-post-detail.tsx');const declaration=find(detail,n=>ts.isVariableDeclaration(n)&&n.name.getText(detail)==='handleLike');const callback=declaration.initializer.arguments[0].getText(detail);
 function harness({liked=false,rpc}={}){const initial={id:'p',liked_by_me:liked,likes_count:liked?4:3};let current=initial;const calls=[];const busy={current:false};const context={post:initial,post_id:'p',likeBusy:busy,Math,console:{error(){}},setPost:f=>{current=f(current);},toggleLike:async(...args)=>{calls.push(args);return rpc?rpc(...args):{liked:!liked,likes_count:liked?3:4};}};const handle=evaluate(`(${callback})`,context);return {handle,calls,busy,initial,get:()=>current,set:p=>{current=p;}};}

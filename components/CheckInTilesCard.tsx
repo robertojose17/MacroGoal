@@ -483,7 +483,7 @@ export default function CheckInTilesCard({ isDark, userId, goal, onXpRefresh }: 
   const textColor  = isDark ? colors.textDark : colors.primaryText;
   const subColor   = isDark ? colors.textSecondaryDark : colors.textSecondary;
 
-  const doneText = t('xp.doneCount', { count: doneCount });
+  const doneText = t('localization.checkins.doneCount', { count: doneCount });
 
   // ── Quick action nodes per tile ────────────────────────────────────────────
   const weightQuickAction = (

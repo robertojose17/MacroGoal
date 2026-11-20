@@ -176,7 +176,6 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
   };
 
   const status = challenge.challenge_status;
-  const xpLabel = `${challenge.xp_reward} XP`;
 
   // Duration label from duration_hours
   const getDurationLabel = (hours: number): string => {
@@ -203,11 +202,6 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
           </Text>
           <ProgressBar pct={100} completed isDark={isDark} />
         </View>
-        <View style={styles.badgeColumn}>
-          <View style={[styles.xpBadge, { backgroundColor: COMPLETE_GREEN + '22' }]}>
-            <Text style={[styles.xpBadgeText, { color: COMPLETE_GREEN }]}>{xpLabel}</Text>
-          </View>
-        </View>
       </View>
     );
   }
@@ -226,11 +220,6 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
           <Text style={[styles.expiredLabel, { color: mutedColor }]}>
             {t('flashChallenges.timesUp')}
           </Text>
-        </View>
-        <View style={styles.badgeColumn}>
-          <View style={[styles.xpBadge, { backgroundColor: isDark ? '#2E3050' : '#F0F2F7' }]}>
-            <Text style={[styles.xpBadgeText, { color: mutedColor }]}>{xpLabel}</Text>
-          </View>
         </View>
       </View>
     );
@@ -292,11 +281,6 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
             </TouchableOpacity>
           )}
         </View>
-        <View style={styles.badgeColumn}>
-          <View style={styles.xpBadge}>
-            <Text style={styles.xpBadgeText}>{xpLabel}</Text>
-          </View>
-        </View>
       </View>
     );
   }
@@ -334,11 +318,6 @@ function ChallengeRow({ challenge, isDark, onXpAwarded, onAccept }: ChallengeRow
             </>
           )}
         </TouchableOpacity>
-      </View>
-      <View style={styles.badgeColumn}>
-        <View style={styles.xpBadge}>
-          <Text style={styles.xpBadgeText}>{xpLabel}</Text>
-        </View>
       </View>
     </View>
   );
@@ -616,23 +595,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     marginTop: 2,
-  },
-  // Badge column
-  badgeColumn: {
-    alignItems: 'flex-end',
-    gap: spacing.xs,
-    flexShrink: 0,
-  },
-  xpBadge: {
-    backgroundColor: '#3B82F6' + '22',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: borderRadius.full,
-  },
-  xpBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#3B82F6',
   },
   // Share code button (referral)
   shareCodeButton: {
