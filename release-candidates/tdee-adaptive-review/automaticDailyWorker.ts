@@ -5,6 +5,7 @@ import type {SchedulerDiagnostic} from './schedulerDiagnostic.ts';
 type Signal=AbortSignal;
 // Keep a two-second margin under the production scheduler's 10s HTTP timeout.
 const AUTOMATIC_DAILY_RUN_MS=8000;
+const AUTOMATIC_SELECTOR_RUN_MS=5000;
 export type AutomaticAttention={kind:'attention'|'none';reason:string;actionable:false};
 export interface AutomaticDailyPorts {
  selectDueOwners(limit:number,deadline:number,signal:Signal):Promise<WorkerSelection[]>;
@@ -69,7 +70,7 @@ export function createAutomaticDailyWorker(key:string|undefined,p:AutomaticDaily
  const start=p.now();if(!Number.isSafeInteger(start)||start<0)return reply(503,'clock_unavailable');
  const deadline=start+AUTOMATIC_DAILY_RUN_MS,abort=new AbortController(),timer=setTimeout(()=>abort.abort(),AUTOMATIC_DAILY_RUN_MS),counts={completed:0,skipped:0,reconcile:0};let previous=start;
  try{
-  const owners=await p.selectDueOwners(25,deadline,abort.signal);if(!validateWorkerSelection(owners))return reply(503,'invalid_server_selection');
+  const owners=await p.selectDueOwners(25,Math.min(deadline,start+AUTOMATIC_SELECTOR_RUN_MS),abort.signal);if(!validateWorkerSelection(owners))return reply(503,'invalid_server_selection');
   for(const owner of owners){const now=p.now();if(now<previous||now>=deadline||abort.signal.aborted)return reply(503,'budget_exhausted',counts);previous=now;counts[await runAutomaticAssessment(p,owner,deadline,abort.signal)]++;}
   return reply(200,'batch_finished',counts);
  }catch{return reply(503,'reconciliation_required',counts);}finally{clearTimeout(timer);abort.abort();}
