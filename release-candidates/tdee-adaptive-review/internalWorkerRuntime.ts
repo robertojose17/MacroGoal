@@ -164,9 +164,10 @@ export function createInternalWorkerRuntime(bootstrap:WorkerRuntimeBootstrap){
       },
      },
      selectDueOwners:async(limit,deadline,signal)=>{workerSignal=signal;return automaticSelector.selectDueOwners(limit,deadline,signal);},
-     loadContext:async(owner,signal)=>{const raw=await source(owner,signal) as any;return raw?.snapshot;},
-     evaluate:async(owner,assessedAt,signal)=>{
-      const raw=await source(owner,signal) as any;
+     loadContext:source,
+     evaluate:async(owner,assessedAt,signal,evaluationSource)=>{
+      if(signal.aborted)throw Error('automatic_worker_aborted');
+      const raw=evaluationSource as any;
       const premium=raw?.snapshot?.observation?.context?.premium;
       if(typeof premium!=='boolean')throw Error('automatic_access_unverified');
       const attention=dashboardAttentionFromSource(raw,owner,premium,now());

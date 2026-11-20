@@ -5,13 +5,13 @@ import type {SchedulerDiagnostic} from './schedulerDiagnostic.ts';
 type Signal=AbortSignal;
 // Keep a two-second margin under the production scheduler's 10s HTTP timeout.
 const AUTOMATIC_DAILY_RUN_MS=8000;
-const AUTOMATIC_SELECTOR_RUN_MS=5000;
+const AUTOMATIC_SELECTOR_RUN_MS=3200;
 export type AutomaticAttention={kind:'attention'|'none';reason:string;actionable:false};
 export interface AutomaticDailyPorts {
  selectDueOwners(limit:number,deadline:number,signal:Signal):Promise<WorkerSelection[]>;
  readCurrentSelection(selection:WorkerSelection,signal:Signal):Promise<unknown>;
  loadContext(owner:string,signal:Signal):Promise<unknown>;
- evaluate(owner:string,now:number,signal:Signal):Promise<AutomaticAttention>;
+ evaluate(owner:string,now:number,signal:Signal,source:unknown):Promise<AutomaticAttention>;
  storage:{
   load(scope:AssessmentInput):Promise<{record:DailyRecord|null;hold:UncertainHold|null}>;
   recordComplete(plan:DailyPlan,revision:number,claimId:string,diagnostic:SchedulerDiagnostic,evaluatedAt:number):Promise<void>;
@@ -37,14 +37,14 @@ export function automaticAssessmentInput(raw:unknown,s:WorkerSelection,now:numbe
 export async function runAutomaticAssessment(p:AutomaticDailyPorts,s:WorkerSelection,deadline:number,signal:Signal):Promise<'completed'|'skipped'|'reconcile'>{
  const time=()=>{const n=p.now();if(!Number.isSafeInteger(n)||n<0||n>=deadline||signal.aborted)throw Error('worker_deadline');return n;};
  let stage='selection';
- const context=async()=>{stage='selection';time();await p.readCurrentSelection(s,signal);stage='context';const raw=await p.loadContext(s.ownerId,signal);stage='selection_recheck';await p.readCurrentSelection(s,signal);return automaticAssessmentInput(raw,s,time());};
+ const context=async()=>{stage='selection';time();await p.readCurrentSelection(s,signal);stage='context';const raw=await p.loadContext(s.ownerId,signal);stage='selection_recheck';await p.readCurrentSelection(s,signal);return {source:raw,input:automaticAssessmentInput(object(raw)?raw.snapshot:null,s,time())};};
  try {
-  const input=await context();stage='ledger_read';const state=await p.storage.load(input),candidate=planDailyAssessment({...input,hold:state.hold},state.record);
+  const {input,source}=await context();stage='ledger_read';const state=await p.storage.load(input),candidate=planDailyAssessment({...input,hold:state.hold},state.record);
   if(candidate.kind!=='assessment_plan')return candidate.kind==='reconcile'?'reconcile':'skipped';
   // Read-only evaluation precedes persistence. A crash cannot leave a new claim.
-  stage='evaluation';const evaluatedAt=time(),result=await p.evaluate(s.ownerId,evaluatedAt,signal);
+  stage='evaluation';const evaluatedAt=time(),result=await p.evaluate(s.ownerId,evaluatedAt,signal,source);
   if(!result||!['attention','none'].includes(result.kind)||result.actionable!==false||typeof result.reason!=='string'||result.reason.length>100)throw Error('invalid_analysis');
-  const fresh=await context();stage='ledger_recheck';const latest=await p.storage.load(fresh),current=planDailyAssessment({...fresh,hold:latest.hold},latest.record);
+  const {input:fresh}=await context();stage='ledger_recheck';const latest=await p.storage.load(fresh),current=planDailyAssessment({...fresh,hold:latest.hold},latest.record);
   if(current.kind!=='assessment_plan')return current.kind==='reconcile'?'reconcile':'skipped';
   if(current.key!==candidate.key||(latest.record?.revision??0)!==(state.record?.revision??0))return 'reconcile';
   stage='final_selection';await p.readCurrentSelection(s,signal);time();
