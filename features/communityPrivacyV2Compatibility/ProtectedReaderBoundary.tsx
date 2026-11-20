@@ -1,3 +1,4 @@
+import { isCommunityWindowFocused, observeCommunityWindowFocus } from '@/features/communityPrivacyV2/communityWindowFocus.mjs';
 import { useTranslation } from 'react-i18next';
 import { socialT as t } from '@/features/communityPrivacyV2/socialTranslations';
 import React, { useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react';
@@ -14,7 +15,7 @@ export function ProtectedReaderBoundary({ children, scopeKey = '' }: { children:
   const auth = useSyncExternalStore(binding.subscribe, binding.getSnapshot, binding.getSnapshot);
   const focused = useIsFocused();
   const [appState, setAppState] = useState(AppState.currentState);
-  const [windowFocused, setWindowFocused] = useState(true);
+  const [windowFocused, setWindowFocused] = useState(() => isCommunityWindowFocused(Platform.OS));
   const active = focused && appState === 'active' && windowFocused;
   useLayoutEffect(() => {
     if (active) binding.start(); else binding.stop();
@@ -22,26 +23,8 @@ export function ProtectedReaderBoundary({ children, scopeKey = '' }: { children:
   }, [binding, active]);
   useLayoutEffect(() => {
     const changes = AppState.addEventListener('change', setAppState);
-    // React Native Web exposes change only. Keep the same privacy boundary on
-    // browser focus loss without subscribing to unsupported native events.
-    if (Platform.OS === 'web') {
-      const onBlur = () => setWindowFocused(false);
-      const onFocus = () => setWindowFocused(true);
-      if (typeof window !== 'undefined') {
-        window.addEventListener('blur', onBlur);
-        window.addEventListener('focus', onFocus);
-      }
-      return () => {
-        changes.remove();
-        if (typeof window !== 'undefined') {
-          window.removeEventListener('blur', onBlur);
-          window.removeEventListener('focus', onFocus);
-        }
-      };
-    }
-    const blur = AppState.addEventListener('blur', () => setWindowFocused(false));
-    const focus = AppState.addEventListener('focus', () => setWindowFocused(true));
-    return () => { changes.remove(); blur.remove(); focus.remove(); };
+    const unobserve = observeCommunityWindowFocus(Platform.OS, AppState, () => setWindowFocused(false), () => setWindowFocused(true));
+    return () => { changes.remove(); unobserve(); };
   }, []);
   if (!active || !auth.session) return <View accessibilityRole="summary">
     {active && auth.status === 'loading' ? <ActivityIndicator /> :

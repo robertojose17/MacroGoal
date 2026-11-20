@@ -1,5 +1,6 @@
+import { isCommunityWindowFocused, observeCommunityWindowFocus } from '@/features/communityPrivacyV2/communityWindowFocus.mjs';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase/client';
 import { createSupabaseInboxAuthBinding } from './supabaseInboxAuth';
@@ -27,7 +28,7 @@ export function ConfiguredFollowerActions({ activation, ownerId, requester, onCl
   onRelationshipChanged, onRelationshipInvalidated }: Props) {
   const focused = useIsFocused();
   const [appState, setAppState] = useState(AppState.currentState);
-  const [windowFocused, setWindowFocused] = useState(true);
+  const [windowFocused, setWindowFocused] = useState(() => isCommunityWindowFocused(Platform.OS));
   const active = focused && windowFocused && appState === 'active';
   const activeRef = useRef(active);
   activeRef.current = active;
@@ -86,9 +87,8 @@ export function ConfiguredFollowerActions({ activation, ownerId, requester, onCl
       if (next !== 'active') activeRef.current = false;
       setAppState(next);
     });
-    const blur = AppState.addEventListener('blur', () => { activeRef.current = false; setWindowFocused(false); });
-    const focus = AppState.addEventListener('focus', () => setWindowFocused(true));
-    return () => { change.remove(); blur.remove(); focus.remove(); };
+    const unobserve = observeCommunityWindowFocus(Platform.OS, AppState, () => { activeRef.current = false; setWindowFocused(false); }, () => setWindowFocused(true));
+    return () => { change.remove(); unobserve(); };
   }, []);
   useLayoutEffect(() => {
     services.controller.setScope(scope);

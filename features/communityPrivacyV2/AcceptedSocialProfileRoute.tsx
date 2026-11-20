@@ -1,7 +1,8 @@
+import { isCommunityWindowFocused, observeCommunityWindowFocus } from '@/features/communityPrivacyV2/communityWindowFocus.mjs';
 import { useTranslation } from 'react-i18next';
 import { socialT as t } from '@/features/communityPrivacyV2/socialTranslations';
 import React, { useCallback, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useProfileScreenServices } from './ProfileScreenEnvironment';
@@ -29,7 +30,7 @@ function ConfiguredProfileRoute({ services, target, onBack }: {
   useTranslation();
   const router = useRouter();
   const focused = useIsFocused();
-  const [windowFocused, setWindowFocused] = useState(true);
+  const [windowFocused, setWindowFocused] = useState(() => isCommunityWindowFocused(Platform.OS));
   const [appState, setAppState] = useState(AppState.currentState);
   const [range, setRange] = useState<NutritionRange>('today');
   const [calendarNow, setCalendarNow] = useState(() => new Date());
@@ -47,9 +48,8 @@ function ConfiguredProfileRoute({ services, target, onBack }: {
   useLayoutEffect(() => { services.binding.start(); return services.binding.stop; }, [services]);
   useLayoutEffect(() => {
     const subscription = AppState.addEventListener('change', next => { setAppState(next); if (next === 'active') setCalendarNow(new Date()); });
-    const blur = AppState.addEventListener('blur', () => setWindowFocused(false));
-    const focus = AppState.addEventListener('focus', () => { setWindowFocused(true); setCalendarNow(new Date()); });
-    return () => { subscription.remove(); blur.remove(); focus.remove(); };
+    const unobserve = observeCommunityWindowFocus(Platform.OS, AppState, () => setWindowFocused(false), () => { setWindowFocused(true); setCalendarNow(new Date()); });
+    return () => { subscription.remove(); unobserve(); };
   }, []);
   useLayoutEffect(() => { if (focused) setCalendarNow(new Date()); }, [focused]);
   useLayoutEffect(() => {

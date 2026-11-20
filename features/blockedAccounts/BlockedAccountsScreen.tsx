@@ -1,5 +1,6 @@
+import { isCommunityWindowFocused, observeCommunityWindowFocus } from '@/features/communityPrivacyV2/communityWindowFocus.mjs';
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View, Platform } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,7 +21,7 @@ export default function BlockedAccountsScreen() {
   const dark = useColorScheme() === 'dark';
   const focused = useIsFocused();
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
-  const [windowFocused, setWindowFocused] = useState(true);
+  const [windowFocused, setWindowFocused] = useState(() => isCommunityWindowFocused(Platform.OS));
   const active = focused && foreground && windowFocused;
   const activeRef = useRef(active); activeRef.current = active;
   const services = useMemo(() => {
@@ -54,9 +55,8 @@ export default function BlockedAccountsScreen() {
       if (next !== 'active') { activeRef.current = false; services.controller.setSession(null); }
       setForeground(next === 'active');
     });
-    const blur = AppState.addEventListener('blur', () => { activeRef.current = false; services.controller.setSession(null); setWindowFocused(false); });
-    const focus = AppState.addEventListener('focus', () => setWindowFocused(true));
-    return () => { change.remove(); blur.remove(); focus.remove(); };
+    const unobserve = observeCommunityWindowFocus(Platform.OS, AppState, () => { activeRef.current = false; services.controller.setSession(null); setWindowFocused(false); }, () => setWindowFocused(true));
+    return () => { change.remove(); unobserve(); };
   }, [services]);
   useLayoutEffect(() => {
     services.controller.setSession(session);

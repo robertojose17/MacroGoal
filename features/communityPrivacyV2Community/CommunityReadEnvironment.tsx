@@ -1,5 +1,6 @@
+import { isCommunityWindowFocused, observeCommunityWindowFocus } from '@/features/communityPrivacyV2/communityWindowFocus.mjs';
 import React, { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase/client';
 import { getCommunityPrivacyActivation } from '../communityPrivacyV2/communityPrivacyRollout';
@@ -22,12 +23,11 @@ export function CommunityReadProvider({ children, activation }: {
     allowAutomaticWrites: activation.rollout !== 'pair',
   }), [activation.actorId, activation.scopeKey, activation.rollout]);
   useFocusEffect(useCallback(() => {
-    const update = (state: string | null) => { if (state === 'active') runtime.activate(); else runtime.deactivate(); };
+    const update = (state: string | null) => { if (state === 'active' && isCommunityWindowFocused(Platform.OS)) runtime.activate(); else runtime.deactivate(); };
     const change = AppState.addEventListener('change', update);
-    const blur = AppState.addEventListener('blur', runtime.deactivate);
-    const focus = AppState.addEventListener('focus', () => update(AppState.currentState));
+    const unobserve = observeCommunityWindowFocus(Platform.OS, AppState, runtime.deactivate, () => update(AppState.currentState));
     update(AppState.currentState);
-    return () => { change.remove(); blur.remove(); focus.remove(); runtime.deactivate(); };
+    return () => { change.remove(); unobserve(); runtime.deactivate(); };
   }, [runtime]));
   return <Environment.Provider value={runtime}>{children}</Environment.Provider>;
 }
