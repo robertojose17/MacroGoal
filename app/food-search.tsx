@@ -148,6 +148,7 @@ export default function FoodSearchScreen() {
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [isSearching, setIsSearching] = useState(false); // true while any stage is pending
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [partialSearch, setPartialSearch] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
   const searchInputRef = useRef<TextInput>(null);
@@ -189,6 +190,7 @@ export default function FoodSearchScreen() {
     resultsMapRef.current = new Map();
     setResults([]);
     setErrorMessage(null);
+    setPartialSearch(false);
     setHasSearched(true);
     setIsSearching(true);
 
@@ -223,13 +225,19 @@ export default function FoodSearchScreen() {
             setErrorMessage(i18n.language.startsWith('es') ? 'Actualiza MacroGoal para revisar este alimento de forma segura. No se ha añadido nada.' : 'Update MacroGoal to review this food safely. Nothing has been added.');
             return;
           }
-          // Only show error if we have no results at all
-          setResults(prev => {
-            if (prev.length === 0) {
-              setErrorMessage(t('foodSearch.connectionIssue'));
-            }
-            return prev;
-          });
+          // Preserve usable results, but do not present a partial search as exhaustive.
+          if (resultsMapRef.current.size > 0) {
+            if (error.message !== 'SEARCH_ABORTED') setPartialSearch(true);
+            return;
+          }
+          if (['SEARCH_SOURCES_UNAVAILABLE','SEARCH_UNAVAILABLE','SEARCH_PARTIAL'].includes(error.message)) {
+            setPartialSearch(true);
+            setErrorMessage(i18n.language.startsWith('es')
+              ? 'No pudimos consultar todas las fuentes de alimentos. Intenta de nuevo.'
+              : "We couldn't check all food sources. Try again.");
+            return;
+          }
+          setErrorMessage(t('foodSearch.connectionIssue'));
         },
         onComplete: () => {
           if (controller.signal.aborted) return;
@@ -253,6 +261,7 @@ export default function FoodSearchScreen() {
     resultsMapRef.current = new Map();
     setResults([]);
     setErrorMessage(null);
+    setPartialSearch(false);
     const trimmedQuery = searchQuery.trim();
     setIsSearching(trimmedQuery.length >= 2);
 
@@ -262,6 +271,7 @@ export default function FoodSearchScreen() {
       resultsMapRef.current = new Map();
       setResults([]);
       setErrorMessage(null);
+      setPartialSearch(false);
       setHasSearched(false);
       setIsSearching(false);
       return;
@@ -273,6 +283,7 @@ export default function FoodSearchScreen() {
       resultsMapRef.current = new Map();
       setResults([]);
       setErrorMessage(null);
+      setPartialSearch(false);
       setHasSearched(false);
       setIsSearching(false);
       return;
@@ -370,7 +381,7 @@ export default function FoodSearchScreen() {
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>⚠️</Text>
           <Text style={[styles.emptyTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            {t('foodSearch.connectionIssueTitle')}
+            {partialSearch ? (i18n.language.startsWith('es') ? 'Búsqueda incompleta' : 'Incomplete search') : t('foodSearch.connectionIssueTitle')}
           </Text>
           <Text style={[styles.emptyMessage, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             {errorMessage}
@@ -525,6 +536,13 @@ export default function FoodSearchScreen() {
           renderItem={renderResultItem}
           keyExtractor={keyExtractor}
           contentContainerStyle={styles.listContent}
+          ListHeaderComponent={partialSearch && results.length > 0 ? (
+            <TouchableOpacity accessibilityRole="button" onPress={handleRetry} style={{ paddingVertical: 10, paddingHorizontal: 12 }}>
+              <Text style={{ color: isDark ? colors.textSecondaryDark : colors.textSecondary }}>
+                {i18n.language.startsWith('es') ? 'Puede haber más resultados. Toca para reintentar.' : 'More results may be available. Tap to retry.'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
           ListEmptyComponent={renderEmptyState}
           ListFooterComponent={renderFooter}
           showsVerticalScrollIndicator={false}

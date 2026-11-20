@@ -11,7 +11,7 @@ export interface HybridSearchCallbacks {
   onError?: (stage: 'supabase' | 'off', error: Error) => void;
   onComplete?: () => void;
 }
-type SearchResponse = { products: OpenFoodFactsProduct[]; partial: boolean; cacheable: boolean };
+type SearchResponse = { products: OpenFoodFactsProduct[]; partial: boolean; sourcesUnavailable: boolean; cacheable: boolean };
 function aborted(): Error { const error = new Error('SEARCH_ABORTED'); error.name = 'AbortError'; return error; }
 
 export async function fetchSearchResponse(query: string, abortSignal?: AbortSignal, timeoutMs = SUPABASE_TIMEOUT_MS): Promise<SearchResponse> {
@@ -38,13 +38,20 @@ export async function fetchSearchResponse(query: string, abortSignal?: AbortSign
           const failure = await response.json().catch(() => null);
           if (response.status === 426 || (failure?.status === 'update_required' && failure?.error === 'SEARCH_REVIEW_UPDATE_REQUIRED')) throw new Error('SEARCH_REVIEW_UPDATE_REQUIRED');
         }
+        if (response.status === 503) {
+          const failure = await response.json().catch(() => null);
+          if (failure?.status === 'partial' && Array.isArray(failure?.products) && failure.products.length === 0) {
+            throw new Error('SEARCH_SOURCES_UNAVAILABLE');
+          }
+        }
         throw new Error('SEARCH_HTTP_' + response.status);
       }
       const data = await response.json();
       if (!data || !Array.isArray(data.products)) throw new Error('SEARCH_INVALID_RESPONSE');
       const partial = data.status === 'partial';
       if (partial && data.products.length === 0) throw new Error('SEARCH_UNAVAILABLE');
-      return { products: data.products as OpenFoodFactsProduct[],partial,
+      const sourcesUnavailable = partial && (!data.providers || ['db','usda','off'].some(stage => data.providers?.[stage] === 'unavailable'));
+      return { products: data.products as OpenFoodFactsProduct[],partial,sourcesUnavailable,
         cacheable: !partial && data.ranking_version === 'food-v2' };
     })()]);
   } finally {
@@ -63,7 +70,7 @@ export async function hybridSearch(query: string, callbacks: HybridSearchCallbac
     if (isAborted()) return;
     callbacks.onSupabaseHit?.(result.products);
     if (result.cacheable) setLocalCache(query,result.products).catch(() => {});
-    if (result.partial) callbacks.onError?.('supabase',new Error('SEARCH_PARTIAL'));
+    if (result.sourcesUnavailable) callbacks.onError?.('supabase',new Error('SEARCH_PARTIAL'));
   } catch (error) {
     if (!isAborted()) {
       if (error instanceof Error && error.message === 'SEARCH_REVIEW_UPDATE_REQUIRED') {

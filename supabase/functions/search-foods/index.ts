@@ -6,7 +6,7 @@ import {usdaSearchNutriments} from '../_shared/nutritionProvider.mjs';
 import { decorateCachedProducts } from '../_shared/portionCache.mjs';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { firstText, normalizeQuery, queryVariants, searchCatalog, ProviderHttpError } from './searchCore.ts';
+import { firstText, normalizeQuery, queryVariants, searchCatalog, ProviderHttpError, fetchOffSearch } from './searchCore.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -256,11 +256,11 @@ export async function handleSearch(req: Request): Promise<Response> {
       nutritionBatch.add('usda',body.foods);
       return body.foods.map(mapUsdaToOff).filter((p: Record<string,unknown> | null): p is Record<string,unknown> => p !== null);
     },
-    off: async (normalized,signal) => {
+    off: async (normalized,signal,deadlineMs) => {
       const url = 'https://world.openfoodfacts.org/cgi/search.pl?search_terms=' + encodeURIComponent(normalized)
         + '&search_simple=1&action=process&json=1&page_size=20&sort_by=unique_scans_n'
         + '&fields=code,product_name,generic_name,brands,serving_size,serving_quantity,serving_quantity_unit,nutriments,nutrition_data_per,nutrition_data_prepared_per,nutrition,preparation,nutrient_levels,last_modified_t,image_url';
-      const response = await fetch(url,{ signal,headers: { 'User-Agent': 'MacroGoal/1.0 (contact@macrogoal.app)' } });
+      const response = await fetchOffSearch(() => fetch(url,{ signal,headers: { 'User-Agent': 'MacroGoal/1.0 (contact@macrogoal.app)' } }), signal, deadlineMs ?? Date.now());
       if (!response.ok) throw new ProviderHttpError('OFF_UNAVAILABLE',response.status);
       const body = await response.json();
       if (!Array.isArray(body.products)) throw new Error('OFF_INVALID_RESPONSE');

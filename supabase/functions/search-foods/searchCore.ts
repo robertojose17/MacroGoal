@@ -115,6 +115,17 @@ export function mergeProducts(groups: Product[][], limit: number): Product[] {
 export class ProviderHttpError extends Error {
   constructor(code: string, readonly status: number) { super(code); }
 }
+// A gateway failure can be brief. Retry only once, within the existing
+// abortable stage and never against an upstream Retry-After or rate limit.
+export async function fetchOffSearch(
+  request: () => Promise<Response>, signal: AbortSignal, deadlineMs: number, now = Date.now,
+): Promise<Response> {
+  const first = await request();
+  if (signal.aborted || ![502, 503, 504].includes(first.status) ||
+      first.headers.has('Retry-After') || deadlineMs - now() < 425) return first;
+  void first.body?.cancel().catch(() => {});
+  return request();
+}
 async function bounded(provider: Provider, query: string, ms: number, stage: 'db'|'usda'|'off'): Promise<{ products: Product[]; state: ProviderState }> {
   const started = Date.now();
   const controller = new AbortController();
@@ -136,7 +147,7 @@ async function bounded(provider: Provider, query: string, ms: number, stage: 'db
   }
   finally { if (timer) clearTimeout(timer); }
 }
-export async function searchCatalog(query: string, limit: number, providers: { db: Provider; usda: Provider; off: Provider; skipFallback?: () => boolean }, budgets = { db: 1800, usda: 1400, off: 600 }) {
+export async function searchCatalog(query: string, limit: number, providers: { db: Provider; usda: Provider; off: Provider; skipFallback?: () => boolean }, budgets = { db: 1800, usda: 1400, off: 950 }) {
   // Preserve original-language intent; each provider chooses its request form.
   const states: Record<'db'|'usda'|'off',ProviderState> = { db: 'skipped',usda: 'skipped',off: 'skipped' };
   const db = await bounded(providers.db,query,budgets.db,'db'); states.db = db.state;

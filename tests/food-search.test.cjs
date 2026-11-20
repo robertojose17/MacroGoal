@@ -158,8 +158,9 @@ test('already aborted client search makes no request',async () => {
 });
 test('client distinguishes empty success, HTTP error and partial results',async () => {
   const empty=clientFixture(async()=>new Response(JSON.stringify({products:[],status:'complete',ranking_version:'food-v2'})));
-  assert.deepEqual(plain(await empty.api.fetchSearchResponse('apple')),{products:[],partial:false,cacheable:true});
+  assert.deepEqual(plain(await empty.api.fetchSearchResponse('apple')),{products:[],partial:false,sourcesUnavailable:false,cacheable:true});
   const failed=clientFixture(async()=>new Response('{}',{status:503}));await assert.rejects(failed.api.fetchSearchResponse('apple'),/SEARCH_HTTP_503/);
+  const sources=clientFixture(async()=>new Response(JSON.stringify({products:[],status:'partial'}),{status:503}));await assert.rejects(sources.api.fetchSearchResponse('apple'),/SEARCH_SOURCES_UNAVAILABLE/);
   const partial=clientFixture(async()=>new Response(JSON.stringify({products:[apple],status:'partial',ranking_version:'food-v2'})));
   assert.equal((await partial.api.fetchSearchResponse('apple')).cacheable,false);
 });
