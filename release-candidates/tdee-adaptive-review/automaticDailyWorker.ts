@@ -6,6 +6,9 @@ type Signal=AbortSignal;
 // Keep a two-second margin under the production scheduler's 10s HTTP timeout.
 const AUTOMATIC_DAILY_RUN_MS=8000;
 const AUTOMATIC_SELECTOR_RUN_MS=3200;
+// Measured production budget reliably handled three owners, including reads and CAS.
+// At the existing five-minute cadence this caps selection at 864 per day.
+const AUTOMATIC_OWNER_BATCH=3;
 export type AutomaticAttention={kind:'attention'|'none';reason:string;actionable:false};
 export interface AutomaticDailyPorts {
  selectDueOwners(limit:number,deadline:number,signal:Signal):Promise<WorkerSelection[]>;
@@ -70,7 +73,7 @@ export function createAutomaticDailyWorker(key:string|undefined,p:AutomaticDaily
  const start=p.now();if(!Number.isSafeInteger(start)||start<0)return reply(503,'clock_unavailable');
  const deadline=start+AUTOMATIC_DAILY_RUN_MS,abort=new AbortController(),timer=setTimeout(()=>abort.abort(),AUTOMATIC_DAILY_RUN_MS),counts={completed:0,skipped:0,reconcile:0};let previous=start;
  try{
-  const owners=await p.selectDueOwners(25,Math.min(deadline,start+AUTOMATIC_SELECTOR_RUN_MS),abort.signal);if(!validateWorkerSelection(owners))return reply(503,'invalid_server_selection');
+  const owners=await p.selectDueOwners(AUTOMATIC_OWNER_BATCH,Math.min(deadline,start+AUTOMATIC_SELECTOR_RUN_MS),abort.signal);if(!validateWorkerSelection(owners))return reply(503,'invalid_server_selection');
   for(const owner of owners){const now=p.now();if(now<previous||now>=deadline||abort.signal.aborted)return reply(503,'budget_exhausted',counts);previous=now;counts[await runAutomaticAssessment(p,owner,deadline,abort.signal)]++;}
   return reply(200,'batch_finished',counts);
  }catch{return reply(503,'reconciliation_required',counts);}finally{clearTimeout(timer);abort.abort();}
