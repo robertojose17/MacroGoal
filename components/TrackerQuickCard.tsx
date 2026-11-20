@@ -32,6 +32,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { promptForProgressPhoto } from '@/utils/checkInPhotoUpload';
 import { useSteps } from '@/hooks/useSteps';
+import { saveFreshAndroidSteps } from '@/utils/saveFreshAndroidSteps.mjs';
 import * as Haptics from 'expo-haptics';
 import { CheckCircle2, RotateCw } from 'lucide-react-native';
 
@@ -66,6 +67,7 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
 
   // Steps refresh state
   const [stepsRefreshing, setStepsRefreshing] = useState(false);
+  const androidStepsSyncInProgress = useRef(false);
   const spinAnim = useRef(new Animated.Value(0)).current;
   const spinRef = useRef<Animated.CompositeAnimation | null>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -250,7 +252,32 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
   };
 
   // ── Steps refresh ──────────────────────────────────────────────────────────
+  const handleAndroidStepsSync = async (connect: boolean) => {
+    if (!stepsTracker || androidStepsSyncInProgress.current) return;
+    androidStepsSyncInProgress.current = true;
+    setStepsRefreshing(true);
+    const trackerId = stepsTracker.id;
+    const date = new Date();
+    try {
+      const entry = await saveFreshAndroidSteps({
+        date,
+        toDateKey: toLocalDateString,
+        read: connect ? stepsHook.requestPermission : stepsHook.refresh,
+        save: (day: string, steps: number) => logEntry(trackerId, day, steps),
+      });
+      if (entry && toLocalDateString(date) === toLocalDateString(new Date())) {
+        setTodayEntries((prev) => ({ ...prev, [trackerId]: { id: entry.id, value: Number(entry.value) } }));
+      }
+    } catch {
+      Alert.alert(t('checkIns.logFailed'), t('localization.shared.saveFailed'));
+    } finally {
+      androidStepsSyncInProgress.current = false;
+      setStepsRefreshing(false);
+    }
+  };
+
   const handleStepsRefresh = async () => {
+    if (Platform.OS === 'android') return handleAndroidStepsSync(false);
     if (stepsRefreshing || !stepsTracker) return;
     console.log('[TrackerQuickCard] Steps refresh tapped');
     setStepsRefreshing(true);
@@ -366,11 +393,13 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
                 style={[styles.logBtn, { backgroundColor: colors.primary }]}
                 onPress={() => {
                   console.log('[TrackerQuickCard] Steps connect health tapped');
-                  stepsHook.requestPermission();
+                  if (Platform.OS === 'android') void handleAndroidStepsSync(true);
+                  else void stepsHook.requestPermission();
                 }}
+                disabled={Platform.OS === 'android' && stepsRefreshing}
                 activeOpacity={0.8}
               >
-                <Text style={styles.logBtnText}>{t('checkIns.connect')}</Text>
+                <Text style={styles.logBtnText}>{Platform.OS === 'android' ? `${t('checkIns.connect')} Health Connect` : t('checkIns.connect')}</Text>
                 {Platform.OS === 'android' && stepsHook.error ? <Text accessibilityRole="alert" style={{color:'#fff',fontSize:11,maxWidth:180}}>{stepsHook.error}</Text> : null}
               </TouchableOpacity>
             ) : (
@@ -382,6 +411,13 @@ export default function TrackerQuickCard({ isDark, userId, goal, onXpRefresh }: 
                       <Text style={[styles.stepsUnit, { color: subColor }]}>{' / '}{stepsGoalFormatted}</Text>
                     )}
                   </View>
+                  {Platform.OS === 'android' && (stepsHook.error || (!stepsHook.loading && stepsHook.steps === 0)) ? (
+                    <Text accessibilityRole="alert" style={{ color: subColor, fontSize: 11 }}>
+                      {stepsHook.error || (/^es\b/i.test(getAppLocale())
+                        ? 'No hay pasos de hoy en Health Connect. Revisa tu fuente de actividad.'
+                        : 'No steps in Health Connect today. Check your activity source.')}
+                    </Text>
+                  ) : null}
                   {stepsGoal > 0 && (
                     <View style={[styles.progressTrack, { backgroundColor: isDark ? '#2A2C40' : '#E5E7EB' }]}>
                       <Animated.View

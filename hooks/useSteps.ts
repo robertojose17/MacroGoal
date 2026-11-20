@@ -15,10 +15,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import {
+  getStepsForDate,
   getTodaySteps,
   initializeHealthData,
   requestStepsPermission,
   type PermissionStatus,
+  type StepsResult,
 } from '@/utils/healthKit';
 
 export type UseStepsResult = {
@@ -26,8 +28,8 @@ export type UseStepsResult = {
   permission: PermissionStatus | 'unknown';
   loading: boolean;
   error: string | null;
-  requestPermission: () => Promise<void>;
-  refresh: () => Promise<void>;
+  requestPermission: (date?: Date) => Promise<StepsResult | undefined>;
+  refresh: (date?: Date) => Promise<StepsResult | undefined>;
 };
 
 export function useSteps(): UseStepsResult {
@@ -41,20 +43,21 @@ export function useSteps(): UseStepsResult {
 
   // ─── Core fetch ────────────────────────────────────────────────────────────
 
-  const fetchSteps = useCallback(async () => {
+  const fetchSteps = useCallback(async (date?: Date) => {
     console.log('[useSteps] fetchSteps called');
     if (!mountedRef.current) return;
     setLoading(true);
     setError(null);
 
     try {
-      const result = await getTodaySteps();
+      const result = date ? await getStepsForDate(date) : await getTodaySteps();
       if (!mountedRef.current) return;
 
-      console.log('[useSteps] fetchSteps result:', result);
+      if (Platform.OS !== 'android') console.log('[useSteps] fetchSteps result:', result);
       setPermission(result.permission);
       setSteps(result.steps);
       if (result.error) setError(result.error);
+      return result;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.warn('[useSteps] fetchSteps error:', msg);
@@ -151,7 +154,7 @@ export function useSteps(): UseStepsResult {
 
   // ─── Public actions ────────────────────────────────────────────────────────
 
-  const requestPermission = useCallback(async () => {
+  const requestPermission = useCallback(async (date?: Date) => {
     console.log('[useSteps] requestPermission called');
     setLoading(true);
     try {
@@ -166,7 +169,7 @@ export function useSteps(): UseStepsResult {
       // error, the fetch may still succeed and self-correct the permission state.
       setPermission(status);
       console.log('[useSteps] always calling fetchSteps after permission request to confirm actual access');
-      await fetchSteps();
+      return await fetchSteps(date);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.warn('[useSteps] requestPermission error:', msg);
@@ -177,10 +180,5 @@ export function useSteps(): UseStepsResult {
     }
   }, [fetchSteps]);
 
-  const refresh = useCallback(async () => {
-    console.log('[useSteps] refresh called');
-    await fetchSteps();
-  }, [fetchSteps]);
-
-  return { steps, permission, loading, error, requestPermission, refresh };
+  return { steps, permission, loading, error, requestPermission, refresh: fetchSteps };
 }
