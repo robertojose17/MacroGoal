@@ -72,9 +72,11 @@ export async function handlePortionRequest(req:Request,admin:any,cors:Record<str
    if(uuidMode&&admission?.status!=='claimed'&&!cachedRaw)throw Error('USDA_PORTION_ADMISSION_UNAVAILABLE');
    let food:any=cachedRaw;
    if(!food){
-    const apiKey=Deno.env.get('USDA_API_KEY')||'DEMO_KEY';
-    const response=await fetch('https://api.nal.usda.gov/fdc/v1/food/'+fdcId+'?api_key='+encodeURIComponent(apiKey),{signal});
+    const apiKey=Deno.env.get('USDA_SEARCH_API_KEY')?.trim();
+    if(!apiKey)throw Error('USDA_KEY_MISSING');
+    const response=await fetch('https://api.nal.usda.gov/fdc/v1/food/'+fdcId,{signal,redirect:'error',headers:{'X-Api-Key':apiKey}});
     if(!response.ok)throw Error('USDA_PORTION_UNAVAILABLE');
+    console.info('[lookup-barcode] USDA portions succeeded');
     food=await readProviderJSON(response,{signal,maxBytes:1048576});
    }
    if(String(food?.fdcId)!==fdcId)throw Error('USDA_IDENTITY_MISMATCH');

@@ -20,10 +20,11 @@ function exactUSDAFoodPortionGrams(portions:unknown,unit:unknown,quantity:unknow
 const complete=(n:Nutrition|null):n is Nutrition=>!!n&&!n.missing.length&&NUTRIENTS.every(k=>!!n.fields[k]&&Number.isFinite(n.fields[k]!.value));
 type RecipeReadBudget={startedAt:number;reads:number;maxReads:number;maxDurationMs:number};
 const recipeReadBudgetError='recipe_lookup_budget_exhausted';
-async function publicRead(url:string,deps:VerifiedFoodDeps,budget?:RecipeReadBudget):Promise<string>{
+async function publicRead(url:string,deps:VerifiedFoodDeps,budget?:RecipeReadBudget,usdaKey?:string):Promise<string>{
+ if(usdaKey&&new URL(url).origin!=='https://api.nal.usda.gov')throw Error('invalid_usda_origin');
  let timeout=5000;if(budget){const remaining=budget.maxDurationMs-(Date.now()-budget.startedAt);if(budget.reads>=budget.maxReads||remaining<=0)throw Error(recipeReadBudgetError);budget.reads++;timeout=Math.min(timeout,remaining);}
  const signal=AbortSignal.timeout(timeout);let response:Response;
- try{response=await deps.fetch(url,{redirect:'manual',credentials:'omit',headers:{Accept:'application/json,text/html,text/plain'},signal});}catch(error){const timeout=signal.aborted||error instanceof Error&&['TimeoutError','AbortError'].includes(error.name);deps.onSourceReadDiagnostic?.({outcome:timeout?'timeout':'read_error'});if(budget&&timeout)throw Error('recipe_lookup_timeout');throw error;}
+ try{response=await deps.fetch(url,{redirect:'manual',credentials:'omit',headers:{Accept:'application/json,text/html,text/plain',...(usdaKey?{'X-Api-Key':usdaKey}:{})},signal});}catch(error){const timeout=signal.aborted||error instanceof Error&&['TimeoutError','AbortError'].includes(error.name);deps.onSourceReadDiagnostic?.({outcome:timeout?'timeout':'read_error'});if(budget&&timeout)throw Error('recipe_lookup_timeout');throw error;}
  if(response.status!==200){const outcome=response.status===402||response.status===403?'http_denied':response.status>=300&&response.status<400?'http_redirect':'http_error';deps.onSourceReadDiagnostic?.({outcome,http_status:response.status});throw Error('source_unavailable');}
  if(!response.body||Number(response.headers.get('content-length')??0)>1048576){deps.onSourceReadDiagnostic?.({outcome:'page_too_large',http_status:response.status});throw Error('source_unavailable');}
  const type=response.headers.get('content-type')??'';if(!/^(application\/(?:ld\+)?json|text\/(?:html|plain))\b/i.test(type)){deps.onSourceReadDiagnostic?.({outcome:'unsupported_content_type',http_status:response.status});throw Error('source_format');}
@@ -150,6 +151,13 @@ export function parseCompleteRecipe(html:string,name:string,url='',retrievedAt='
 export async function findVerifiedFood(request:VerifiedFoodRequest,deps:VerifiedFoodDeps):Promise<VerifiedFoodResult>{
  const sources:VerifiedFoodResult['sources']=[];const missing=(field:string,clarification?:string):VerifiedFoodResult=>({kind:request.kind,eligible:false,missing:[field],...(clarification?{clarification}:{}),sources});
  const budget:RecipeReadBudget|undefined=request.kind==='recipe'?(deps.recipeBudget??{startedAt:Date.now(),reads:0,maxReads:21,maxDurationMs:20000}):undefined;
+ const readUSDA=async(url:URL)=>{
+  const key=typeof Deno==='undefined'?undefined:Deno.env.get('USDA_SEARCH_API_KEY')?.trim();
+  if(!key)throw Error('usda_key_missing');
+  const body=await publicRead(url.href,deps,budget,key);
+  sources.push({url:url.href,retrievedAt:deps.retrievedAt});
+  return body;
+ };
  const read=async(url:string)=>{if(request.kind==='recipe'&&url===request.url&&deps.recipeSourceHtml){sources.push({url,retrievedAt:deps.retrievedAt});return deps.recipeSourceHtml;}const body=await publicRead(url,deps,budget);sources.push({url,retrievedAt:deps.retrievedAt});return body;};
  try{
   if(request.kind==='product'){
@@ -180,16 +188,18 @@ export async function findVerifiedFood(request:VerifiedFoodRequest,deps:Verified
   if(recipe.ingredients.length>10)return missing(recipeReadBudgetError,'This source recipe has more than 10 ingredients, beyond the current USDA verification read budget. Please choose a shorter recipe page.');
   const ingredients:RecipeIngredient[]=[];
   for(const item of recipe.ingredients){
-   const query=new URL('https://api.nal.usda.gov/fdc/v1/foods/search');query.searchParams.set('query',item.name);query.searchParams.set('dataType','Foundation,SR Legacy');query.searchParams.set('pageSize','25');query.searchParams.set('api_key','DEMO_KEY');
-   const data=JSON.parse(await read(query.href));const foods=Array.isArray(data.foods)?data.foods:[];
+   const query=new URL('https://api.nal.usda.gov/fdc/v1/foods/search');query.searchParams.set('query',item.name);query.searchParams.set('dataType','Foundation,SR Legacy');query.searchParams.set('pageSize','25');
+   const data=JSON.parse(await readUSDA(query));const foods=Array.isArray(data.foods)?data.foods:[];
    const exact=foods.filter((f:any)=>normalize(f.description)===normalize(item.name));
    const selection=request.confirmedIngredients?.[item.text];
    const confirmedPreparation=request.confirmedPreparations?.[item.text];
    const prepared=confirmedPreparation?foods.filter((f:any)=>normalize(f.description).startsWith(normalize(item.name))&&usdaNutrition(f,deps.retrievedAt)?.preparation===confirmedPreparation):[];
    const candidates=selection?foods.filter((f:any)=>normalize(f.description)===normalize(selection)):confirmedPreparation?prepared:exact;
    if(candidates.length!==1){const options=foods.slice(0,5).map((f:any)=>String(f.description??'').trim()).filter(Boolean);const ask=options.length?`Which USDA ingredient matches "${item.name}": ${options.map((v:string,i:number)=>`${i+1}) ${v}`).join('; ')}? Reply with the exact food name.`:`Which exact USDA food identity and preparation matches "${item.name}"?`;return {...missing('ingredient_identity:'+item.name),clarification:ask,lookup_context:continuation(item.text,'identity')};}
-   const match=candidates[0],detailUrl=`https://api.nal.usda.gov/fdc/v1/food/${match.fdcId}?api_key=DEMO_KEY`;
-   const raw=JSON.parse(await read(detailUrl));const food=usdaNutrition(raw,deps.retrievedAt);
+   const match=candidates[0];
+   if(!Number.isSafeInteger(match.fdcId)||match.fdcId<=0)return missing('exact_ingredient_identity');
+   const detailUrl=new URL(`https://api.nal.usda.gov/fdc/v1/food/${match.fdcId}`);
+   const raw=JSON.parse(await readUSDA(detailUrl));const food=usdaNutrition(raw,deps.retrievedAt);
    if(!food||raw.fdcId!==match.fdcId||normalize(food.identity)!==normalize(match.description))return {...missing('exact_ingredient_identity'),clarification:`I could not verify an exact USDA identity for "${item.name}". Please choose another exact USDA food identity.`,lookup_context:continuation(item.text,'identity')};
    const selectedText=selection??'';const explicitPrep=request.confirmedPreparations?.[item.text]??(/\b(raw|uncooked|fresh)\b/i.test(item.name+' '+selectedText)?'raw':/\b(cooked|boiled|roasted|baked|fried|steamed)\b/i.test(item.name+' '+selectedText)?'cooked':undefined);
    const prep=food.preparation==='not_applicable'?'not_applicable':explicitPrep??food.preparation;

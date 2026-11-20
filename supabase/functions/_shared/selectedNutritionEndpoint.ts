@@ -46,9 +46,14 @@ export async function handleSelectedNutrition(req:Request,admin:any,cors:Record<
   if(admissionError||!admission)return reply({status:'unavailable',reason:'admission_unavailable'},503);
   if(['fresh','duplicate'].includes(admission.status))return reply(acknowledgment(admission,'duplicate',await enrich(admission.evidence?.raw_payload)));
   if(admission.status!=='claimed')return reply({status:'unavailable',reason:['busy','rate_limited'].includes(admission.status)?admission.status:'admission_rejected'},admission.status==='rate_limited'?429:503);
-  const url=provider==='usda'?'https://api.nal.usda.gov/fdc/v1/food/'+sourceId+'?api_key='+encodeURIComponent(Deno.env.get('USDA_API_KEY')||'DEMO_KEY'):'https://world.openfoodfacts.org/api/v2/product/'+sourceId+'.json';
-  const response=await fetch(url,{signal:controller.signal,headers:provider==='openfoodfacts'?{'User-Agent':'MacroGoal/1.0 (macro-goal.app)'}:{}});
+  const apiKey=provider==='usda'?Deno.env.get('USDA_SEARCH_API_KEY')?.trim():undefined;
+  if(provider==='usda'&&!apiKey)return reply({status:'unavailable',reason:'provider_unavailable'},502);
+  const url=provider==='usda'?'https://api.nal.usda.gov/fdc/v1/food/'+sourceId:'https://world.openfoodfacts.org/api/v2/product/'+sourceId+'.json';
+  const response=await fetch(url,apiKey
+   ?{signal:controller.signal,redirect:'error',headers:{'X-Api-Key':apiKey}}
+   :{signal:controller.signal,headers:{'User-Agent':'MacroGoal/1.0 (macro-goal.app)'}});
   if(!response.ok)return reply({status:'unavailable',reason:'provider_unavailable'},502);
+  if(provider==='usda')console.info('[lookup-barcode] USDA selection succeeded');
   const fetched=await readProviderJSON(response,{signal:controller.signal,maxBytes:provider==='usda'?1048576:262144});
   if(provider==='openfoodfacts'&&(fetched.status!==1||!fetched.product))return reply({status:'unavailable',reason:'provider_not_found'});
   const raw=provider==='usda'?fetched:fetched.product;

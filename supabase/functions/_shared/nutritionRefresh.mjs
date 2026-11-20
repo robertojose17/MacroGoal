@@ -27,7 +27,7 @@ export async function readProviderJSON(response,{signal,maxBytes=262144}={}) {
  * Call only after exact persisted food selection, never on autocomplete results.
  */
 /** @param {{admin:any,enabled?:boolean,networkEnabled?:boolean,fetchImpl?:typeof fetch,usdaKey?:string,requestId?:()=>string,now?:()=>number,timeoutMs?:number}} [options] */
-export function createSelectionCapture({admin,enabled=false,networkEnabled=false,fetchImpl=globalThis.fetch,usdaKey='DEMO_KEY',requestId=()=>crypto.randomUUID(),now=Date.now,timeoutMs=8000}={}) {
+export function createSelectionCapture({admin,enabled=false,networkEnabled=false,fetchImpl=globalThis.fetch,usdaKey,requestId=()=>crypto.randomUUID(),now=Date.now,timeoutMs=8000}={}) {
  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>8000)throw Error('invalid_timeout');
  return async function capture(/** @type {{request?:Request,foodId?:string|null,provider?:string,sourceId?:string,providerFood?:unknown,authenticated?:boolean,returnFoodItem?:boolean}} */ {request,foodId,provider,sourceId,providerFood,authenticated=false,returnFoodItem=false}={}) {
   if(!enabled||!networkEnabled)return {status:'disabled'};
@@ -57,12 +57,16 @@ export function createSelectionCapture({admin,enabled=false,networkEnabled=false
     refreshEvidence:(args,options)=>rpc('refresh_food_nutrition_v1',args,options),
     fetchProvider:async({provider,source_id,signal})=>{
      if(providerFood!==undefined)return providerFood; // Existing full provider response, no duplicate fetch.
+     if(provider==='usda'&&!usdaKey)throw Error('USDA_KEY_MISSING');
      const url=provider==='usda'
-      ?'https://api.nal.usda.gov/fdc/v1/food/'+source_id+'?api_key='+encodeURIComponent(usdaKey)
+      ?'https://api.nal.usda.gov/fdc/v1/food/'+source_id
       :'https://world.openfoodfacts.org/api/v2/product/'+source_id+'.json?fields=code,product_name,brands,ingredients_text,preparation,nutriments,serving_quantity,serving_quantity_unit,serving_size,nutrition_data_per,nutrition_data_prepared_per,nutrition';
-     const response=await fetchImpl(url,{signal,headers:provider==='openfoodfacts'?{'User-Agent':'MacroGoal/1.0 (macro-goal.app)'}:{}});
+     const response=await fetchImpl(url,provider==='usda'
+      ?{signal,redirect:'error',headers:{'X-Api-Key':usdaKey}}
+      :{signal,headers:{'User-Agent':'MacroGoal/1.0 (macro-goal.app)'}});
      if(!response.ok)throw Error('provider_http_error');
      const body=await readProviderJSON(response,{signal});
+     if(provider==='usda')console.info('[lookup-barcode] USDA refresh succeeded');
      if(provider==='openfoodfacts'){if(body.status!==1||!body.product)throw Error('provider_not_found');return body.product;}
      return body;
     }
@@ -86,7 +90,7 @@ export async function captureSelectedNutrition(admin,request,selection){
   const capture=createSelectionCapture({admin,
    enabled:Deno.env.get('NUTRIENT_REFRESH_ENABLED')==='true',
    networkEnabled:Deno.env.get('NUTRIENT_REFRESH_NETWORK_ENABLED')==='true',
-   usdaKey:Deno.env.get('USDA_API_KEY')||'DEMO_KEY'});
+   usdaKey:Deno.env.get('USDA_SEARCH_API_KEY')?.trim()});
   return await capture({request,...selection});
  }catch{return {status:'capture_unavailable'};}
 }
@@ -119,7 +123,7 @@ export async function refreshCachedSelection(admin,request,selection){
   return await scheduleCachedSelection({admin,
    enabled:Deno.env.get('NUTRIENT_REFRESH_ENABLED')==='true',
    networkEnabled:Deno.env.get('NUTRIENT_REFRESH_NETWORK_ENABLED')==='true',
-   usdaKey:Deno.env.get('USDA_API_KEY')||'DEMO_KEY'},
+   usdaKey:Deno.env.get('USDA_SEARCH_API_KEY')?.trim()},
    {request,...selection},{waitUntil:typeof runtime?.waitUntil==='function'?runtime.waitUntil.bind(runtime):undefined});
  }catch{return {status:'capture_unavailable'};}
 }
