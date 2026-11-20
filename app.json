@@ -28,7 +28,7 @@
         "NSCameraUsageDescription": "Macro Goal uses your camera to scan barcodes on food packaging so you can quickly add accurate nutrition information.",
         "NSSpeechRecognitionUsageDescription": "Macro Goal uses speech recognition to transcribe your voice when you describe meals to the AI meal estimator.",
         "NSPhotoLibraryUsageDescription": "Macro Goal needs access to your photo library so you can attach progress photos to your weight check-ins and track your transformation over time.",
-        "NSHealthShareUsageDescription": "Macro Goal reads your daily step count from Apple Health to track your activity, calculate calories burned, and award XP for completing daily step goals.",
+        "NSHealthShareUsageDescription": "Macro Goal reads your daily step count from Apple Health to track your activity and calculate calories burned.",
         "NSHealthUpdateUsageDescription": "Macro Goal writes your nutrition data to Apple Health to keep your health profile in sync across all your apps.",
         "NSLocationWhenInUseUsageDescription": "Macro Goal uses your location to find nearby gyms, restaurants, and food stores to help you reach your nutrition goals."
       }
@@ -89,7 +89,7 @@
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "Macro Goal reads your daily step count from Apple Health to track your activity, calculate calories burned, and award XP for completing daily step goals.",
+          "NSHealthShareUsageDescription": "Macro Goal reads your daily step count from Apple Health to track your activity and calculate calories burned.",
           "background": true
         }
       ],
