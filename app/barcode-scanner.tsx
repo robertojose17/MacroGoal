@@ -13,6 +13,33 @@ import { packageBarcodeInput } from '@/utils/packageBarcodeInput';
 import { recoveryRouteContext } from '@/utils/recoveryRouteContext';
 import { buildSyntheticOffData } from '@/utils/servingParser';
 
+// SDK 54 can report a 12-digit UPC-A as ean13 on iOS. Expand an explicit UPC-E
+// before lookup so that an eight-digit EAN-8 cannot collide with that UPC-E.
+function retailCameraCode(type: string, data: string): string | null {
+  if (typeof type !== 'string' || typeof data !== 'string') return null;
+  const kind = type.toLowerCase();
+  let code = data.trim();
+  if (!/^\d+$/.test(code) || /^0+$/.test(code)) return null;
+  if (kind === 'upc_e' || kind === 'upce' || kind.endsWith('.upce') || kind.endsWith('.upc-e')) {
+    if (!/^[01]\d{7}$/.test(code)) return null;
+    const [system, a, b, c, d, e, last, check] = code;
+    const manufacturerAndItem = last <= '2' ? a+b+last+'0000'+c+d+e
+      : last === '3' ? a+b+c+'00000'+d+e
+      : last === '4' ? a+b+c+d+'00000'+e
+      : a+b+c+d+e+'0000'+last;
+    code = system+manufacturerAndItem+check;
+  } else {
+    const lengths = kind === 'ean8' || kind.endsWith('.ean-8') ? [8]
+      : kind === 'ean13' || kind.endsWith('.ean-13') ? [12,13]
+      : kind === 'upc_a' || kind === 'upca' ? [12]
+      : kind === 'itf14' || kind.endsWith('.itf14') || kind.endsWith('.itf-14') ? [14] : [];
+    if (!lengths.includes(code.length)) return null;
+  }
+  let sum = 0;
+  for (let i=code.length-2,w=3;i>=0;i--,w=4-w) sum+=Number(code[i])*w;
+  return (10-sum%10)%10===Number(code[code.length-1]) ? code : null;
+}
+
 export default function BarcodeScannerScreen() {
   const { t, i18n } = useTranslation();
   const es=i18n.language.startsWith('es');
@@ -30,7 +57,9 @@ export default function BarcodeScannerScreen() {
   const planId = (params.planId as string) || undefined;
 
   const [webBarcode,setWebBarcode]=useState(''),[webError,setWebError]=useState(''),[webBusy,setWebBusy]=useState(false);
-  const webGeneration=useRef(0),webRequest=useRef<AbortController|null>(null);
+  const lookupGeneration=useRef(0),lookupRequest=useRef<AbortController|null>(null);
+  const nativeLookupActive=useRef(false);
+  const [nativeRetry,setNativeRetry]=useState<string|null>(null),[nativeBusy,setNativeBusy]=useState(false);
   const [permission, requestPermission] = useCameraPermissions();
 
   // One-scan lock using ref (doesn't cause re-renders)
@@ -55,10 +84,11 @@ export default function BarcodeScannerScreen() {
       console.log('[BarcodeScanner] Screen focused → reset scan state');
       hasScannedRef.current = false;
       isClosingRef.current = false;
-      if(Platform.OS==='web'){webGeneration.current++;setWebBusy(false);}
+      lookupGeneration.current++;
+      if(Platform.OS==='web')setWebBusy(false);else{nativeLookupActive.current=false;setNativeBusy(false);setNativeRetry(null);}
 
       return () => {
-        if(Platform.OS==='web'){webGeneration.current++;isClosingRef.current=true;webRequest.current?.abort();}
+        lookupGeneration.current++;isClosingRef.current=true;lookupRequest.current?.abort();
         console.log('[BarcodeScanner] Screen unfocused');
       };
     }, [])
@@ -66,15 +96,17 @@ export default function BarcodeScannerScreen() {
 
   /**
    * Perform lookup via Supabase edge function (lookup-barcode) and navigate.
-   * Falls back to barcode-lookup screen on error or not-found.
+   * Native retries transport failures here; the typed web route keeps its existing fallback.
    */
   const performLookupAndNavigate = useCallback(async (barcode: string) => {
     console.log('[BarcodeScanner] ========== PERFORMING LOOKUP ==========');
     console.log('[BarcodeScanner] Barcode:', barcode);
     console.log('[BarcodeScanner] Routing through edge function: lookup-barcode');
 
-    const generation=webGeneration.current;
-    const current=()=>Platform.OS!=='web'||(generation===webGeneration.current&&isMountedRef.current&&!isClosingRef.current);
+    const generation=lookupGeneration.current;
+    const native=Platform.OS!=='web';
+    const current=()=>generation===lookupGeneration.current&&isMountedRef.current&&!isClosingRef.current;
+    if(native){if(nativeLookupActive.current)return;nativeLookupActive.current=true;setNativeRetry(null);setNativeBusy(true);}
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if(!current())return;
@@ -85,19 +117,33 @@ export default function BarcodeScannerScreen() {
       const edgeFnUrl = `${SUPABASE_PROJECT_URL}/functions/v1/lookup-barcode`;
       console.log('[BarcodeScanner] Edge function URL:', edgeFnUrl);
 
-      const controller = new AbortController();
-      if(Platform.OS==='web')webRequest.current=controller;
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const sendLookup = async () => {
+        const controller = new AbortController();
+        lookupRequest.current=controller;
+        const timeoutId=setTimeout(()=>controller.abort(),15000);
+        try {
+          return await fetch(edgeFnUrl,{
+            method:'POST',
+            headers:{'Content-Type':'application/json',...(token?{'Authorization':`Bearer ${token}`}:{})},
+            body:JSON.stringify({barcode,review_capability:'label_confirmation_v1',...(native?{strict_scan:'v1'}:{})}),
+            signal:controller.signal,
+          });
+        } finally {clearTimeout(timeoutId);}
+      };
       let response:Response;
-      try {response = await fetch(edgeFnUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ barcode, review_capability: 'label_confirmation_v1' }),
-        signal: controller.signal,
-      });}finally{clearTimeout(timeoutId);}
+      let retried=false;
+      try {response=await sendLookup();}
+      catch(error){
+        if(!current())return;
+        if(!native)throw error;
+        retried=true;
+        response=await sendLookup();
+      }
+      if(!current())return;
+      if(native&&response.status>=502&&response.status<=504){
+        // If the transport already retried, leave the next attempt to the user.
+        if(!retried)response=await sendLookup();
+      }
       if(!current())return;
 
       console.log('[BarcodeScanner] HTTP Status:', response.status);
@@ -140,6 +186,7 @@ export default function BarcodeScannerScreen() {
         return;
       }
 
+      if(native && result.found!==true && result.lookup_outcome!=='confirmed_missing')throw Error('Lookup unavailable');
       if (result.found) {
         // Always build synthetic offData from DB columns — single source of truth.
         // Preserve the server's explicit basis; legacy rows without one are per 100 g.
@@ -196,6 +243,7 @@ export default function BarcodeScannerScreen() {
       console.error('[BarcodeScanner] ❌ LOOKUP ERROR:', error);
 
       if (!current() || !isMountedRef.current || isClosingRef.current) return;
+      if(native){setNativeRetry(barcode);return;}
       router.push({
         pathname: '/barcode-lookup',
         params: {
@@ -210,46 +258,19 @@ export default function BarcodeScannerScreen() {
           error: error.message || 'Lookup failed',
         },
       });
-    } finally {if(Platform.OS==='web'&&current()){setWebBusy(false);webRequest.current=null;}}
+    } finally {if(current()){if(native){nativeLookupActive.current=false;setNativeBusy(false);}else setWebBusy(false);lookupRequest.current=null;}}
   }, [router, mealType, date, mode, context, returnTo, myMealId, planId, es, params]);
 
   /**
    * Handle barcode scan
-   * CRITICAL FIX: Use dismissTo() to remove ALL screens including Add Food Menu
+   * Claim the scan only after a supported retail code validates.
    */
   const handleBarCodeScanned = useCallback(async ({ type, data }: { type: string; data: string }) => {
-    // Check one-scan lock
-    if (hasScannedRef.current) {
-      console.log('[BarcodeScanner] ⚠️ Already scanned, ignoring duplicate scan');
-      return;
-    }
-
-    // Check if component is still mounted
-    if (!isMountedRef.current) {
-      console.log('[BarcodeScanner] ⚠️ Component unmounted, ignoring scan');
-      return;
-    }
-
-    console.log('[BarcodeScanner] ========== BARCODE SCANNED ==========');
-    console.log('[BarcodeScanner] SCANNED BARCODE:', data);
-    console.log('[BarcodeScanner] Type:', type);
-
-    // Clean the barcode
-    const cleanBarcode = data.trim();
-    
-    // Validate barcode
-    if (!cleanBarcode || cleanBarcode.length === 0) {
-      console.log('[BarcodeScanner] ❌ Empty barcode, ignoring');
-      return;
-    }
-
-    // Set one-scan lock IMMEDIATELY
-    hasScannedRef.current = true;
-    console.log('[BarcodeScanner] ✅ One-scan lock activated');
-
-    // Start lookup process immediately (no delay needed)
-    console.log('[BarcodeScanner] 🚀 STARTING LOOKUP PROCESS');
-    performLookupAndNavigate(cleanBarcode);
+    if(hasScannedRef.current || !isMountedRef.current || isClosingRef.current)return;
+    const barcode=retailCameraCode(type,data);
+    if(!barcode)return;
+    hasScannedRef.current=true;
+    void performLookupAndNavigate(barcode);
   }, [performLookupAndNavigate]);
 
   const submitWebBarcode=()=>{
@@ -264,7 +285,7 @@ export default function BarcodeScannerScreen() {
   if(Platform.OS==='web')return (
     <SafeAreaView style={[styles.container,{backgroundColor:isDark?colors.backgroundDark:colors.background}]} edges={['top']}>
       <View style={[styles.permissionContainer,{gap:16}]}>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel={es?'Atrás':'Back'} onPress={()=>{isClosingRef.current=true;webGeneration.current++;webRequest.current?.abort();router.back();}}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={es?'Atrás':'Back'} onPress={()=>{isClosingRef.current=true;lookupGeneration.current++;lookupRequest.current?.abort();router.back();}}>
           <Text style={{color:isDark?colors.textDark:colors.text}}>{es?'Atrás':'Back'}</Text>
         </TouchableOpacity>
         <Text style={[styles.permissionTitle,{color:isDark?colors.textDark:colors.text}]}>{es?'Ingresa el código del paquete':'Enter the package barcode'}</Text>
@@ -382,7 +403,7 @@ export default function BarcodeScannerScreen() {
           style={styles.camera}
           facing="back"
           barcodeScannerSettings={{
-            barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+            barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'itf14'],
           }}
           onBarcodeScanned={handleBarCodeScanned}
         />
@@ -396,7 +417,8 @@ export default function BarcodeScannerScreen() {
               onPress={() => {
                 console.log('[BarcodeScanner] Close button pressed');
                 isClosingRef.current = true;
-                hasScannedRef.current = false;
+                lookupGeneration.current++;
+                lookupRequest.current?.abort();
                 router.back();
               }}
             >
@@ -428,8 +450,12 @@ export default function BarcodeScannerScreen() {
                 {t('barcodeScanner.alignBarcode')}
               </Text>
               <Text style={styles.instructionsSubtext}>
-                {t('barcodeScanner.autoScanned')}
+                {nativeBusy?(es?'Buscando producto…':'Looking up product…'):nativeRetry?(es?'No pudimos completar la búsqueda.':'We couldn’t complete the lookup.'):t('barcodeScanner.autoScanned')}
               </Text>
+              {nativeBusy&&<ActivityIndicator color="#FFFFFF"/>}
+              {nativeRetry&&!nativeBusy&&<TouchableOpacity accessibilityRole="button" onPress={()=>{if(nativeLookupActive.current||isClosingRef.current)return;void performLookupAndNavigate(nativeRetry);}}>
+                <Text style={styles.instructionsText}>{t('common.tryAgain')}</Text>
+              </TouchableOpacity>}
             </View>
           </View>
         </View>
