@@ -5,6 +5,11 @@ type Save = Database['public']['Functions']['save_accepted_nutrition_goal_v1'];
 type Restart = Database['public']['Functions']['restart_accepted_nutrition_journey_v1'];
 export type AppDatabase = Omit<Database, 'public'> & { public: Omit<Database['public'], 'Functions'> & {
   Functions: Omit<Database['public']['Functions'], 'save_accepted_nutrition_goal_v1' | 'restart_accepted_nutrition_journey_v1'> & {
+    save_profile_goal_weight_v1: { Args: {
+      p_expected_user_id: string; p_expected_profile_updated_at: string | null;
+      p_expected_goal_id: string; p_expected_goal_updated_at: string | null;
+      p_target_weight: number;
+    }; Returns: boolean };
     save_accepted_nutrition_goal_v1: Omit<Save, 'Args'> & { Args: Omit<Save['Args'], 'p_expected_goal_id' | 'p_expected_updated_at' | 'p_expected_profile_updated_at' | 'p_operation'> & {
       p_expected_goal_id: string | null; p_expected_updated_at: string | null; p_expected_profile_updated_at: string | null;
       p_operation: 'initial_onboarding' | 'manual_goal';

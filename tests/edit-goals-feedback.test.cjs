@@ -1,11 +1,14 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
+const mod={exports:{}};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('utils/profileJourneyWeights.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:mod.exports,require:()=>({})});
+const {resolveGoalWeight}=mod.exports;
 const text=fs.readFileSync('app/edit-goals.tsx','utf8'),source=ts.createSourceFile('edit-goals.tsx',text,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
 let handler;function visit(n){if(ts.isVariableDeclaration(n)&&n.name.getText(source)==='handleSave')handler=n.initializer;ts.forEachChild(n,visit);}visit(source);assert.ok(handler);
 const js=ts.transpileModule(`(${handler.getText(source)})`,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
 function setup(platform='web',overrides={}){
  const events=[],alerts=[],errors=[],calls=[];
- const editor={snapshot:{profile:{id:'owner',updated_at:'original'},goal:{id:'goal',target_weight:70}},pending:false,busy:false,isCurrent:()=>true,run:async(...args)=>{calls.push(args);events.push('verified');}};
- const context={editor,Platform:{OS:platform},router:{back:()=>events.push('back')},Alert:{alert:(...a)=>alerts.push(a)},setSaveError:x=>errors.push(x),t:x=>x,console:{log(){},error(){}},validateMacros:()=>true,macroError:'invalid macros',formError:'',weightKg:80,heightCm:180,age:30,sex:'male',activityLevel:'moderate',goalType:'lose',lossRateLbsPerWeek:1,macroPreset:'balanced',calculateBMR:()=>1700,calculateTDEE:()=>2400,calculateTargetCalories:()=>2000,calculateMacrosWithPreset:()=>({protein:150,carbs:200,fats:67,fiber:28}),...overrides};
+ const editor={snapshot:{profile:{id:'owner',updated_at:'original',goal_weight:70},goal:{id:'goal',target_weight:70}},pending:false,busy:false,isCurrent:()=>true,run:async(...args)=>{calls.push(args);events.push('verified');}};
+ const context={resolveGoalWeight,editor,Platform:{OS:platform},router:{back:()=>events.push('back')},Alert:{alert:(...a)=>alerts.push(a)},setSaveError:x=>errors.push(x),t:x=>x,console:{log(){},error(){}},validateMacros:()=>true,macroError:'invalid macros',formError:'',weightKg:80,heightCm:180,age:30,sex:'male',activityLevel:'moderate',goalType:'lose',lossRateLbsPerWeek:1,macroPreset:'balanced',calculateBMR:()=>1700,calculateTDEE:()=>2400,calculateTargetCalories:()=>2000,calculateMacrosWithPreset:()=>({protein:150,carbs:200,fats:67,fiber:28}),...overrides};
  return {context,events,alerts,errors,calls,run:vm.runInNewContext(js,context)};
 }
 test('web waits for verified run then navigates once, no alert or second save',async()=>{
@@ -20,3 +23,6 @@ test('native errors retain alert and do not navigate',async()=>{const h=setup('i
 for(const guard of ['pending','busy'])test(`${guard} prevents saving and navigation`,async()=>{const h=setup();h.context.editor[guard]=true;await h.run();assert.equal(h.calls.length,0);assert.deepEqual(h.events,[]);});
 test('invalid macros keep existing inline validation and never save',async()=>{const h=setup('web',{validateMacros:()=>false});await h.run();assert.equal(h.calls.length,0);assert.deepEqual(h.events,[]);assert.match(text,/macroError/);});
 test('local save error is separate from blocking profile validity and accessible',()=>{assert.match(text,/\[saveError, setSaveError\] = useState\(''\)/);assert.match(text,/!!saveError && <Text accessibilityRole="alert" accessibilityLiveRegion="polite">\{saveError\}/);assert.doesNotMatch(handler.getText(source),/setFormError/);assert.match(text,/setFormError\(''\); setSaveError\(''\)/);});
+
+test('legacy profile target is accepted by Edit Goals and mirrored in its explicit save',async()=>{const h=setup();h.context.editor.snapshot.goal.target_weight=null;await h.run();assert.equal(h.calls[0][1].goal.target_weight,70);});
+test('conflicting legacy target cannot override the accepted goal',async()=>{const h=setup();h.context.editor.snapshot.profile.goal_weight=90;await h.run();assert.equal(h.calls[0][1].goal.target_weight,70);});

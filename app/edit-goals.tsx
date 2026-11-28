@@ -1,3 +1,4 @@
+import { resolveGoalWeight } from '@/utils/profileJourneyWeights';
 import { getAppLocale } from '@/lib/localization';
 
 import React, { useState, useEffect } from 'react';
@@ -153,7 +154,7 @@ export default function EditGoalsScreen() {
         preset: macroPreset,
       });
 
-      const target = snapshot.goal.target_weight;
+      const target = resolveGoalWeight(snapshot.goal.target_weight, snapshot.profile.goal_weight);
       if ((goalType === 'lose' && (target == null || target >= weightKg)) || (goalType === 'gain' && (target == null || target <= weightKg))) throw new Error('Review the target weight before changing goal direction.');
       if (goalType === 'lose' && (!Number.isFinite(lossRateLbsPerWeek) || lossRateLbsPerWeek <= 0 || lossRateLbsPerWeek > 2)) throw new Error('Review the loss rate.');
       await editor.run('save', {
@@ -162,6 +163,7 @@ export default function EditGoalsScreen() {
         isCurrent: () => editor.isCurrent(snapshot.profile.id),
         goal: { goal_type: goalType, daily_calories: targetCalories, protein_g: macros.protein,
           carbs_g: macros.carbs, fats_g: macros.fats, fiber_g: macros.fiber, macro_preset: macroPreset,
+          ...(goalType !== 'maintain' && target !== null && (snapshot.goal.target_weight !== target || snapshot.profile.goal_weight !== target) ? { target_weight: target } : {}),
           ...(goalType === 'lose' ? { loss_rate_lbs_per_week: lossRateLbsPerWeek } : {}),
         },
       });

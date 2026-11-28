@@ -1,3 +1,5 @@
+import { journeyWeightInput, parseJourneyWeight, resolveGoalWeight, validJourneyWeight } from '@/utils/profileJourneyWeights';
+import { emitGoalChanged } from '@/utils/goalChangeEvents';
 import { TdeeDataReadiness } from '@/components/TdeeDataReadiness';
 import { TdeeMacroChoice } from '@/components/TdeeMacroChoice';
 import { PremiumCheckpointScrollView } from '@/components/PremiumCheckpointViewport';
@@ -18,7 +20,7 @@ import type { Database } from '@/lib/supabase/types';
 import { useAcceptedGoalEditor, AcceptedGoalReadSuperseded, type GoalEditorSnapshot } from '@/hooks/useAcceptedGoalEditor';
 import { clearOnboardingSession } from '@/utils/onboardingAnalytics';
 import { usePremium } from '@/hooks/usePremium';
-import { cmToFeetInches, kgToLbs, getLossRateDisplayText, feetInchesToCm, lbsToKg, calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
+import { cmToFeetInches, kgToLbs, getLossRateDisplayText, feetInchesToCm, calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacrosWithPreset } from '@/utils/calculations';
 import { captureJourneyDateBounds, type JourneyDateBounds } from '@/utils/journeyDateBounds';
 import { toLocalDateString } from '@/utils/dateUtils';
 import { Sex, ActivityLevel, GoalType } from '@/types';
@@ -440,18 +442,10 @@ export default function SettingsScreen() {
         }
         break;
       case 'weight':
-        if (units === 'imperial') {
-          setEditValue(Math.round(kgToLbs(user.current_weight ?? NaN)).toString());
-        } else {
-          setEditValue((user.current_weight ?? NaN).toString());
-        }
+        setEditValue(journeyWeightInput(user.journey_start_weight, units === 'imperial' ? 'imperial' : 'metric'));
         break;
       case 'goalWeight':
-        if (units === 'imperial') {
-          setEditValue(user.goal_weight ? Math.round(kgToLbs(user.goal_weight)).toString() : '');
-        } else {
-          setEditValue(user.goal_weight ? user.goal_weight.toString() : '');
-        }
+        setEditValue(journeyWeightInput(resolveGoalWeight(goal.target_weight, user.goal_weight), units === 'imperial' ? 'imperial' : 'metric'));
         break;
       case 'age':
         const age = user.date_of_birth ? calculateAge(user.date_of_birth) : null;
@@ -509,17 +503,43 @@ export default function SettingsScreen() {
         if (!Number.isFinite(parsed) || parsed <= 0 || (units === 'imperial' && (!Number.isInteger(parsed) || !Number.isFinite(inches) || inches < 0 || inches >= 12))) throw new Error('Enter the complete height');
         patch.height = units === 'imperial' ? feetInchesToCm(parsed, inches) : parsed;
       } else if (editingField === 'weight') {
-        if (!Number.isFinite(parsed) || parsed <= 0) throw new Error('Enter a valid weight'); patch.current_weight = units === 'imperial' ? lbsToKg(parsed) : parsed;
+        if (units !== 'imperial' && units !== 'metric') throw new Error(t('profile.verifyWeightUnits'));
+        const initial = parseJourneyWeight(editValue, units, snapshot.profile.journey_start_weight);
+        if (initial === null) throw new Error(t('profile.invalidJourneyWeight'));
+        if (initial === snapshot.profile.journey_start_weight) { closeEditModal(); return; }
+        if (!snapshot.profile.journey_start_date) throw new Error(t('profile.missingJourneyDate'));
+        patch.journey_start_weight = initial;
       } else if (editingField === 'age') {
         throw new Error('Age alone cannot establish an exact date of birth. Review your birth date before saving.');
-      } else if (editingField === 'goalWeight' || editingField === 'lossRate') {
-        if (!Number.isFinite(parsed) || parsed <= 0) throw new Error('Enter a valid positive value');
-        const target = units === 'imperial' ? lbsToKg(parsed) : parsed;
-        const rate = units === 'metric' ? parsed / 0.453592 : parsed;
-        await editor.run('save', { userId: snapshot.profile.id, expectedProfileUpdatedAt: snapshot.profile.updated_at, expectedGoal: snapshot.goal, operation: 'manual_goal', profile: {}, isCurrent: current,
-          goal: editingField === 'goalWeight' ? { target_weight: target } : { loss_rate_lbs_per_week: rate },
+      } else if (editingField === 'goalWeight') {
+        if (units !== 'imperial' && units !== 'metric') throw new Error(t('profile.verifyWeightUnits'));
+        const original = resolveGoalWeight(snapshot.goal.target_weight, snapshot.profile.goal_weight);
+        const target = parseJourneyWeight(editValue, units, original);
+        if (target === null) throw new Error(t('profile.invalidJourneyWeight'));
+        if (target === snapshot.goal.target_weight && target === snapshot.profile.goal_weight) {
+          setShowGoalWeightPrompt(false); closeEditModal(); return;
+        }
+        const auth = await supabase.auth.getUser();
+        if (auth.error || auth.data.user?.id !== snapshot.profile.id || !current()) throw new Error(t('profile.reopenWeightEditor'));
+        const { data, error } = await supabase.rpc('save_profile_goal_weight_v1', {
+          p_expected_user_id: snapshot.profile.id,
+          p_expected_profile_updated_at: snapshot.profile.updated_at,
+          p_expected_goal_id: snapshot.goal.id,
+          p_expected_goal_updated_at: snapshot.goal.updated_at,
+          p_target_weight: target,
         });
-        await loadUserData(); setShowGoalWeightPrompt(false); closeEditModal(); return;
+        if (error?.message === 'goal_direction_review_required') throw new Error(t('profile.reviewGoalWeightDirection'));
+        if (error || data !== true) throw new Error(t('profile.reopenWeightEditor'));
+        if (!current()) return;
+        await loadUserData();
+        emitGoalChanged(snapshot.profile.id);
+        if (current()) { setShowGoalWeightPrompt(false); closeEditModal(); }
+        return;
+      } else if (editingField === 'lossRate') {
+        if (!Number.isFinite(parsed) || parsed <= 0) throw new Error('Enter a valid positive value');
+        const rate = units === 'metric' ? parsed / 0.453592 : parsed;
+        await editor.run('save', { userId: snapshot.profile.id, expectedProfileUpdatedAt: snapshot.profile.updated_at, expectedGoal: snapshot.goal, operation: 'manual_goal', profile: {}, isCurrent: current, goal: { loss_rate_lbs_per_week: rate } });
+        await loadUserData(); closeEditModal(); return;
       } else throw new Error('Reopen the relevant editor');
       await saveProfilePatch(patch, snapshot, current); closeEditModal();
     } catch (error) { if (current()) Alert.alert('Unable to save', error instanceof Error ? error.message : 'Review your profile'); }
@@ -620,6 +640,8 @@ export default function SettingsScreen() {
   }
 
   const units = user.preferred_units || 'metric';
+  const startingWeight = validJourneyWeight(user.journey_start_weight) ? user.journey_start_weight : null;
+  const goalWeight = resolveGoalWeight(goal?.target_weight, user.goal_weight);
   const age = user.date_of_birth ? calculateAge(user.date_of_birth) : null;
 
   const subscriptionStatusText = isPremium ? t('profile.premium') : t('profile.free');
@@ -949,18 +971,18 @@ export default function SettingsScreen() {
                   highlight={!user.height}
                 />
                 <EditableSettingItem
-                  label={t('profile.weight')}
-                  value={user.current_weight ? formatWeight(user.current_weight, units) : t('common.tapToSet')}
+                  label={t('profile.startingWeight')}
+                  value={startingWeight !== null ? formatWeight(startingWeight, units) : t('common.tapToSet')}
                   onPress={() => openEditModal('weight')}
                   isDark={isDark}
-                  highlight={!user.current_weight}
+                  highlight={startingWeight === null}
                 />
                 <EditableSettingItem
                   label={t('profile.goalWeight')}
-                  value={user.goal_weight ? formatWeight(user.goal_weight, units) : t('profile.tapToSetGoalWeight')}
+                  value={goalWeight !== null ? formatWeight(goalWeight, units) : t('profile.tapToSetGoalWeight')}
                   onPress={() => openEditModal('goalWeight')}
                   isDark={isDark}
-                  highlight={!user.goal_weight}
+                  highlight={goalWeight === null}
                 />
                 <EditableSettingItem
                   label={t('profile.units')}
@@ -1667,7 +1689,7 @@ export default function SettingsScreen() {
             <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.text }]}>
               {editingField === 'name' && t('profile.editName')}
               {editingField === 'height' && t('profile.editHeight')}
-              {editingField === 'weight' && t('profile.editWeight')}
+              {editingField === 'weight' && t('profile.editStartingWeight')}
               {editingField === 'goalWeight' && t('profile.editGoalWeight')}
               {editingField === 'age' && t('profile.editAge')}
               {editingField === 'lossRate' && t('profile.editLossRate')}
