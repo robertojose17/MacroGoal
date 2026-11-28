@@ -164,6 +164,8 @@
     "verifyWeightUnits": "Primero selecciona tus unidades de medida.",
     "invalidJourneyWeight": "Ingresa un peso válido.",
     "missingJourneyDate": "Necesitas una fecha de inicio para establecer el peso inicial.",
+    "goalWeightSaved": "Peso meta guardado",
+    "goalWeightRefreshRetry": "Intenta actualizar el perfil. No tienes que guardar el peso otra vez.",
     "reopenWeightEditor": "No se pudo verificar el cambio. Vuelve a abrir el editor y revisa el peso.",
     "reviewGoalWeightDirection": "Elige un peso meta que coincida con la dirección de tu objetivo.",
     "editWeight": "Editar Peso Actual",

@@ -33,6 +33,11 @@ export function useAcceptedGoalEditor(autoLoad = true) {
   const session = useRef<Session | null>(null);
   const unsubscribe = useRef<(() => void) | null>(null);
   const isCurrent = useCallback((id: string, revision = epoch.current) => active.current && owner.current === id && epoch.current === revision, []);
+  const clearOwner = useCallback(() => {
+    epoch.current += 1; owner.current = null; session.current = null;
+    unsubscribe.current?.(); unsubscribe.current = null;
+    setSnapshot(null); setError('Account changed. Reopen this screen.'); setLoading(false);
+  }, []);
   const bind = useCallback((id: string) => {
     if (owner.current === id && session.current) return session.current;
     unsubscribe.current?.(); owner.current = id;
@@ -41,14 +46,19 @@ export function useAcceptedGoalEditor(autoLoad = true) {
     next.listeners.add(listener); unsubscribe.current = () => next.listeners.delete(listener);
     return next;
   }, []);
-  const refresh = useCallback(async () => {
-    const revision = epoch.current, requestRevision = ++readRevision.current;
+  const refresh = useCallback(async (options?: { preserveFor: string }) => {
+    const revision = epoch.current;
+    const preserveFor = options?.preserveFor;
+    if (preserveFor && !isCurrent(preserveFor, revision)) throw new AcceptedGoalReadSuperseded();
+    const requestRevision = ++readRevision.current;
     const latestRead = () => active.current && epoch.current === revision && readRevision.current === requestRevision;
-    setLoading(true); setError(''); setSnapshot(null);
+    setLoading(true); setError(''); if (!preserveFor) setSnapshot(null);
     try {
       const auth = await supabase.auth.getUser();
+      if (preserveFor && latestRead() && !auth.error && auth.data.user?.id !== preserveFor) clearOwner();
       if (auth.error || !auth.data.user || !latestRead()) throw new Error('Account unavailable');
-      const id = auth.data.user.id; const bound = bind(id);
+      const id = auth.data.user.id;
+      const bound = bind(id);
       if (journalEditingSupported) await bound.recover(() => isCurrent(id, revision) && latestRead());
       if (bound.save.pendingScope() === 'initial_onboarding') throw new Error('An onboarding request is unresolved. Reopen onboarding to retry or review that exact request.');
       const [profile, goal] = await Promise.all([
@@ -56,15 +66,16 @@ export function useAcceptedGoalEditor(autoLoad = true) {
         supabase.from('goals').select('*').eq('user_id', id).eq('is_active', true).maybeSingle(),
       ]);
       const latest = await supabase.auth.getUser();
+      if (preserveFor && latestRead() && !latest.error && latest.data.user?.id !== preserveFor) clearOwner();
       if (profile.error || goal.error || !profile.data || !goal.data || profile.data.id !== id || goal.data.user_id !== id || goal.data.is_active !== true || latest.error || latest.data.user?.id !== id || !isCurrent(id, revision) || !latestRead()) throw new Error('Current profile and one active goal must be verified before editing.');
       const result = { profile: { ...profile.data }, goal: { ...goal.data } };
       setSnapshot(result); return result;
     } catch (failure) {
       if (!latestRead()) throw new AcceptedGoalReadSuperseded();
-      if (latestRead()) { setSnapshot(null); setError(errorMessage(failure)); }
+      if (latestRead()) { if (!preserveFor) setSnapshot(null); setError(errorMessage(failure)); }
       throw failure;
     } finally { if (latestRead()) setLoading(false); }
-  }, [bind, isCurrent, journalEditingSupported]);
+  }, [bind, clearOwner, isCurrent, journalEditingSupported]);
   useFocusEffect(useCallback(() => {
     active.current = true; epoch.current += 1;
     if (autoLoad) void refresh().catch(() => {});
@@ -72,14 +83,10 @@ export function useAcceptedGoalEditor(autoLoad = true) {
   }, [autoLoad, refresh]));
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((_event, current) => {
-      if (owner.current !== null && current?.user.id !== owner.current) {
-        epoch.current += 1; owner.current = null; session.current = null;
-        unsubscribe.current?.(); unsubscribe.current = null;
-        setSnapshot(null); setError('Account changed. Reopen this screen.'); setLoading(false);
-      }
+      if (owner.current !== null && current?.user.id !== owner.current) clearOwner();
     });
     return () => { data.subscription.unsubscribe(); unsubscribe.current?.(); active.current = false; epoch.current += 1; };
-  }, []);
+  }, [clearOwner]);
   const run = useCallback(async (kind: 'save' | 'restart', input?: Parameters<SaveController['save']>[0] | Parameters<RestartController['save']>[0]) => {
     if (!journalEditingSupported) throw new Error('Goal editing is unavailable in this browser. Your current profile and targets can still be viewed.');
     const current = session.current, id = owner.current, revision = epoch.current;

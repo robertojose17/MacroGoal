@@ -14,22 +14,25 @@ CREATE ROLE anon; CREATE ROLE authenticated;
 CREATE SCHEMA auth;
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS 'SELECT nullif(current_setting(''test.uid'', true), '''')::uuid';
 GRANT USAGE ON SCHEMA auth TO authenticated;
-CREATE TABLE public.users (id uuid PRIMARY KEY, updated_at timestamptz, current_weight numeric, goal_weight numeric, journey_start_weight numeric, journey_start_date date);
+CREATE TABLE public.users (id uuid PRIMARY KEY, updated_at timestamptz, current_weight numeric, goal_weight numeric, journey_start_weight numeric, journey_start_date date, timezone text);
 CREATE TABLE public.goals (id uuid PRIMARY KEY, user_id uuid, updated_at timestamptz, target_weight numeric, goal_type text, is_active bool, daily_calories int, protein_g int, carbs_g int, fats_g int, base_daily_calories int, last_adaptive_update timestamptz);
-CREATE TABLE public.check_ins (user_id uuid, weight numeric);
+CREATE TABLE public.check_ins (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid, weight numeric, date date, created_at timestamptz, updated_at timestamptz);
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.goals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.check_ins ENABLE ROW LEVEL SECURITY;
+CREATE POLICY check_in_own ON public.check_ins FOR SELECT TO authenticated USING (user_id=auth.uid());
+GRANT SELECT ON public.check_ins TO authenticated;
 CREATE POLICY user_own ON public.users TO authenticated USING (id=auth.uid());
 CREATE POLICY goal_own ON public.goals TO authenticated USING (user_id=auth.uid());
 GRANT SELECT, UPDATE ON public.users, public.goals TO authenticated;
 CREATE FUNCTION public.touch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at=now(); RETURN NEW; END $$;
 CREATE TRIGGER touch_user BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.touch();
 CREATE TRIGGER touch_goals BEFORE UPDATE ON public.goals FOR EACH ROW EXECUTE FUNCTION public.touch();
-INSERT INTO public.users VALUES ('${owner}','${stamp}',80,70,90,'2026-01-01'), ('${other}','${stamp}',100,90,105,'2026-01-02');
+INSERT INTO public.users VALUES ('${owner}','${stamp}',80,70,90,'2026-01-01','America/New_York'), ('${other}','${stamp}',100,90,105,'2026-01-02','America/New_York');
 INSERT INTO public.goals VALUES ('${goal}','${owner}','${stamp}',NULL,'lose',true,1850,155,160,65,2050,'${oldAdjustment}'),
   ('${otherGoal}','${other}','${stamp}',90,'lose',true,1900,150,170,61,2000,'${oldAdjustment}'),
   ('${pastGoal}','${owner}','${stamp}',75,'lose',false,2010,145,150,67,2110,'${oldAdjustment}');
-INSERT INTO public.check_ins VALUES ('${owner}',78);
+INSERT INTO public.check_ins (user_id,weight,date) VALUES ('${owner}',78,current_date-2);
 `;
 const sql = fs.readFileSync(process.env.GOAL_WEIGHT_SQL || 'supabase/migrations/20261128142015_save_profile_goal_weight.sql','utf8');
 let db;
@@ -79,5 +82,46 @@ test('target is atomic, idempotent, authorization-scoped and does not reset the 
     await db.query('UPDATE users SET journey_start_weight=92 WHERE id=$1',[owner]);
     const u = (await db.query('SELECT current_weight, goal_weight, journey_start_weight, journey_start_date::text AS start_date FROM users')).rows[0];
     assert.deepEqual(u,{current_weight:'80',goal_weight:'69',journey_start_weight:'92',start_date:'2026-01-01'});
+  } finally { await db.close(); }
+});
+
+test('latest valid owned Dashboard measurement governs target direction for both goal types', async () => {
+  db = new PGlite();
+  try {
+    await db.exec(fixture);
+    await db.exec(sql);
+    await db.exec(`
+      UPDATE users SET timezone='not-a-timezone' WHERE id='${owner}';
+      INSERT INTO check_ins(user_id,weight,date,created_at,updated_at) VALUES
+      ('${owner}',76,current_date-1,now()-interval '1 day',now()-interval '1 day'),
+      ('${owner}',82,current_date-1,now()-interval '2 days',now()-interval '2 days'),
+      ('${owner}',200,current_date-5,now(),now()),
+      ('${owner}',300,current_date+1,now(),now()),
+      ('${owner}','NaN',current_date-1,now(),now()),
+      ('${other}',400,current_date,now(),now());
+    `);
+    const directionCall = async w => {
+      const {u,g} = (await db.query('SELECT u.updated_at::text AS u, g.updated_at::text AS g FROM users u JOIN goals g ON g.user_id=u.id AND g.is_active')).rows[0];
+      return call(w,owner,goal,u,g);
+    };
+    await role();
+    await assert.rejects(directionCall(79), /goal_direction_review_required/);
+    await db.exec('RESET ROLE');
+    await db.exec(`UPDATE users SET current_weight=75 WHERE id='${owner}';`);
+    await role();
+    assert.equal((await directionCall(75.5)).rows[0].saved,true);
+    await db.exec('RESET ROLE');
+    await db.exec(`UPDATE goals SET goal_type='gain' WHERE id='${goal}';`);
+    await role();
+    await assert.rejects(directionCall(75.6), /goal_direction_review_required/);
+    await db.exec('RESET ROLE');
+    await db.exec(`UPDATE users SET current_weight=82 WHERE id='${owner}';`);
+    await role();
+    assert.equal((await directionCall(79)).rows[0].saved,true);
+    await db.exec('RESET ROLE');
+    await db.exec(`DELETE FROM check_ins WHERE user_id='${owner}';`);
+    await role();
+    await assert.rejects(directionCall(80), /goal_direction_review_required/);
+    assert.equal((await directionCall(83)).rows[0].saved,true);
   } finally { await db.close(); }
 });

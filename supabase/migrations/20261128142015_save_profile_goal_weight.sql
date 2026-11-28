@@ -15,6 +15,8 @@ DECLARE
   u record;
   g record;
   existing_target numeric;
+  current_weight_kg numeric;
+  local_today date;
 BEGIN
   IF actor IS NULL OR actor IS DISTINCT FROM p_expected_user_id THEN
     RAISE EXCEPTION 'account_changed' USING ERRCODE = '42501';
@@ -23,7 +25,7 @@ BEGIN
     RAISE EXCEPTION 'invalid_goal_weight' USING ERRCODE = '22023';
   END IF;
 
-  SELECT id, updated_at, current_weight, goal_weight INTO u
+  SELECT id, updated_at, current_weight, goal_weight, timezone INTO u
   FROM public.users WHERE id = actor FOR UPDATE NOWAIT;
   IF NOT FOUND THEN RAISE EXCEPTION 'profile_changed' USING ERRCODE = '40001'; END IF;
   SELECT id, updated_at, target_weight, goal_type INTO g
@@ -43,12 +45,25 @@ BEGIN
   existing_target := CASE WHEN g.target_weight BETWEEN 20 AND 500 THEN g.target_weight
     WHEN u.goal_weight BETWEEN 20 AND 500 THEN u.goal_weight END;
   -- Preserve the existing direction rule for an actual change, not for syncing an existing goal.
-  IF existing_target IS DISTINCT FROM p_target_weight
-     AND g.goal_type IN ('lose', 'gain') AND (
-       u.current_weight IS NULL OR NOT (u.current_weight BETWEEN 20 AND 500)
-       OR (g.goal_type = 'lose' AND p_target_weight >= u.current_weight)
-       OR (g.goal_type = 'gain' AND p_target_weight <= u.current_weight)
-     ) THEN RAISE EXCEPTION 'goal_direction_review_required' USING ERRCODE = '22023'; END IF;
+  IF existing_target IS DISTINCT FROM p_target_weight AND g.goal_type IN ('lose', 'gain') THEN
+    local_today := (statement_timestamp() AT TIME ZONE COALESCE(
+      (SELECT name FROM pg_catalog.pg_timezone_names WHERE name = u.timezone), 'UTC'
+    ))::date;
+    -- Date of measurement, not time of edit, determines the latest check-in.
+    SELECT ci.weight INTO current_weight_kg
+    FROM public.check_ins AS ci
+    WHERE ci.user_id = actor AND ci.date <= local_today AND ci.weight BETWEEN 20 AND 500
+    ORDER BY ci.date DESC, ci.updated_at DESC NULLS LAST, ci.created_at DESC NULLS LAST, ci.id DESC
+    LIMIT 1;
+
+    IF current_weight_kg IS NULL AND u.current_weight BETWEEN 20 AND 500 THEN
+      current_weight_kg := u.current_weight;
+    END IF;
+    IF current_weight_kg IS NULL
+       OR (g.goal_type = 'lose' AND p_target_weight >= current_weight_kg)
+       OR (g.goal_type = 'gain' AND p_target_weight <= current_weight_kg)
+    THEN RAISE EXCEPTION 'goal_direction_review_required' USING ERRCODE = '22023'; END IF;
+  END IF;
 
   IF g.target_weight IS DISTINCT FROM p_target_weight THEN
     UPDATE public.goals SET target_weight = p_target_weight

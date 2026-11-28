@@ -164,6 +164,8 @@
     "verifyWeightUnits": "Select your measurement units first.",
     "invalidJourneyWeight": "Enter a valid weight.",
     "missingJourneyDate": "A journey start date is required before setting the starting weight.",
+    "goalWeightSaved": "Goal weight saved",
+    "goalWeightRefreshRetry": "Try refreshing Profile. You do not need to save the weight again.",
     "reopenWeightEditor": "Could not verify the save. Open the editor again and review the weight.",
     "reviewGoalWeightDirection": "Choose a goal weight that matches your goal direction.",
     "editWeight": "Edit Current Weight",

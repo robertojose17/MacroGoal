@@ -70,11 +70,12 @@ export default function SettingsScreen() {
   const restartTimezone = useRef<string | null>(null);
   const modalCurrent = useRef<() => boolean>(() => false), restartCurrent = useRef<() => boolean>(() => false);
   const screenActive = useRef(false), loadEpoch = useRef(0);
+  const targetReadOwner = useRef<string | null>(null);
   useFocusEffect(useCallback(() => {
     screenActive.current = true; loadEpoch.current += 1;
-    return () => { screenActive.current = false; loadEpoch.current += 1; modalCurrent.current = () => false; restartCurrent.current = () => false; };
+    return () => { screenActive.current = false; loadEpoch.current += 1; targetReadOwner.current = null; modalCurrent.current = () => false; restartCurrent.current = () => false; };
   }, []));
-  useEffect(() => { if (editor.snapshot) { setUser(editor.snapshot.profile); setGoal(editor.snapshot.goal); } else { setUser(null); setGoal(null); setIsAdmin(false); } }, [editor.snapshot]);
+  useEffect(() => { if (editor.snapshot) { setUser(editor.snapshot.profile); setGoal(editor.snapshot.goal); } else { targetReadOwner.current = null; setUser(null); setGoal(null); setIsAdmin(false); } }, [editor.snapshot]);
 
 
   // Avatar upload state
@@ -245,15 +246,21 @@ export default function SettingsScreen() {
     if (!screenActive.current) return;
     const revision = ++loadEpoch.current;
     const active = () => screenActive.current && loadEpoch.current === revision;
-    setLoading(true);
+    const preserveFor = targetReadOwner.current;
+    if (!preserveFor) setLoading(true);
     try {
-      const verified = await refreshAcceptedEditor();
+      const verified = await refreshAcceptedEditor(preserveFor ? { preserveFor } : undefined);
       const current = captureAcceptedEditor();
       if (!active() || !current()) return;
+      if (targetReadOwner.current === preserveFor) targetReadOwner.current = null;
       setUser(verified.profile); setGoal(verified.goal);
       setIsAdmin(verified.profile.is_admin === true);
-    } catch (error) { if (active() && !(error instanceof AcceptedGoalReadSuperseded)) { setUser(null); setGoal(null); setIsAdmin(false); } }
-    finally { if (active()) { setLoading(false); setRefreshing(false); } }
+      return true;
+    } catch (error) {
+      if (!active() || error instanceof AcceptedGoalReadSuperseded) return;
+      if (!preserveFor) { setUser(null); setGoal(null); setIsAdmin(false); }
+      return false;
+    } finally { if (active()) { setLoading(false); setRefreshing(false); } }
   }, [refreshAcceptedEditor, captureAcceptedEditor]);
 
   useFocusEffect(
@@ -406,6 +413,7 @@ export default function SettingsScreen() {
   const openEditModal = (field: EditField) => {
     if (field === 'lossRate') { router.push('/edit-goals'); return; }
     if (!editor.snapshot || editor.pending || editor.busy || saving) return;
+    if (targetReadOwner.current) { void loadUserData(); return; }
     modalSnapshot.current = { profile: { ...editor.snapshot.profile }, goal: { ...editor.snapshot.goal } };
     modalCurrent.current = editor.capture();
     const user = modalSnapshot.current.profile;
@@ -514,9 +522,23 @@ export default function SettingsScreen() {
         if (error?.message === 'goal_direction_review_required') throw new Error(t('profile.reviewGoalWeightDirection'));
         if (error || data !== true) throw new Error(t('profile.reopenWeightEditor'));
         if (!current()) return;
-        await loadUserData();
-        emitGoalChanged(snapshot.profile.id);
-        if (current()) { setShowGoalWeightPrompt(false); closeEditModal(); }
+        const id = snapshot.profile.id;
+        const stillSameAccount = editor.capture();
+        targetReadOwner.current = id;
+        setUser((previous: typeof user) => previous?.id === id ? { ...previous, goal_weight: target } : previous);
+        setGoal((previous: typeof goal) => previous?.id === snapshot.goal.id && previous?.user_id === id ? { ...previous, target_weight: target } : previous);
+        emitGoalChanged(id);
+        setShowGoalWeightPrompt(false); closeEditModal();
+        void loadUserData().then((verified) => {
+          if (verified === false && stillSameAccount() && screenActive.current && targetReadOwner.current === id) {
+            Alert.alert(t('profile.goalWeightSaved'), t('profile.goalWeightRefreshRetry'), [
+              { text: t('common.retry'), onPress: () => {
+                if (stillSameAccount() && screenActive.current && targetReadOwner.current === id) void loadUserData();
+              } },
+              { text: t('common.cancel'), style: 'cancel' },
+            ]);
+          }
+        });
         return;
       } else if (editingField === 'lossRate') {
         if (!Number.isFinite(parsed) || parsed <= 0) throw new Error('Enter a valid positive value');
